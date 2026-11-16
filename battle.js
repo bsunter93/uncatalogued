@@ -1,5 +1,6 @@
 // The expedition screen: board, input, and playback of what the rules engine reports.
 import { C, D, G, $, esc, art, face, store, toast } from './ui.js';
+import { createScene } from './scene3d.js';
 
 const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. A good place to study. Nothing to clear, so no case for clearing it.']],
   clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. A good place to study. Nothing to clear, so no case for clearing it.']] };
@@ -14,45 +15,30 @@ export function mountBattle(root, onFinish) {
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="wrap" style="padding-block:14px 90px"><div class="bhead"><div class="rooms"></div><div class="obj grow"></div><span class="label turn"></span><button class="link" data-act="retreat">Retreat</button></div>
-    <div class="battle"><div><div class="board"><div class="tiles"></div><svg class="lines" viewBox="0 0 8 6" preserveAspectRatio="none"></svg><div class="toks"></div></div><div class="actions"></div><div class="hint"></div></div>
+    <div class="battle"><div><div class="board three"></div><div class="actions"></div><div class="hint"></div></div>
     <aside class="stack"><div class="scards"></div><div class="panel info"></div></aside></div></div>`;
-  const board = $('.board', root), tiles = $('.tiles', root), toks = $('.toks', root), lines = $('.lines', root);
-  for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) { const b = document.createElement('button'); b.className = 'tile'; b.dataset.x = x; b.dataset.y = y; b.setAttribute('aria-label', `Tile ${x + 1}, ${y + 1}`); tiles.append(b); }
-  const tileEl = (x, y) => tiles.children[y * C.W + x];
-  const pos = (el, x, y) => { el.style.left = x * 12.5 + '%'; el.style.top = y * 16.6667 + '%'; };
+  const board = $('.board', root);
+  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
   const foes = () => st.units.filter(u => u.side === 'c' && live(u));
   const propAt = (x, y) => st.room.props.find(p => !p.done && p.x === x && p.y === y);
-  const artKey = u => u.side === 's' ? u.kind : u.kind;
   const stage = k => spec.stages[k] ?? -1;
-
-  function tok(u) {
-    let el = toks.querySelector(`[data-id="${u.id}"]`);
-    if (!el) { el = document.createElement('div'); el.dataset.id = u.id; el.className = 'tok ' + u.side; el.innerHTML = art(artKey(u), { variant: u.variant }) + '<div class="hp"><i></i><b></b></div><div class="ap"></div><div class="sts"></div>' + (u.side === 'c' ? '<div class="mood"></div>' : ''); pos(el, u.x, u.y); toks.append(el); }
-    return el;
+  function label(u) {
+    const s = []; if (u.bleed > 0) s.push(`<span class="bleed">BLEED ${u.bleed}</span>`); if (u.poison > 0) s.push(`<span class="poison">POISON ${u.poison}</span>`); if (u.mark > 0) s.push('<span class="mark">MARKED</span>'); if (u.root > 0) s.push('<span>HELD</span>'); if (u.stun > 0) s.push('<span>STUNNED</span>'); if (u.rip > 0) s.push('<span>RIPOSTE</span>'); if (u.taunt > 0) s.push('<span>BRACED</span>'); if (u.calm > 0) s.push('<span class="calm">CALM</span>');
+    const h = u.side === 'c' && C.isHostile(st, u);
+    return `${s.length ? `<div class="sts">${s.join('')}</div>` : ''}${u.side === 's' ? `<div class="ap">${'<i></i>'.repeat(Math.max(0, u.ap))}</div>` : ''}<div class="hp ${h ? 'hostile' : ''}"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><b style="width:${Math.min(100, (u.shield || 0) / u.max * 100)}%"></b></div>`;
   }
   function sync() {
-    if (shownRoom !== st.roomIdx) { toks.innerHTML = ''; shownRoom = st.roomIdx; sel = null; mode = null; info = null;
-      st.room.rock.forEach((r, i) => { if (r) { const el = document.createElement('div'); el.className = 'tok prop rock'; el.innerHTML = art('obstacle', { seed: i + st.roomIdx * 7 }); pos(el, i % C.W, Math.floor(i / C.W)); toks.append(el); } }); }
-    const ids = new Set(st.units.map(u => String(u.id)));
-    for (const el of [...toks.querySelectorAll('[data-id]')]) if (!ids.has(el.dataset.id)) el.remove();
-    for (const p of st.room.props) { let el = toks.querySelector(`[data-pid="${p.pid}"]`); if (p.done) { el?.remove(); continue; } if (!el) { el = document.createElement('div'); el.dataset.pid = p.pid; el.className = 'tok prop'; el.innerHTML = art(p.id); pos(el, p.x, p.y); toks.append(el); } }
-    toks.querySelectorAll('[data-trap],[data-corpse]').forEach(e => e.remove());
-    for (const t of st.room.traps) { const el = document.createElement('div'); el.dataset.trap = 1; el.className = 'tok prop'; el.innerHTML = art('trap'); pos(el, t.x, t.y); toks.prepend(el); }
-    for (const c of st.room.corpses) { const el = document.createElement('div'); el.dataset.corpse = 1; el.className = 'tok prop rock'; el.innerHTML = art('corpse'); pos(el, c.x, c.y); toks.prepend(el); }
+    if (shownRoom !== st.roomIdx) { shownRoom = st.roomIdx; sel = null; mode = null; info = null; sc.setRoom(st); }
     if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
-    const su = unit(sel);
-    for (const u of st.units) {
-      const el = tok(u); pos(el, u.x, u.y); const gone = !live(u); el.classList.toggle('gone', gone); if (gone) continue;
-      el.querySelector('.hp i').style.width = Math.max(0, u.hp / u.max * 100) + '%'; el.querySelector('.hp b').style.width = Math.min(100, (u.shield || 0) / u.max * 100) + '%';
-      const s = []; if (u.bleed > 0) s.push(`<span class="bleed">BLEED ${u.bleed}</span>`); if (u.poison > 0) s.push(`<span class="poison">POISON ${u.poison}</span>`); if (u.mark > 0) s.push('<span class="mark">MARKED</span>'); if (u.root > 0) s.push('<span>HELD</span>'); if (u.stun > 0) s.push('<span>STUNNED</span>'); if (u.rip > 0) s.push('<span>RIPOSTE</span>'); if (u.taunt > 0) s.push('<span>BRACED</span>');
-      el.querySelector('.sts').innerHTML = s.join('');
-      if (u.side === 's') { el.classList.toggle('sel', u.id === sel); el.classList.toggle('spent', u.ap <= 0); el.querySelector('.ap').innerHTML = '<i></i>'.repeat(Math.max(0, u.ap)); }
-      if (u.side === 'c') { const h = C.isHostile(st, u); el.classList.toggle('hostile', h); if (u.variant) el.classList.add('var-' + u.variant); el.querySelector('.mood').textContent = C.plan(st, u).label; }
-    }
-    marks(); drawLines(); head(); actions(); cards(); panel(); hint();
+    const m = targets();
+    sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gone: !live(u), label: live(u) ? label(u) : '',
+      ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
+      st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'flora' ? p.id : p.kind, use: !!m.get(p.x + ',' + p.y) && !mode }))
+        .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
+    marks(m); drawLines(); head(); actions(); cards(); panel(); hint();
   }
   function targets() { // what a click can do right now: Map "x,y" -> action
     const m = new Map(); const u = unit(sel); if (!live(u) || busy || st.outcome) return m;
@@ -76,17 +62,15 @@ export function mountBattle(root, onFinish) {
     }
     return m;
   }
-  function marks() {
-    const m = targets(); const reg = st.units.find(u => u.tele && live(u));
-    for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) { const a = m.get(x + ',' + y); const el = tileEl(x, y);
-      el.className = 'tile' + (a ? (a.t === 'move' ? ' mv' : mode ? ' ab' : '') : '') + (reg && (reg.tele.axis === 'row' ? y === reg.tele.i : x === reg.tele.i) ? ' danger' : ''); }
-    for (const el of toks.querySelectorAll('.tok.c')) { const u = unit(+el.dataset.id); const a = live(u) && m.get(u.x + ',' + u.y); el.classList.toggle('tg', !!a && !mode); el.classList.toggle('abt', !!a && !!mode); }
-    for (const el of toks.querySelectorAll('[data-pid]')) { const p = st.room.props.find(q => q.pid === +el.dataset.pid); el.classList.toggle('use', !!p && !!m.get(p.x + ',' + p.y) && !mode); }
+  function marks(m = targets()) {
+    const out = new Map(); const reg = st.units.find(u => u.tele && live(u));
+    if (reg) for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (reg.tele.axis === 'row' ? y === reg.tele.i : x === reg.tele.i) out.set(x + ',' + y, 'danger');
+    for (const [k, a] of m) { if (a.t === 'move') out.set(k, 'mv'); else if (mode) out.set(k, 'ab'); }
+    sc.marks(out);
   }
   function drawLines() {
-    let s = ''; for (const c of foes()) { if (!C.isHostile(st, c)) continue; const p = C.plan(st, c); const t = p.tgt && unit(p.tgt); if (!t || !live(t)) continue;
-      s += `<line x1="${c.x + .5}" y1="${c.y + .5}" x2="${t.x + .5}" y2="${t.y + .5}"/><circle cx="${t.x + .5}" cy="${t.y + .5}" r=".42"/>`; }
-    lines.innerHTML = s;
+    const L = []; for (const c of foes()) { if (!C.isHostile(st, c)) continue; const p = C.plan(st, c); const t = p.tgt && unit(p.tgt); if (t && live(t)) L.push([c, t]); }
+    sc.lines(L);
   }
   function objective() {
     const rs = st.res; const obs = D.SPECIES[reg.observe].name;
@@ -157,31 +141,29 @@ export function mountBattle(root, onFinish) {
     else t = 'No actions left. <b>End turn.</b>';
     el.innerHTML = t;
   }
-  function float(x, y, txt, cls = '') { const f = document.createElement('div'); f.className = 'float ' + cls; f.textContent = txt; f.style.left = (x + .5) * 12.5 + '%'; f.style.top = y * 16.6667 + '%'; board.append(f); setTimeout(() => f.remove(), 900); }
+  function float(x, y, txt, cls = '') { const f = document.createElement('div'); f.className = 'float ' + cls; f.textContent = txt; const p = sc.screen(x, y, 1.5); f.style.left = p.left + '%'; f.style.top = p.top + '%'; board.append(f); setTimeout(() => f.remove(), 900); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
 
   async function play(ev, before) {
-    const vp = new Map(before.map(u => [u.id, { x: u.x, y: u.y, hp: u.hp, max: u.max }]));
-    const at = id => { if (!vp.has(id)) { const u = unit(id); if (u) vp.set(id, { x: u.x, y: u.y, hp: u.max, max: u.max }); } return vp.get(id) || { x: 0, y: 0, hp: 1, max: 1 }; };
-    const el = id => toks.querySelector(`[data-id="${id}"]`);
+    const vp = new Map(before.map(u => [u.id, { x: u.x, y: u.y }]));
+    const at = id => { if (!vp.has(id)) { const u = unit(id); vp.set(id, u ? { x: u.x, y: u.y } : { x: 0, y: 0 }); } return vp.get(id); };
     for (const e of ev) {
       if (e.e === 'room') { banner(`Room ${e.idx + 1}`); return; }
-      if (e.e === 'move') { const v = at(e.id); const t = el(e.id); for (const [x, y] of e.path) { v.x = x; v.y = y; if (t) pos(t, x, y); await sleep(e.shove ? 120 : 85); } await sleep(60); }
-      else if (e.e === 'hit') { const v = at(e.id); v.hp -= e.n; const t = el(e.id); if (t) { t.classList.remove('hitfx'); void t.offsetWidth; t.classList.add('hitfx'); t.querySelector('.hp i').style.width = Math.max(0, v.hp / v.max * 100) + '%'; }
-        float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 130 : 230); }
-      else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { v.hp += e.n; float(v.x, v.y, '+' + e.n, 'heal'); const t = el(e.id); if (t) t.querySelector('.hp i').style.width = Math.min(100, v.hp / v.max * 100) + '%'; await sleep(120); } }
+      if (e.e === 'move') { const v = at(e.id); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; await sleep(50); }
+      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { sc.lunge(e.from, e.id); await sleep(110); } sc.hit(e.id, e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
       else if (e.e === 'status') { const v = at(e.id); float(v.x, v.y, { bleed: 'Bleeding', poison: 'Poisoned', mark: 'Marked', calm: 'Calmed', root: 'Held' }[e.s] || e.s, 'txt'); await sleep(110); }
-      else if (e.e === 'study') { const v = at(e.id); float(v.x, v.y, '+' + e.n + ' study', 'study'); await sleep(260); }
-      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { const v = at(e.id); const t = el(e.id); if (t) t.classList.add('gone'); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(200); }
-      else if (e.e === 'spawn') { const u = unit(e.id); if (u) { const t = tok(u); pos(t, u.x, u.y); vp.set(u.id, { x: u.x, y: u.y, hp: u.max, max: u.max }); await sleep(160); } }
+      else if (e.e === 'study') { const v = at(e.id); float(v.x, v.y, '+' + e.n + ' study', 'study'); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
+      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { const v = at(e.id); sc.gone(e.id); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
+      else if (e.e === 'spawn') { const u = unit(e.id); if (u) { sc.add({ id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant }); sc.burst(u.x, u.y, 0xb6e33a); vp.set(u.id, { x: u.x, y: u.y }); await sleep(180); } }
       else if (e.e === 'eat') { const v = at(e.id); float(v.x, v.y, 'Feeds', 'txt'); await sleep(220); }
       else if (e.e === 'phase') { banner(e.who === 'c' ? 'The Cabinet moves' : 'Your turn'); await sleep(e.who === 'c' ? 520 : 380); }
-      else if (e.e === 'tele') { const L = e.line; for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (L.axis === 'row' ? y === L.i : x === L.i) tileEl(x, y).classList.add('danger'); await sleep(350); }
+      else if (e.e === 'tele') { const m = new Map(); for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (e.line.axis === 'row' ? y === e.line.i : x === e.line.i) m.set(x + ',' + y, 'danger'); sc.marks(m); await sleep(380); }
       else if (e.e === 'purge') { banner('Purge'); await sleep(300); }
-      else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); await sleep(140); }
-      else if (e.e === 'prop') { const t = toks.querySelector(`[data-pid="${e.pid}"]`); if (t) { t.classList.add('gone'); const p = st.room.props.find(q => q.pid === e.pid); if (p) float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); } await sleep(200); }
+      else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); if (e.e !== 'trapset') sc.burst(e.x, e.y); await sleep(160); }
+      else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); } await sleep(200); }
     }
   }
   async function send(a) {
@@ -190,9 +172,9 @@ export function mountBattle(root, onFinish) {
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log }));
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
-    busy = true; actions(); hint(); tiles.querySelectorAll('.mv,.ab').forEach(t => t.classList.remove('mv', 'ab')); lines.innerHTML = '';
+    busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]);
     await play(ev, before); busy = false;
-    if (st.outcome) { sync(); await sleep(350); onFinish(log, st); return; }
+    if (st.outcome) { sync(); await sleep(350); sc.dispose(); onFinish(log, st); return; }
     sync();
   }
   function choosePath() {
@@ -212,16 +194,17 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.act === 'end') return send({ t: 'end' });
     if (b.dataset.act === 'next') return st.roomIdx === 0 ? choosePath() : send({ t: 'next' });
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
-    if (b.classList.contains('tile')) {
-      const x = +b.dataset.x, y = +b.dataset.y; const o = C.unitAt(st, x, y); const p = propAt(x, y); const a = targets().get(x + ',' + y);
-      if (o && o.side === 's' && !(mode && a)) { sel = o.id; mode = null; info = null; armed = null; return sync(); }
-      if (a) {
-        if (a.t === 'atk' && !C.isHostile(st, o) && armed !== o.id) { armed = o.id; info = { u: o.id }; return sync(); }
-        if (a.t === 'use' || a.t === 'atk') info = null; return send(a);
-      }
-      if (mode) { mode = null; }
-      armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
-    }
   };
-  sync(); if (st.outcome) { onFinish(log, st); return; } if (log.length === 0) banner(reg.short);
+  function tileClick(x, y) {
+    if (busy || st.outcome) return;
+    const o = C.unitAt(st, x, y); const p = propAt(x, y); const a = targets().get(x + ',' + y);
+    if (o && o.side === 's' && !(mode && a)) { sel = o.id; mode = null; info = null; armed = null; return sync(); }
+    if (a) {
+      if (a.t === 'atk' && !C.isHostile(st, o) && armed !== o.id) { armed = o.id; info = { u: o.id }; return sync(); }
+      if (a.t === 'use' || a.t === 'atk') info = null; return send(a);
+    }
+    if (mode) mode = null;
+    armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
+  }
+  sync(); if (st.outcome) { sc.dispose(); onFinish(log, st); return; } if (log.length === 0) banner(reg.short);
 }
