@@ -15,6 +15,6 @@ Play: https://bsunter93.github.io/uncatalogued/
 ## Develop
 
     npm test          # bot playtests: determinism, win rates by tier, loot distribution
-    npm run build     # bundle core.js + data.js into engine.js for the server
+    npm run build     # bundle core.js + data.js into engine.iife.js for the server
 
-Bump `VERSION` in `core.js` whenever the rules change, then rebuild. The server loads `engine.js` at that version and tells older browsers to reload.
+Bump `VERSION` in `core.js` whenever the rules change, then rebuild. The server loads `engine.iife.js` at that version and tells older browsers to reload.

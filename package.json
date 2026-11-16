@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node test/sim.mjs",
-    "build": "esbuild core.js --bundle --format=esm --outfile=engine.js"
+    "build": "esbuild core.js --bundle --format=iife --global-name=UncEngine --outfile=engine.iife.js"
   },
   "devDependencies": {
     "esbuild": "0.24.0"

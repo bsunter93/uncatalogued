@@ -11,7 +11,9 @@ const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { sta
 // deno-lint-ignore no-explicit-any
 let core: any = null;
 async function engine(v: number) {
-  if (!core || v > core.VERSION) core = await import(`${SITE}engine.js?v=${v}`);
+  if (core && v <= core.VERSION) return core;
+  const src = await (await fetch(`${SITE}engine.iife.js?v=${v}`, { cache: "no-store" })).text();
+  core = new Function(src + "\nreturn UncEngine;")();
   return core;
 }
 async function sha(s: string) {
