@@ -678,7 +678,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 1;
+  var VERSION = 2;
   var W = 8;
   var H = 6;
   function hashStr(s) {
@@ -2290,10 +2290,10 @@ var UncEngine = (() => {
     if (state.unlocks.clockwork) regs.push("clockwork");
     const types = Object.keys(CONTRACT_TYPES);
     const list = [];
+    const t0 = state.stats.runs ? r.int(4) : 0;
     for (let i = 0; i < 3; i++) {
       const region = regs.length > 1 ? regs[(i + r.int(2)) % 2] : "verdant";
-      let type = types[(r.int(4) + i) % 4];
-      if (!state.stats.runs && i === 0) type = "pursue";
+      const type = types[(t0 + i) % 4];
       const fam = weighted(r, REGIONS[region].fam);
       const mods = {};
       if (state.unlocks.bloom && r.pct(25)) mods.bloom = 1;

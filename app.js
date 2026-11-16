@@ -4,7 +4,7 @@ import { mountBattle } from './battle.js';
 
 const app = $('#app');
 const V = { tab: 'board', contract: 0, tier: {}, squad: null, seeker: null, slot: null, cat: 'Fauna', catKey: null, benchItem: null, benchTab: 'pack', filter: 'all', report: null, opened: {}, rec: 'feed', mounted: false, landErr: '', code: false, asmTier: 1 };
-const TABS = [['board', 'Expeditions'], ['seekers', 'Seekers'], ['catalogue', 'Catalogue'], ['bench', 'Workbench'], ['record', 'The Record']];
+const TABS = [['board', 'Expeditions'], ['seekers', 'Seekers'], ['catalogue', 'Catalogue'], ['bench', 'Workbench'], ['record', '<span class="the">The </span>Record']];
 const S = () => G.state;
 const RAR = r => D.RARITIES.indexOf(r);
 const plateBox = (key, o = {}) => `<div class="plate ${o.unknown ? 'unknown' : ''}">${art(key, o)}</div>`;
@@ -78,7 +78,7 @@ function contractCard(c, i, selected) {
     <div class="who">${known ? art(tgt) : `<span class="art" style="opacity:.25">${art(tgt)}</span>`}<h3>${esc(title)}</h3></div>
     <p>${esc(text)}</p>
     ${c.mods?.bloom ? '<span class="chip">Bloom · stranger rooms, richer cases</span>' : ''}${c.mods?.hunt ? '<span class="chip">Hunt · an elite in every room</span>' : ''}
-    <p class="finds">Fulfilling it pays one extra case: ${D.FAMILY_NAME[c.target.fam].toLowerCase()} ${D.SLOT_NAME[c.target.slot].toLowerCase()} likely</p></button>`;
+    <p class="finds">Bonus case: ${D.FAMILY_NAME[c.target.fam].toLowerCase()} ${D.SLOT_NAME[c.target.slot].toLowerCase()}, likely</p></button>`;
 }
 function board() {
   const st = S(); const wk = C.weeklyContract(Date.now()); const list = st.board.list;
@@ -168,7 +168,7 @@ function catalogue() {
   const count = t => { const ks = CATS[t](); let h = ks.filter(have).length, tot = ks.length; if (t === 'Fauna') { const vs = C.allKeys().filter(k => k[0] === 'v'); h += vs.filter(have).length; tot += vs.length; } return `${h}/${tot}`; };
   return `<div class="sec-head" style="flex-wrap:wrap"><h2>Field Catalogue</h2><p class="label num">${n} of ${total} catalogued · ${mine} first${mine === 1 ? '' : 's'} · index score ${sc}${G.world?.rank ? ' · rank ' + G.world.rank : ''}</p></div>
     <div class="bar"><i style="width:${n / total * 100}%"></i></div>
-    <div class="tabs" role="tablist" style="margin-top:14px">${Object.keys(CATS).map(t => `<button role="tab" data-cat="${t}" aria-selected="${V.cat === t}">${t}<span class="n">${count(t)}</span></button>`).join('')}<button role="tab" data-cat="Index" aria-selected="false" data-tab="board" style="margin-left:auto" class="dim">Milestones are on Expeditions</button></div>
+    <div class="tabs" role="tablist" style="margin-top:14px">${Object.keys(CATS).map(t => `<button role="tab" data-cat="${t}" aria-selected="${V.cat === t}">${t}<span class="n">${count(t)}</span></button>`).join('')}</div>
     <div class="cols" style="margin-top:16px"><div class="plates">${keys.map(k => { const i = C.keyInfo(k); const h = have(k); return `<button class="entry" data-key="${k}" aria-pressed="${V.catKey === k}">${i.art ? plateBox(i.art, { unknown: !h }) : `<div class="plate ${h ? '' : 'unknown'}"><span class="art" style="display:grid;place-items:center;font:italic 500 15px var(--display);line-height:1.1;padding:8px;text-align:center">${h ? '' : ''}${D.RESONANCES[k.slice(2)].need.map(x => D.TAG_NAME[x]).join('<br>+<br>')}</span></div>`}<span class="nm ${h ? '' : 'dim'}">${h || k[0] === 'r' ? esc(i.name) : 'Uncatalogued'}</span><span class="acc ${st.cat[k]?.first ? 'first' : ''}">${st.cat[k]?.first ? 'yours first' : accession(k)}</span></button>`; }).join('')}</div>
     <aside>${catDetail(V.catKey)}</aside></div>`;
 }

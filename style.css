@@ -3,7 +3,7 @@
 :root {
   color-scheme: dark;
   --bg: #0a2240; --bg2: #0d2a4f; --panel: #10335f; --panel2: #15407a; --line: rgba(232, 241, 250, .14); --line2: rgba(232, 241, 250, .3);
-  --ink: #e8f1fa; --ink2: #9cc3e6; --dim: #7598bd; --gilt: #f2c66d; --hostile: #ff8474; --calm: #8fe0c2;
+  --ink: #e8f1fa; --paper: #e8f1fa; --ink2: #9cc3e6; --dim: #7598bd; --gilt: #f2c66d; --hostile: #ff8474; --calm: #8fe0c2;
   --common: #b9cadb; --uncommon: #8fdc9f; --rare: #6fd6ff; --epic: #cdaaff; --exotic: #ffae63; --singular: #fff3c4;
   --display: 'Bodoni Moda', 'Didot', 'Bodoni 72', Georgia, serif;
   --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -51,9 +51,13 @@ h4 { font: 600 15px/1.25 var(--body); }
 .purse { display: flex; gap: 14px; font: 500 12px var(--mono); color: var(--ink2); white-space: nowrap; }
 .purse b { color: var(--ink); font-weight: 500; }
 @media (max-width: 760px) {
+  .top { backdrop-filter: none; background: var(--bg); }
   .top .wrap { height: 46px; }
+  .nav .the { display: none; }
+  .mood { display: none; }
+  .sts span { font-size: 7.5px; }
   .nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: rgba(8, 28, 54, .97); border-top: 1px solid var(--line); padding: 4px max(6px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)); justify-content: space-around; }
-  .nav button { padding: 9px 6px; font-size: 13px; flex: 1; }
+  .nav button { padding: 10px 2px; font-size: 12.5px; flex: 1; min-width: 0; }
   main { padding-bottom: 76px; }
   .purse { margin-left: auto; }
 }
@@ -144,12 +148,12 @@ main { padding-block: 26px 60px; }
 .contract .who .art { width: 54px; flex: none; }
 .contract h3 { font-size: 21px; }
 .contract p { font-size: 13.5px; color: var(--ink2); }
-.contract .finds { font: 11.5px var(--mono); color: var(--ink); }
+.contract .finds { font: 11.5px var(--mono); color: var(--ink); margin-top: auto; }
 .chip { font: 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 2px; background: rgba(242, 198, 109, .14); color: var(--gilt); align-self: flex-start; }
 .squad { display: flex; gap: 10px; flex-wrap: wrap; }
 .pick { display: flex; gap: 10px; align-items: center; padding: 8px 12px 8px 8px; border: 1px solid var(--line); border-radius: 40px; opacity: .55; transition: opacity .12s, border-color .12s; }
 .pick[aria-pressed="true"] { opacity: 1; border-color: var(--ink); }
-.pick .face, .face { width: 38px; height: 38px; border-radius: 50%; background: var(--ink); flex: none; --ink: #0a2240; --ink2: #2b5d99; padding: 6px; }
+.pick .face, .face { width: 38px; height: 38px; border-radius: 50%; background: var(--paper); flex: none; --ink: #0a2240; --ink2: #2b5d99; padding: 6px; }
 .pick small { display: block; font: 11px var(--mono); color: var(--ink2); }
 .stepper { display: inline-flex; align-items: center; border: 1px solid var(--line2); border-radius: var(--r); }
 .stepper button { width: 34px; height: 34px; font-size: 18px; }
@@ -244,9 +248,9 @@ table.rank tr.me td { color: var(--gilt); }
 .tok { position: absolute; width: 12.5%; height: 16.6667%; transition: left .2s ease, top .2s ease, opacity .25s; z-index: 2; padding: 6%; pointer-events: none; display: grid; place-items: center; padding: .7%; }
 .tok .art { width: 84%; }
 .tok.prop { z-index: 1; opacity: .9; } .tok.prop.rock { opacity: .5; } .tok.prop.use .art { filter: drop-shadow(0 0 5px var(--gilt)); }
-.tok.s .art, .tok.a .art { background: var(--ink); border-radius: 50%; --ink: #0a2240; --ink2: #2b5d99; padding: 9%; width: 76%; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
+.tok.s .art, .tok.a .art { background: var(--paper); border-radius: 50%; --ink: #0a2240; --ink2: #2b5d99; padding: 9%; width: 76%; box-shadow: 0 2px 8px rgba(0, 0, 0, .35); }
 .tok.a .art { background: var(--ink2); width: 62%; }
-.tok.sel .art { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink); }
+.tok.sel .art { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--paper); }
 .tok.spent .art { opacity: .55; }
 .tok.c.hostile .art { filter: drop-shadow(0 0 4px rgba(255, 132, 116, .9)); }
 .tok.c.tg .art, .tok.c.abt .art { filter: drop-shadow(0 0 6px var(--gilt)); }

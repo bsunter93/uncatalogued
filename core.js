@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 1;
+export const VERSION = 2;
 export const W = 8, H = 6;
 
 // ---------------------------------------------------------------- rng
@@ -658,10 +658,9 @@ export function weekId(now) { return fl((now - 345600000) / 604800000); }
 export function weeklyContract(now) { const w = weekId(now); return { weekly: true, week: w, region: w % 2 ? 'clockwork' : 'verdant', type: 'pursue', tier: 3, mods: {}, target: { fam: w % 2 ? 'relic' : 'organic', slot: D.SLOTS[w % 6] }, seed: hashStr('weekly-trial-' + w) }; }
 export function makeBoard(state, seed) {
   const r = mkRng(seed); const regs = ['verdant']; if (state.unlocks.clockwork) regs.push('clockwork');
-  const types = Object.keys(D.CONTRACT_TYPES); const list = [];
+  const types = Object.keys(D.CONTRACT_TYPES); const list = []; const t0 = state.stats.runs ? r.int(4) : 0;
   for (let i = 0; i < 3; i++) {
-    const region = regs.length > 1 ? regs[(i + r.int(2)) % 2] : 'verdant'; let type = types[(r.int(4) + i) % 4];
-    if (!state.stats.runs && i === 0) type = 'pursue';
+    const region = regs.length > 1 ? regs[(i + r.int(2)) % 2] : 'verdant'; const type = types[(t0 + i) % 4];
     const fam = weighted(r, D.REGIONS[region].fam); const mods = {};
     if (state.unlocks.bloom && r.pct(25)) mods.bloom = 1; else if (state.unlocks.hunts && r.pct(25)) mods.hunt = 1;
     list.push({ region, type, mods, target: { fam, slot: r.pick(D.SLOTS) }, seed: r.next() });

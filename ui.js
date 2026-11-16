@@ -65,7 +65,7 @@ export function pairHints(it, onlySeeker) {
     if (onlySeeker && sid !== onlySeeker) continue; const s = G.state.seekers[sid]; if (s.gear[slot] === it.id) continue;
     const cur = C.seekerItems(G.state, s); const next = cur.filter(x => C.itemDef(x).slot !== slot).concat([it]);
     const a = C.resonancesFor(cur), b = C.resonancesFor(next);
-    for (const r of b.active) if (!a.active.includes(r)) { const [t1, t2] = D.RESONANCES[r].need; const mine = C.itemTags(it); const other = next.find(x => x !== it && (C.itemTags(x).includes(mine.includes(t1) ? t2 : t1)));
+    for (const r of b.active) if (!a.active.includes(r)) { const [t1, t2] = D.RESONANCES[r].need; const other = next.find(x => x !== it && (C.itemTags(x).includes(t1) || C.itemTags(x).includes(t2)));
       out.push({ sid, name: s.name, res: r, other: other ? C.itemName(other) : null }); }
   }
   return out;
