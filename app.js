@@ -1,6 +1,22 @@
 // Camp: everything between expeditions.
 import { C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
-import { mountBattle } from './battle.js';
+import { mountBattle, NATURE } from './battle.js';
+// What a Mastered entry adds: who each resident lives beside, eats, or avoids.
+const ECO = {
+  thornling: 'Packs trail Mossbacks for the seed that falls from their gardens. They will not touch a Gulper Vine and give it a wide berth.',
+  mossback: 'Its shell garden feeds half the hall. Glasswings roost in it at night and Lantern Moss spreads wherever it sleeps.',
+  glasswing: 'Drawn to any light. Hush take them on the wing, so a hall with no Glasswings usually has a Hush in it.',
+  gulper: 'It does not hunt. It waits beside the paths the Thornlings use, and it has never been seen to move in daylight.',
+  carrion: 'It follows whatever does the killing. The petals at its throat are the flowers of the things it has eaten.',
+  hush: 'The top of the hall. Everything else goes quiet when one is near, which is where the name comes from.',
+  orchardmother: 'The Thornlings are hers. Every seed pod in the Galleries fell from one of her kind, and she remembers each one.',
+  mite: 'They service the larger machines and are tolerated for it. A swarm with nothing to repair starts taking things apart.',
+  pollinator: 'It carries filings between the copper lilies. The Wardens will not let anything near one.',
+  coilfawn: 'Built to be chased. The Arc Mantis hunts them, and a herd that stops running winds down within the hour.',
+  warden: 'It guards the Pollinators and the Coilfawns alike. Nobody has found who set it to.',
+  mantis: 'It hunts Coilfawns for the spring steel. It will leave a Seeker alone if there is a fawn in reach.',
+  regulator: 'Everything in the Wilds keeps its time. Stop it and the whole garden runs a little fast for a while.',
+};
 
 const app = $('#app');
 const V = { tab: 'board', contract: 0, tier: {}, squad: null, seeker: null, slot: null, cat: 'Fauna', catKey: null, benchItem: null, benchTab: 'pack', filter: 'all', report: null, opened: {}, rec: 'feed', mounted: false, landErr: '', code: false, asmTier: 1 };
@@ -148,8 +164,9 @@ function catDetail(key) {
     body = `<p class="lat">${esc(Sx.latin)}</p><div class="track">${C.STAGE_NAME.map((n, i) => `<div class="${i <= sg ? 'on' : ''}">${n}</div>`).join('')}</div>
       <dl class="kv"><dt>Studies</dt><dd class="num">${e.study || 0}${nx ? ' / ' + nx[0] : ''}</dd><dt>Samples</dt><dd class="num">${e.samples || 0}${nx && nx[1] ? ' / ' + nx[1] : ''}</dd><dt>Home</dt><dd>${D.REGIONS[Sx.region].short}</dd>${sg >= 1 ? `<dt>Yields</dt><dd>${D.MATERIALS[Sx.mat].name}</dd>` : ''}</dl>
       <p style="font-size:14px">${esc(Sx.blurb)}</p>
-      ${sg >= 1 ? `<p style="font-size:14px"><span class="label" style="display:block">Behaviour</span>${esc(Sx.behavior)}</p>` : `<p class="dim" style="font-size:13.5px">Behaviour unrecorded. Study it ${Math.max(1, 4 - (e.study || 0))} more time${4 - (e.study || 0) === 1 ? '' : 's'} in the field.</p>`}
-      ${sg >= 2 ? '<p style="font-size:13.5px;color:var(--gilt)">Investigated: your Seekers deal 10% more damage to it.</p>' : sg === 1 ? '<p class="dim" style="font-size:13.5px">Investigate it (10 studies, 2 samples) and your Seekers hit it 10% harder. Kills give samples. So does a Naturalist studying a calm one.</p>' : ''}
+      <div class="record">${[[1, 'Behaviour', Sx.behavior], [1, 'Weak to', D.FAMILY_NAME[Sx.weak] + ' weapons. They hit it 35% harder.'], [1, 'How to handle it', (NATURE[Sx.ai] || ['', ''])[1]], [2, 'Resists', D.FAMILY_NAME[Sx.resist] + ' weapons. They do 30% less.'], [2, 'Edge', 'Every Seeker deals 10% more damage to it.'], [3, 'Ecology', ECO[id] || '']]
+        .map(([need, lab, txt]) => sg >= need ? `<div class="rec on"><span class="label">${lab}</span><p>${esc(txt)}</p></div>` : `<div class="rec"><span class="label">${lab}</span><p class="redact" aria-hidden="true">${'&#9608;'.repeat(Math.min(34, 10 + (txt.length >> 2)))}</p><small>${C.STAGE_NAME[need]}: ${Math.max(0, C.STAGE_REQ[need][0] - (e.study || 0))} more stud${C.STAGE_REQ[need][0] - (e.study || 0) === 1 ? 'y' : 'ies'}${C.STAGE_REQ[need][1] > (e.samples || 0) ? ', ' + (C.STAGE_REQ[need][1] - (e.samples || 0)) + ' more sample' + (C.STAGE_REQ[need][1] - (e.samples || 0) === 1 ? '' : 's') : ''}</small></div>`).join('')}</div>
+      <p class="dim" style="font-size:12.5px">Notes come from Study, and from watching what it does when it has not noticed you. Samples come from kills, old specimen cases, and a Naturalist studying a calm one.</p>
       ${Sx.boss ? '' : `<div><span class="label">Variants</span><div class="vars" style="margin-top:6px">${Object.keys(D.VARIANTS).map(v => { const k = 'v:' + id + ':' + v; return `<div style="text-align:center" title="${have(k) ? esc(D.VARIANTS[v].note) : 'Not yet seen'}">${plateBox(id, { variant: v, unknown: !have(k) })}<span class="acc label ${G.firsts[k] && st.cat[k]?.first ? 'first' : ''}">${D.VARIANTS[v].name}</span></div>`; }).join('')}</div></div>`}`; }
   else if (t === 'p') body = `<p class="lat">${esc(D.FLORA[id].latin)}</p><p style="font-size:14px">${esc(D.FLORA[id].blurb)}</p><dl class="kv"><dt>Gathered</dt><dd class="num">${e.n || 0}</dd><dt>Yields</dt><dd>${D.MATERIALS[D.FLORA[id].mat].name}</dd></dl>`;
   else if (t === 'w') body = `<p style="font-size:14px">${esc(D.WONDERS[id].blurb)}</p><p style="font-size:14px;color:var(--gilt)">${esc(D.WONDERS[id].effect)}</p>`;

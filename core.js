@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 6;
+export const VERSION = 7;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -294,7 +294,7 @@ function kill(st, src, t, ev) {
   st.res.kills[t.kind] = (st.res.kills[t.kind] || 0) + 1; st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1;
   if (!t.noLoot) st.res.xp += S.boss ? 75 : S.elite ? 35 : 8;
   if (S.boss) { st.res.bossDown = true; st.res.cases.push('boss'); } else if (S.elite) st.res.cases.push('elite');
-  if (t.kind === D.REGIONS[st.spec.region].observe && st.spec.type === 'observe') st.res.obsKilled = true;
+  if (t.kind === D.REGIONS[st.spec.region].observe && st.spec.type === 'observe' && !(src && src.side === 'c')) st.res.obsKilled = true; // a predator taking one is not on you
   const corpse = { x: t.x, y: t.y, mat: S.mat, n: (t.variant === 'gilded' ? 2 : 1) };
   const k = src && src.side === 'a' ? st.units.find(u => u.id === src.owner) : src;
   if (k && k.side === 's') {

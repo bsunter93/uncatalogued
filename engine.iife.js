@@ -705,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 6;
+  var VERSION = 7;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1380,7 +1380,7 @@ var UncEngine = (() => {
       st.res.bossDown = true;
       st.res.cases.push("boss");
     } else if (S.elite) st.res.cases.push("elite");
-    if (t.kind === REGIONS[st.spec.region].observe && st.spec.type === "observe") st.res.obsKilled = true;
+    if (t.kind === REGIONS[st.spec.region].observe && st.spec.type === "observe" && !(src && src.side === "c")) st.res.obsKilled = true;
     const corpse = { x: t.x, y: t.y, mat: S.mat, n: t.variant === "gilded" ? 2 : 1 };
     const k = src && src.side === "a" ? st.units.find((u) => u.id === src.owner) : src;
     if (k && k.side === "s") {

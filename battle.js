@@ -24,7 +24,7 @@ const DECOR = {
 const KIND = { attack: 'Attack', defend: 'Defend', control: 'Control', support: 'Support', device: 'Device', lore: 'Knowledge', flow: '' };
 const ABIL_KIND = { brace: 'defend', riposte: 'defend', shove: 'attack', deadeye: 'attack', spore_dart: 'attack', arc_pulse: 'attack', mark: 'control', snare: 'control', soothe: 'control', mend: 'support', overclock: 'support', drone: 'device' };
 // How each kind of creature behaves, and the one thing worth knowing when you meet it.
-const NATURE = {
+export const NATURE = {
   pack: ['Pack hunter', 'Weak alone. Kill or scatter them one at a time before they gather round a single Seeker.'],
   predator: ['Predator', 'It picks a Seeker and commits. Brace, or put a snare in its path.'],
   ambush: ['Ambusher', 'It waits for you to come within reach. Fight it from range.'],
