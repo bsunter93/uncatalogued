@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 8;
+export const VERSION = 9;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -799,8 +799,10 @@ function settle(state, log, ctx, fresh, out) {
   state.run = null; state.stats.runs++; if (win) state.stats.wins++;
   // catalogue
   const touch = (key) => { catAdd(state, key, now, fresh); return state.cat[key]; };
-  for (const sp in rs.seen) { const e = touch('f:' + sp); const before = stageOf(e); e.study = (e.study || 0) + (rs.study[sp] || 0); e.samples = (e.samples || 0) + (rs.samples[sp] || 0); e.n = (e.n || 0) + 1; const after = stageOf(e); if (after > before) { rep.stageUps.push({ sp, stage: after }); rep.research += 5 * (after - before); } }
-  for (const v in rs.variants) touch('v:' + v);
+  // Walking out early only counts what the party actually worked on: studied, sampled, watched or killed. Being in the room with it is not a record.
+  const met = sp => win || rs.study[sp] || rs.samples[sp] || rs.kills[sp];
+  for (const sp in rs.seen) { if (!met(sp)) continue; const e = touch('f:' + sp); const before = stageOf(e); e.study = (e.study || 0) + (rs.study[sp] || 0); e.samples = (e.samples || 0) + (rs.samples[sp] || 0); e.n = (e.n || 0) + 1; const after = stageOf(e); if (after > before) { rep.stageUps.push({ sp, stage: after }); rep.research += 5 * (after - before); } }
+  for (const v in rs.variants) if (met(v.split(':')[0])) touch('v:' + v);
   for (const f in rs.flora) { const e = touch('p:' + f); e.n = (e.n || 0) + rs.flora[f]; }
   for (const w in rs.wonders) touch('w:' + w);
   let studyPts = 0; for (const sp in rs.study) studyPts += rs.study[sp];

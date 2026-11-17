@@ -705,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 8;
+  var VERSION = 9;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2716,7 +2716,9 @@ var UncEngine = (() => {
       catAdd(state, key, now, fresh);
       return state.cat[key];
     };
+    const met = (sp) => win || rs.study[sp] || rs.samples[sp] || rs.kills[sp];
     for (const sp in rs.seen) {
+      if (!met(sp)) continue;
       const e = touch("f:" + sp);
       const before = stageOf(e);
       e.study = (e.study || 0) + (rs.study[sp] || 0);
@@ -2728,7 +2730,7 @@ var UncEngine = (() => {
         rep.research += 5 * (after - before);
       }
     }
-    for (const v in rs.variants) touch("v:" + v);
+    for (const v in rs.variants) if (met(v.split(":")[0])) touch("v:" + v);
     for (const f in rs.flora) {
       const e = touch("p:" + f);
       e.n = (e.n || 0) + rs.flora[f];
