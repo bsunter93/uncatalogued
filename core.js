@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 7;
+export const VERSION = 8;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -418,7 +418,10 @@ export function plan(st, c) {
   if (lampOn) return { k: 'idle', mv: stepToward(st, c, lampOn, 2, 1), label: md(lampOn, c) <= 1 ? 'Held by the light' : 'Drawn to the light' };
   if (c.ai === 'skittish') {
     const near = sk.filter(s => md(s, c) <= 3);
-    if (c.hp * 2 <= c.max && c.hp < c.max) return { k: 'flee', label: 'Bolting' };
+    if (c.hp * 2 <= c.max && c.hp < c.max && !(c.bleed > 0 || c.mauled)) return { k: 'flee', label: 'Bolting' };
+    if ((c.bleed > 0 || c.mauled) && c.hp < c.max) { const hunter = creatures(st).filter(o => o !== c && (D.SPECIES[o.kind].ai === 'predator' || D.SPECIES[o.kind].hunts)).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; // too hurt to clear the hall: it drags itself away from whatever bit it
+      const away = hunter && c.root <= 0 ? DIRS.map(o => [c.x + o[0], c.y + o[1]]).filter(([x, y]) => free(st, x, y)).sort((p, q) => (Math.abs(q[0] - hunter.x) + Math.abs(q[1] - hunter.y)) - (Math.abs(p[0] - hunter.x) + Math.abs(p[1] - hunter.y)))[0] : null;
+      return away ? { k: 'idle', mv: { to: away, path: [away] }, label: 'Hurt, dragging itself away' } : { k: 'idle', label: 'Hurt, cornered' }; }
     if (!near.length) { const o = DIRS[(c.id + st.turn) % 4]; const x = c.x + o[0], y = c.y + o[1]; return free(st, x, y) && c.root <= 0 ? { k: 'idle', mv: { to: [x, y], path: [[x, y]] }, label: 'Wary' } : { k: 'idle', label: 'Wary' }; }
     const { dist, par } = reach(st, c, moveRange(st, c)); const score = (x, y) => Math.min(...sk.map(s => Math.abs(s.x - x) + Math.abs(s.y - y)));
     let best = null, bs = score(c.x, c.y);
@@ -479,9 +482,9 @@ function stepToward(st, c, goal, steps, stopAt = 0) {
 // The party sees something happen between residents and writes it down. Once per kind of event per room.
 function witness(st, c, what, ev) {
   const seen = st.room.seenActs || (st.room.seenActs = {}); const key = c.kind + ':' + what; if (seen[key]) return;
-  const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (!w || md(w, c) > 7) return;
+  const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (!w || md(w, c) > (what === 'kill' || what === 'hunt' ? 10 : 7)) return; // a hunt is loud enough to follow from across the hall
   seen[key] = 1; st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2; st.res.xp += 4;
-  ev.push({ e: 'text', id: c.id, msg: what === 'kill' ? 'Witnessed: a kill' : what === 'feed' ? 'Witnessed: feeding' : 'Witnessed: grazing' }, { e: 'study', id: c.id, by: w.id, n: 2, left: 0, seen: what });
+  ev.push({ e: 'text', id: c.id, msg: what === 'kill' ? 'Witnessed: a kill' : what === 'hunt' ? 'Witnessed: a hunt' : what === 'feed' ? 'Witnessed: feeding' : 'Witnessed: grazing' }, { e: 'study', id: c.id, by: w.id, n: 2, left: 0, seen: what });
 }
 // Anything still living its own life notices the party when they come close, and its kin take the alarm.
 function notice(st, ev) {
@@ -506,7 +509,7 @@ function act(st, c, ev) {
   if (p.root) { const t = st.units.find(u => u.id === p.root); if (t && alive(t) && !t.fx.anchor) { t.root = 1; ev.push({ e: 'text', id: t.id, msg: 'Rooted' }, { e: 'status', id: t.id, s: 'root' }); } }
   if (p.mv && p.mv.path.length) { walk(st, c, p.mv.path, ev); if (!alive(c)) return; }
   const t = p.tgt ? st.units.find(u => u.id === p.tgt && alive(u)) : null;
-  if (p.k === 'atk') { if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== 'ambush' || md(c, t) === 1)) { const beast = t.side === 'c'; creatureAttack(st, c, t, ev); if (beast && !alive(t) && alive(c)) witness(st, c, 'kill', ev); } }
+  if (p.k === 'atk') { if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== 'ambush' || md(c, t) === 1)) { const beast = t.side === 'c'; creatureAttack(st, c, t, ev); if (beast && alive(t)) t.mauled = 1; if (beast && alive(c)) witness(st, c, alive(t) ? 'hunt' : 'kill', ev); } }
   else if (p.k === 'idle' && p.graze) witness(st, c, 'graze', ev);
   else if (p.k === 'pull') { if (t && !t.fx.anchor) { let best = null, bd = 99; for (const [dx, dy] of DIRS) { const x = c.x + dx, y = c.y + dy; if (free(st, x, y)) { const d = Math.abs(x - t.x) + Math.abs(y - t.y); if (d < bd) { bd = d; best = [x, y]; } } } if (best) { t.x = best[0]; t.y = best[1]; ev.push({ e: 'move', id: t.id, path: [best], shove: true }, { e: 'text', id: t.id, msg: 'Dragged' }); } } }
   else if (p.k === 'eat') { const cp = st.room.corpses[p.ci]; if (cp && md(cp, c) <= 1) { st.room.corpses.splice(p.ci, 1); c.max += 4; c.hp = Math.min(c.max, c.hp + 10); c.dmg = [c.dmg[0] + 2, c.dmg[1] + 2]; ev.push({ e: 'eat', id: c.id, x: cp.x, y: cp.y }); witness(st, c, 'feed', ev); } }

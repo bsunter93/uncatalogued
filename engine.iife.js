@@ -705,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 7;
+  var VERSION = 8;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1671,7 +1671,12 @@ var UncEngine = (() => {
     if (lampOn) return { k: "idle", mv: stepToward(st, c, lampOn, 2, 1), label: md(lampOn, c) <= 1 ? "Held by the light" : "Drawn to the light" };
     if (c.ai === "skittish") {
       const near = sk.filter((s) => md(s, c) <= 3);
-      if (c.hp * 2 <= c.max && c.hp < c.max) return { k: "flee", label: "Bolting" };
+      if (c.hp * 2 <= c.max && c.hp < c.max && !(c.bleed > 0 || c.mauled)) return { k: "flee", label: "Bolting" };
+      if ((c.bleed > 0 || c.mauled) && c.hp < c.max) {
+        const hunter = creatures(st).filter((o) => o !== c && (SPECIES[o.kind].ai === "predator" || SPECIES[o.kind].hunts)).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
+        const away = hunter && c.root <= 0 ? DIRS.map((o) => [c.x + o[0], c.y + o[1]]).filter(([x, y]) => free(st, x, y)).sort((p, q) => Math.abs(q[0] - hunter.x) + Math.abs(q[1] - hunter.y) - (Math.abs(p[0] - hunter.x) + Math.abs(p[1] - hunter.y)))[0] : null;
+        return away ? { k: "idle", mv: { to: away, path: [away] }, label: "Hurt, dragging itself away" } : { k: "idle", label: "Hurt, cornered" };
+      }
       if (!near.length) {
         const o = DIRS[(c.id + st.turn) % 4];
         const x = c.x + o[0], y = c.y + o[1];
@@ -1779,11 +1784,11 @@ var UncEngine = (() => {
     const key = c.kind + ":" + what;
     if (seen[key]) return;
     const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
-    if (!w || md(w, c) > 7) return;
+    if (!w || md(w, c) > (what === "kill" || what === "hunt" ? 10 : 7)) return;
     seen[key] = 1;
     st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2;
     st.res.xp += 4;
-    ev.push({ e: "text", id: c.id, msg: what === "kill" ? "Witnessed: a kill" : what === "feed" ? "Witnessed: feeding" : "Witnessed: grazing" }, { e: "study", id: c.id, by: w.id, n: 2, left: 0, seen: what });
+    ev.push({ e: "text", id: c.id, msg: what === "kill" ? "Witnessed: a kill" : what === "hunt" ? "Witnessed: a hunt" : what === "feed" ? "Witnessed: feeding" : "Witnessed: grazing" }, { e: "study", id: c.id, by: w.id, n: 2, left: 0, seen: what });
   }
   function notice(st, ev) {
     const sk = seekers(st).filter(alive);
@@ -1848,7 +1853,8 @@ var UncEngine = (() => {
       if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== "ambush" || md(c, t) === 1)) {
         const beast = t.side === "c";
         creatureAttack(st, c, t, ev);
-        if (beast && !alive(t) && alive(c)) witness(st, c, "kill", ev);
+        if (beast && alive(t)) t.mauled = 1;
+        if (beast && alive(c)) witness(st, c, alive(t) ? "hunt" : "kill", ev);
       }
     } else if (p.k === "idle" && p.graze) witness(st, c, "graze", ev);
     else if (p.k === "pull") {

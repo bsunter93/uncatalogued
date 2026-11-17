@@ -167,18 +167,21 @@ export function mountBattle(root, onFinish) {
   }
   function actions() {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
-    const b = []; const dis = busy || !live(u);
+    const b = [], own = []; const dis = busy || !live(u);
     if (live(u)) {
       b.push(btn('lore', 'study', 'Study', u.freeStudy ? 'find weak points · 1 action' : 'free on a calm creature', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Each note adds 10% damage against that creature and reveals what it is weak to" ${dis ? 'disabled' : u.ap < 1 && u.freeStudy ? off('No actions left this turn') : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
-        b.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
+        own.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
-        b.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis ? 'disabled' : u.charges <= 0 ? off('No charges left on this device') : u.ap < I.ap ? off('Not enough actions for the device') : ''}`)); }
+        own.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis ? 'disabled' : u.charges <= 0 ? off('No charges left on this device') : u.ap < I.ap ? off('Not enough actions for the device') : ''}`)); }
     }
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0);
     if (adv) b.push(btn('flow', 'move_on', st.roomIdx >= 2 ? 'Extract' : 'Move on', st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
     b.push(btn('flow', 'end', 'End turn', adv ? 'let the room move' : 'creatures act', `data-act="end" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
-    el.innerHTML = b.join('');
+    // two framed groups: what only this Seeker can do, and what anyone can do
+    const pips = live(u) ? `<span class="pips" title="Actions left this turn">${'<i class="on"></i>'.repeat(Math.max(0, u.ap))}${'<i></i>'.repeat(Math.max(0, (u.apMax || 2) - u.ap))}</span>` : '';
+    el.innerHTML = (own.length ? `<div class="agrp own"><div class="agh"><span class="label">${esc(u.name)}</span><span class="agk">${esc(D.ARCHETYPES[u.kind]?.name || '')}</span>${pips}</div><div class="agb">${own.join('')}</div></div>` : '')
+      + `<div class="agrp all"><div class="agh"><span class="label">Party</span><span class="agk">any Seeker</span></div><div class="agb">${b.join('')}</div></div>`;
   }
   function cards() {
     $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button><button class="sheetbtn" data-sheet="${u.id}" title="Open ${esc(u.name)}'s sheet" aria-label="Open ${esc(u.name)}'s sheet">Sheet</button>`).join('');
@@ -267,7 +270,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'hit') push(e.from && !e.dot ? `${who(e.from)} hits ${who(e.id)} for ${e.n}${e.crit ? ', a critical hit' : ''}${e.eff === 'weak' ? ' (it is weak to that weapon)' : e.eff === 'resist' ? ' (it resists that weapon)' : ''}.` : `${who(e.id)} takes ${e.n}${e.dot && e.dot !== 'dot' ? ' from ' + e.dot : ' damage'}.`, cls(e.from && !e.dot ? e.from : e.id));
       else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
       else if (e.e === 'shield') push(e.n < 0 ? `${who(e.id)} gains ${-e.n} shield.` : `${who(e.id)}'s shield absorbs ${e.n}.`, cls(e.id));
-      else if (e.e === 'text') push(`${who(e.id)}: ${e.msg}.`, cls(e.id));
+      else if (e.e === 'text') push(/^Witnessed/.test(e.msg) ? `You watch the ${who(e.id)}. ${e.msg}.` : `${who(e.id)}: ${e.msg}.`, cls(e.id));
       else if (e.e === 'status') push(`${who(e.id)} is ${{ bleed: 'bleeding', poison: 'poisoned', mark: 'marked', calm: 'calmed', root: 'held in place', stun: 'stunned' }[e.s] || e.s}.`, cls(e.id));
       else if (e.e === 'study') push(`Field notes on ${who(e.id)}: +${e.n}.`, 'ally');
       else if (e.e === 'die') push(`${who(e.id)} dies.`, cls(e.id));
