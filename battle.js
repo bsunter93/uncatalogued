@@ -61,7 +61,7 @@ export function mountBattle(root, onFinish) {
     onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
   // which far place the party is standing in: the start, one of the two doors, or the last room
   const siteNow = () => st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
-  if (location.hostname === 'localhost') window.__sc = sc; // local testing hook
+  if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow() }; } // local testing hooks
   sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room' }); sc.place(siteNow());
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
