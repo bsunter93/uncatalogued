@@ -332,3 +332,35 @@ table.rank tr.me td { color: var(--gilt); }
 .ulab.s .hp i { background: #e8f1fa; } .ulab .hp.hostile i { background: var(--hostile); }
 .ulab .ap { position: static; display: flex; gap: 3px; } .ulab .ap i { width: 7px; height: 7px; border-radius: 50%; background: var(--gilt); box-shadow: 0 0 6px var(--gilt); }
 .ulab .sts { position: static; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+
+/* The expedition fills the window. Controls sit over the scene, the way a game's do. */
+.game { position: fixed; inset: 0; z-index: 30; background: #0b0820; overflow: hidden; }
+.game .board.three { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.game::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 4; background: radial-gradient(ellipse at 50% 45%, transparent 52%, rgba(6, 3, 20, .6) 100%); }
+.hud { position: absolute; left: 0; right: 0; z-index: 10; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.htop { top: 0; display: flex; align-items: flex-start; gap: 14px; padding: max(12px, env(safe-area-inset-top, 0px)) 18px 26px; background: linear-gradient(rgba(6, 3, 20, .78), transparent); }
+.htop .rooms { margin-top: 8px; } .htop .obj { font-size: 15px; text-shadow: 0 1px 6px #000; } .htop .turn { margin-top: 4px; white-space: nowrap; }
+.htop .obj small { display: block; font-size: 12.5px; color: var(--gilt); margin-top: 2px; max-width: 60ch; }
+.hbot { bottom: 0; display: flex; align-items: flex-end; gap: 16px; padding: 40px 18px max(14px, env(safe-area-inset-bottom, 0px)); background: linear-gradient(transparent, rgba(6, 3, 20, .86) 62%); }
+.game .scards { flex-direction: row; gap: 8px; flex: 0 0 auto; }
+.game .scard { width: 172px; background: rgba(10, 14, 34, .72); border-color: rgba(232, 241, 250, .2); backdrop-filter: blur(6px); }
+.game .scard[aria-pressed="true"] { background: rgba(28, 44, 92, .9); border-color: #fff; box-shadow: 0 0 0 1px #fff, 0 0 22px rgba(255, 255, 255, .22); }
+.game .scard .sub { font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aps { display: flex; gap: 4px; height: 8px; } .aps i { width: 8px; height: 8px; border-radius: 50%; background: var(--gilt); box-shadow: 0 0 6px var(--gilt); }
+.game .mid { flex: 1; min-width: 0; max-width: 700px; margin-left: auto; }
+.game .hint { min-height: 0; margin: 0 0 8px; padding: 0; border: 0; background: none; color: #d6deee; text-shadow: 0 1px 6px #000; font-size: 14px; }
+.game .actions { margin: 0; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.game .act { background: rgba(10, 14, 34, .78); border-color: rgba(232, 241, 250, .28); backdrop-filter: blur(6px); min-height: 54px; }
+.game .act:hover:not(:disabled) { background: rgba(40, 56, 110, .9); }
+.game .act.end.ready, .game .act.adv { background: var(--ink); }
+.game .info { position: absolute; z-index: 11; right: 16px; top: 74px; width: 290px; max-height: calc(100% - 260px); overflow-y: auto; background: rgba(8, 12, 30, .88); backdrop-filter: blur(8px); border: 1px solid rgba(232, 241, 250, .22); }
+.game .info .x { float: right; font-size: 12px; margin: -4px -2px 0 8px; position: relative; z-index: 1; }
+.game .info .plate { clear: right; }
+@media (max-width: 860px) {
+  .htop { gap: 6px 12px; flex-wrap: wrap; padding-inline: 12px; } .htop .turn, .htop .obj small { display: none; } .htop .obj { flex-basis: 50%; font-size: 13.5px; }
+  .hbot { flex-direction: column; align-items: stretch; gap: 8px; padding: 30px 10px max(10px, env(safe-area-inset-bottom, 0px)); }
+  .game .scard { width: auto; flex: 1; min-width: 0; padding: 6px; } .game .mid { margin: 0; max-width: none; } .game .hint { font-size: 12.5px; }
+  .game .actions { grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); } .game .act { min-height: 46px; padding: 5px 7px; }
+  .game .info { left: 10px; right: 10px; top: 86px; width: auto; max-height: 38%; }
+}

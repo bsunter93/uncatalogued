@@ -1,6 +1,7 @@
 // The expedition screen: board, input, and playback of what the rules engine reports.
 import { C, D, G, $, esc, art, face, store, toast } from './ui.js';
 import { createScene } from './scene3d.js';
+import { snd } from './sound.js';
 
 const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. A good place to study. Nothing to clear, so no case for clearing it.']],
   clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. A good place to study. Nothing to clear, so no case for clearing it.']] };
@@ -14,9 +15,12 @@ export function mountBattle(root, onFinish) {
   let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
   const first = !G.state.stats.runs;
 
-  root.innerHTML = `<div class="wrap" style="padding-block:14px 90px"><div class="bhead"><div class="rooms"></div><div class="obj grow"></div><span class="label turn"></span><button class="link" data-act="retreat">Retreat</button></div>
-    <div class="battle"><div><div class="board three"></div><div class="actions"></div><div class="hint"></div></div>
-    <aside class="stack"><div class="scards"></div><div class="panel info"></div></aside></div></div>`;
+  root.innerHTML = `<div class="game"><div class="board three"></div>
+    <div class="hud htop"><div class="rooms"></div><div class="obj grow"></div><span class="label turn"></span><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
+    <div class="panel info" hidden></div>
+    <div class="hud hbot"><div class="scards"></div><div class="mid"><div class="hint"></div><div class="actions"></div></div></div></div>`;
+  const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
+  const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
@@ -81,9 +85,9 @@ export function mountBattle(root, onFinish) {
   }
   function head() {
     $('.rooms', root).innerHTML = [0, 1, 2].map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
-    const [t, ok] = objective(); const o = $('.obj', root); o.innerHTML = t; o.classList.toggle('ok', !!ok);
+    const [t, ok] = objective(); const o = $('.obj', root); const w = st.room.wonder && D.WONDERS[st.room.wonder]; o.innerHTML = t + (w ? `<small>${esc(w.name)}. ${esc(w.effect)}</small>` : ''); $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off'; o.classList.toggle('ok', !!ok);
     $('.turn', root).textContent = `${reg.short} · Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · Room ${st.roomIdx + 1} of 3 · Turn ${st.turn}`;
-    $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You keep your notes and lose most cases.' : 'Retreat';
+    $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You lose most cases.' : 'Retreat';
   }
   function actions() {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
@@ -101,7 +105,7 @@ export function mountBattle(root, onFinish) {
     el.innerHTML = b.join('');
   }
   function cards() {
-    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.ap + ' action' + (u.ap === 1 ? '' : 's') : 'Down. Back on their feet next room.'}</span></button>`).join('');
+    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button>`).join('');
   }
   function panel() {
     const el = $('.info', root); let h = '';
@@ -118,13 +122,8 @@ export function mountBattle(root, onFinish) {
     } else if (p) {
       const F = p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
       h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
-    } else {
-      const su = unit(sel);
-      if (live(su)) { const w = su.sh.w; const res = su.sh.res.active;
-        h = `<p class="label">${D.ARCHETYPES[su.kind].name} · level ${su.sh.lvl}</p><h4>${esc(su.name)}</h4><dl class="kv" style="margin-top:8px"><dt>Weapon</dt><dd class="num">${w.min}-${w.max} · ${C.weaponRange(st, su) > 1 ? 'range ' + C.weaponRange(st, su) : 'melee'}</dd><dt>Armor</dt><dd class="num">${su.armor}</dd><dt>Move</dt><dd class="num">${su.move}</dd><dt>Critical</dt><dd class="num">${su.sh.crit}%</dd></dl>
-          ${res.map(r => `<div class="reso" style="margin-top:8px"><b>${D.RESONANCES[r].name}</b>${esc(D.RESONANCES[r].text)}</div>`).join('')}<p class="dim" style="font-size:13px;margin-top:8px">Tap any creature or object to read about it.</p>`; }
     }
-    if (st.room.wonder && !info) { const w = D.WONDERS[st.room.wonder]; h += `<hr class="rule" style="margin:12px 0"><p class="label">In this room</p><p style="font-size:13.5px;color:var(--gilt)">${esc(w.name)}. ${esc(w.effect)}</p>`; }
+    if (h) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h;
     el.innerHTML = h; el.hidden = !h;
   }
   function hint() {
@@ -148,22 +147,22 @@ export function mountBattle(root, onFinish) {
     const vp = new Map(before.map(u => [u.id, { x: u.x, y: u.y }]));
     const at = id => { if (!vp.has(id)) { const u = unit(id); vp.set(id, u ? { x: u.x, y: u.y } : { x: 0, y: 0 }); } return vp.get(id); };
     for (const e of ev) {
-      if (e.e === 'room') { banner(`Room ${e.idx + 1}`); return; }
-      if (e.e === 'move') { const v = at(e.id); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { sc.lunge(e.from, e.id); await sleep(110); } sc.hit(e.id, e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
-      else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
+      if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
+      if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
+      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { sc.lunge(e.from, e.id); snd.swing(); await sleep(110); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
       else if (e.e === 'status') { const v = at(e.id); float(v.x, v.y, { bleed: 'Bleeding', poison: 'Poisoned', mark: 'Marked', calm: 'Calmed', root: 'Held' }[e.s] || e.s, 'txt'); await sleep(110); }
-      else if (e.e === 'study') { const v = at(e.id); float(v.x, v.y, '+' + e.n + ' study', 'study'); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
-      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { const v = at(e.id); sc.gone(e.id); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
+      else if (e.e === 'study') { const v = at(e.id); float(v.x, v.y, '+' + e.n + ' study', 'study'); snd.study(); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
+      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { const v = at(e.id); sc.gone(e.id); e.e === 'flee' ? snd.flee() : snd.die(); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
       else if (e.e === 'spawn') { const u = unit(e.id); if (u) { sc.add({ id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant }); sc.burst(u.x, u.y, 0xb6e33a); vp.set(u.id, { x: u.x, y: u.y }); await sleep(180); } }
       else if (e.e === 'eat') { const v = at(e.id); float(v.x, v.y, 'Feeds', 'txt'); await sleep(220); }
-      else if (e.e === 'phase') { banner(e.who === 'c' ? 'The Cabinet moves' : 'Your turn'); await sleep(e.who === 'c' ? 520 : 380); }
-      else if (e.e === 'tele') { const m = new Map(); for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (e.line.axis === 'row' ? y === e.line.i : x === e.line.i) m.set(x + ',' + y, 'danger'); sc.marks(m); await sleep(380); }
-      else if (e.e === 'purge') { banner('Purge'); await sleep(300); }
+      else if (e.e === 'phase') { banner(e.who === 'c' ? 'The Cabinet moves' : 'Your turn'); snd.turn(e.who === 'c'); await sleep(e.who === 'c' ? 520 : 380); }
+      else if (e.e === 'tele') { const m = new Map(); for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (e.line.axis === 'row' ? y === e.line.i : x === e.line.i) m.set(x + ',' + y, 'danger'); sc.marks(m); snd.warn(); await sleep(380); }
+      else if (e.e === 'purge') { banner('Purge'); snd.warn(); await sleep(300); }
       else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); if (e.e !== 'trapset') sc.burst(e.x, e.y); await sleep(160); }
-      else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); } await sleep(200); }
+      else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); snd.pick(); } await sleep(200); }
     }
   }
   async function send(a) {
@@ -174,7 +173,7 @@ export function mountBattle(root, onFinish) {
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]);
     await play(ev, before); busy = false;
-    if (st.outcome) { sync(); await sleep(350); sc.dispose(); onFinish(log, st); return; }
+    if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();
   }
   function choosePath() {
@@ -187,7 +186,10 @@ export function mountBattle(root, onFinish) {
     document.body.append(v);
   }
   root.onclick = e => {
-    const b = e.target.closest('button'); if (!b || busy) return;
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.act === 'snd') { snd.toggle(); head(); return; }
+    if (b.dataset.act === 'closeinfo') { info = null; armed = null; sync(); return; }
+    if (busy) return; snd.click();
     if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
     if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; sync(); return; }
     if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; sync(); return; }
@@ -206,5 +208,5 @@ export function mountBattle(root, onFinish) {
     if (mode) mode = null;
     armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
   }
-  sync(); if (st.outcome) { sc.dispose(); onFinish(log, st); return; } if (log.length === 0) banner(reg.short);
+  sync(); if (st.outcome) { leave(); onFinish(log, st); return; } if (log.length === 0) banner(reg.short);
 }

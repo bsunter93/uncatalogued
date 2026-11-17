@@ -158,10 +158,19 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   let down = null; renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) onTile(t[0], t[1]); });
   const hover = new THREE.Mesh(new THREE.RingGeometry(.5, .56, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; scene.add(hover);
-  renderer.domElement.addEventListener('pointermove', e => { const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
+  renderer.domElement.addEventListener('pointermove', e => { const bb = renderer.domElement.getBoundingClientRect(); ptr.x = (e.clientX - bb.left) / bb.width - .5; ptr.y = (e.clientY - bb.top) / bb.height - .5; const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
   renderer.domElement.addEventListener('pointerleave', () => { hover.visible = false; });
 
-  function resize() { const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05; cam.fov = tall ? 46 : 30; cam.position.set(0, tall ? 15.5 : 9.4, tall ? 9.6 : 11.6); cam.lookAt(0, .2, tall ? -.4 : .2); cam.updateProjectionMatrix(); }
+  // Frame the whole board between the top bar and the bottom controls, whatever the window shape.
+  const base = new THREE.Vector3(), pv = new THREE.Vector3(), ptr = { x: 0, y: 0 };
+  function resize() {
+    const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05;
+    cam.fov = tall ? 44 : 30; cam.updateProjectionMatrix(); const dir = pv.set(0, tall ? 1.5 : .86, 1).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
+    const top = 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 330 : 150) / h; const pts = [[-hw, 0, hd], [hw, 0, hd], [-hw, 1.7, -hd], [hw, 1.7, -hd], [-hw, 0, -hd], [hw, 0, -hd]];
+    for (let d = 7; d < 46; d += .35) { cam.position.copy(dir).multiplyScalar(d); cam.lookAt(0, .3, 0); cam.updateMatrixWorld(); let ok = true; for (const p of pts) { pv.set(p[0], p[1], p[2]).project(cam); if (pv.z > 1 || pv.z < -1 || Math.abs(pv.x) > .93 || pv.y > top || pv.y < bot) { ok = false; break; } } if (ok) break; }
+    // slide the view so the board sits in the open band, not dead centre behind the controls
+    base.copy(cam.position); cam.userData.shift = (top + bot) / 2;
+  }
   const ro = new ResizeObserver(resize); ro.observe(el); resize();
   let dead = false; const v3 = new THREE.Vector3();
   (function frame() {
@@ -182,6 +191,7 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
     for (const k in mk) if (k.endsWith('mv')) mk[k].scale.setScalar(1 + Math.sin(t * 4) * .12);
     gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25;
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
+    cam.position.set(base.x + Math.sin(t * .17) * .22 + ptr.x * .7, base.y + Math.sin(t * .23) * .1 - ptr.y * .3, base.z + Math.cos(t * .13) * .12); cam.lookAt(0, .3, 0);
     composer.render();
   })();
   return api;
