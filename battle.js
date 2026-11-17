@@ -72,7 +72,7 @@ export function mountBattle(root, onFinish) {
   const LORE = spec.region === 'clockwork' ? { ...DECOR, ...DECOR_CW } : DECOR; const CWF = spec.region === 'clockwork';
   let log = []; try { const sv = JSON.parse(store.get('unc.run') || 'null'); if (sv && sv.at === run.at) log = sv.log; } catch { /* start over */ }
   let st; try { st = C.replay(spec, log); } catch { log = []; st = C.createRun(spec); }
-  let focusOn = ''; let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
+  const passed = new Set(); let focusOn = ''; let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
@@ -86,7 +86,7 @@ export function mountBattle(root, onFinish) {
     onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed });
   // which far place the party is standing in: the start, one of the two doors, or the last room
   const siteNow = () => st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
-  if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow() }; } // local testing hooks
+  if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow(), tile: (x, y) => tileClick(x, y) }; } // local testing hooks
   sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room' }); sc.place(siteNow());
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
@@ -103,7 +103,7 @@ export function mountBattle(root, onFinish) {
   }
   function sync() {
     if (shownRoom !== st.roomIdx) { shownRoom = st.roomIdx; sel = null; mode = null; info = null; sc.setRoom(st); }
-    if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
+    if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
     const m = targets();
     sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, gone: !live(u), label: live(u) ? label(u) : '',
       ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
@@ -175,9 +175,10 @@ export function mountBattle(root, onFinish) {
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
         own.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis ? 'disabled' : u.charges <= 0 ? off('No charges left on this device') : u.ap < I.ap ? off('Not enough actions for the device') : ''}`)); }
     }
-    const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0);
+    const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0 && !passed.has(x.id));
+    if (live(u)) { const others = mine().some(x => x !== u && live(x) && x.ap > 0 && !passed.has(x.id)); own.push(btn('flow', 'end', 'End turn', others ? `${esc(u.name)} is done` : 'last Seeker: creatures act', `data-act="pass" title="Finish ${esc(u.name)}'s turn and hand over to the next Seeker" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${u.ap <= 0 ? 'ready' : ''} `)); }
     if (adv) b.push(btn('flow', 'move_on', st.roomIdx >= 2 ? 'Extract' : 'Move on', st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
-    b.push(btn('flow', 'end', 'End turn', adv ? 'let the room move' : 'creatures act', `data-act="end" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
+    b.push(btn('flow', 'end', 'End round', 'all Seekers done', `data-act="end" title="End the turn for the whole party now" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
     // two framed groups: what only this Seeker can do, and what anyone can do
     const pips = live(u) ? `<span class="pips" title="Actions left this turn">${'<i class="on"></i>'.repeat(Math.max(0, u.ap))}${'<i></i>'.repeat(Math.max(0, (u.apMax || 2) - u.ap))}</span>` : '';
     el.innerHTML = (own.length ? `<div class="agrp own"><div class="agh"><span class="label">${esc(u.name)}</span><span class="agk">${esc(D.ARCHETYPES[u.kind]?.name || '')}</span>${pips}</div><div class="agb">${own.join('')}</div></div>` : '')
@@ -324,7 +325,7 @@ export function mountBattle(root, onFinish) {
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st); drawLog();
-    armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
+    armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; passed.clear(); sel = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
     await play(ev, before);
@@ -370,9 +371,19 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; sync(); return; }
     if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; sync(); return; }
     if (b.dataset.act === 'end') return send({ t: 'end' });
+    if (b.dataset.act === 'pass') { passed.add(sel); const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (!n) return send({ t: 'end' }); sel = n.id; mode = null; info = null; armed = null; sc.focus(n.x, n.y); return sync(); }
     if (b.dataset.act === 'next') return st.roomIdx === 0 ? choosePath() : send({ t: 'next' });
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
   };
+  // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.
+  async function approach(tx, ty, need, what) {
+    const me = unit(sel); const T0 = { x: tx, y: ty }; if (!live(me)) return; if (me.ap < 1) return say('No actions left this turn'); let moved = 0;
+    while (!busy && !st.outcome && live(me) && me.ap >= 1 && md(me, T0) > need) { const dist = md(me, T0); let best = null;
+      for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, T0); if (far >= dist) continue; const inR = far <= need; if (!best || (inR && !best.inR) || (inR === best.inR && (inR ? d < best.d : far < best.far || (far === best.far && d < best.d)))) best = { x, y, far, d, inR }; }
+      if (!best) break; info = null; moved++; await send({ t: 'move', u: me.id, x: best.x, y: best.y }); }
+    if (!moved) return say(need ? `Out of range: ${what} reaches ${need}, and there is no way closer` : 'No way there');
+    if (need && live(me) && !st.outcome) say(md(me, T0) <= need ? (me.ap >= 1 ? 'In range' : 'In range. No actions left') : 'Out of range. Moved as close as possible');
+  }
   function tileClick(x, y) {
     if (busy || st.outcome) return;
     const o = C.unitAt(st, x, y); const p = propAt(x, y); const a = targets().get(x + ',' + y);
@@ -384,17 +395,14 @@ export function mountBattle(root, onFinish) {
     const me = unit(sel);
     if (live(me) && o && o.side === 'c' && live(o)) {
       const dist = md(me, o);
-      if (mode?.k === 'abil') { const A = D.ABILITIES[mode.id]; const rg = C.abilRange(st, me, mode.id); return say(A.target !== 'enemy' ? `${A.name} cannot target a creature` : dist > rg ? `Out of range: ${A.name} reaches ${rg}, target is ${dist} away` : `${A.name} has no effect on this one`); }
-      if (mode?.k === 'study') return say(dist > 3 ? `Out of range: Study reaches 3, target is ${dist} away` : 'Nothing more to learn from this one');
-      if (mode?.k === 'dev') return say('Out of range for the device');
-      if (me.ap < 1) return say('No actions left this turn');
-      // out of reach: close the distance with what movement is left
-      let best = null; for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far < dist && (!best || far < best.far || (far === best.far && d < best.d))) best = { x, y, far, d }; }
-      if (best) { info = null; say(best.far <= C.weaponRange(st, me) ? 'Closing in' : 'Out of range. Moving closer'); return send({ t: 'move', u: me.id, x: best.x, y: best.y }); }
-      return say(`Out of range: weapon reaches ${C.weaponRange(st, me)}, target is ${dist} away, and there is no way closer`);
+      if (mode?.k === 'abil') { const A = D.ABILITIES[mode.id]; const rg = C.abilRange(st, me, mode.id); if (A.target !== 'enemy') return say(`${A.name} cannot target a creature`); if (dist > rg) return approach(x, y, rg, A.name); return say(`${A.name} has no effect on this one`); }
+      if (mode?.k === 'study') return dist > 3 ? approach(x, y, 3, 'Study') : say('Nothing more to learn from this one');
+      if (mode?.k === 'dev') return approach(x, y, C.DEV_INFO[C.devKind(me)].range, 'The device');
+      return approach(x, y, C.weaponRange(st, me), 'Weapon');
     }
-    if (live(me) && !mode && !o && !p && !a) { say(st.room.rock[y * C.W + x] ? 'Blocked: boulders' : me.ap < 1 ? 'No actions left this turn' : `Too far: ${me.name} moves ${me.move} tiles per action`); }
-    if (live(me) && mode && !o) { const nm = mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'; say(`${nm} cannot be used there`); }
+    if (live(me) && p && !a && md(me, p) > 1) return approach(x, y, 1, 'Reach'); // scenery and samples: walk up to them
+    if (live(me) && !o && !p && !a) { if (mode) { const need = mode.k === 'abil' ? C.abilRange(st, me, mode.id) : mode.k === 'dev' ? C.DEV_INFO[C.devKind(me)].range : 3; if (md(me, { x, y }) > need) return approach(x, y, need, mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'); say('That cannot be used there'); }
+      else if (st.room.rock[y * C.W + x]) say('Blocked: boulders'); else return approach(x, y, 0, 'Move'); }
     if (mode) mode = null;
     armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
   }
