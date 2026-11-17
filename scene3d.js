@@ -16,8 +16,12 @@ const GLB = { tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker:
   // things around it
   tree_a: ['p_tree_a', 6.4], tree_b: ['p_tree_b', 6], gate: ['p_gate', 6.2], lamp: ['p_lamp', 2.9], case_broken: ['p_case_broken', 2.1], column_fallen: ['p_column_fallen', 2.6], mushrooms: ['p_mushrooms', 1.9], plinth: ['p_plinth', 1.5], survey: ['p_survey', 2.1], crates: ['p_crates', 1.6] };
 // Scenery you can touch: [model, x, z, turn, scale]. The far side and both ends of the hall, clear of the camera.
-const DECOR = [['survey', -5.6, 3.2, .9], ['crates', -5.2, 6.4, .4], ['case_broken', -5.8, -1.4, 1.2], ['plinth', -5.3, -4.2, 1.6], ['lamp', -4.7, 1.3, 0], ['lamp', 4.9, 6.6, 1],
-  ['column_fallen', -7.6, 5.4, .5], ['mushrooms', 4.7, -6.5, 2], ['mushrooms', -7.4, -6.2, 1, 1.4], ['tree_a', -8.6, 9.4, 1, .9], ['tree_b', -3.2, -11.2, 2, .9]];
+const DECORS = {
+  S: [['survey', -5.6, 3.2, .9], ['crates', -5.2, 6.4, .4], ['case_broken', -5.8, -1.4, 1.2], ['plinth', -5.3, -4.2, 1.6], ['lamp', -4.7, 1.3, 0], ['lamp', 4.9, 6.6, 1], ['column_fallen', -7.6, 5.4, .5], ['mushrooms', 4.7, -6.5, 2], ['mushrooms', -7.4, -6.2, 1, 1.4], ['tree_a', -8.6, 9.4, 1, .9], ['tree_b', -3.2, -11.2, 2, .9]],
+  A: [['spires', -6.4, 0, 0], ['spires', -5.2, -6.6, 1, .8], ['spires', -6, 6.8, 2, .9], ['mushrooms', -5, 3.4, 0, 1.6], ['mushrooms', -5.4, -3.2, 2, 1.3], ['mushrooms', 4.8, 6.4, 1, 1.2], ['column_fallen', -7.4, -2.4, 1.3], ['column_fallen', 4.9, -6.6, .4], ['tree_b', -8.4, 4.6, 1, 1.1], ['tree_b', -8.8, -5.4, 3, 1.2], ['case_broken', -5.4, 7.6, .6]],
+  B: [['pond', -7.4, 0, 0], ['reeds', -5.6, 2.6, 0], ['reeds', -5.9, -2.2, 1], ['reeds', -8.6, 3.4, 2], ['reeds', -9, -3, 3], ['tree_b', -8, 7.4, 1, 1.2], ['tree_b', -8.2, -7.6, 2, 1.2], ['tree_b', -4.4, 10.6, 3, 1], ['lamp', -4.7, 5.2, 0], ['lamp', -4.7, -5.4, 2], ['plinth', -5.2, 8.2, .8], ['mushrooms', 4.8, -6.6, 1, .9]],
+  F: [['tree_a', -11.5, 0, 1, 3.4], ['tree_a', -6.2, 9.6, 2, 1.1], ['tree_a', -6.4, -9.8, 0, 1.1], ['plinth', -5.3, 3.2, .4], ['plinth', -5.3, -3.2, 2.4], ['case_broken', -5.8, 6, .9], ['case_broken', -5.8, -6, 2.1], ['mushrooms', -5, 0, 0, 1.2], ['column_fallen', 4.9, 6.6, .6], ['crates', 4.8, -6.8, 1.2], ['lamp', -4.7, 1.6, 0], ['lamp', -4.7, -1.6, 2]],
+};
 // Rigged heroes: file, then which library clip plays each game action.
 const RIG = {
   vanguard: ['hobb_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Right_Hand_Sword_Slash', heavy: 'Charged_Slash', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
@@ -144,7 +148,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   if (!real) for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
   if (!real) env.add(pillar(-2.6, -GZ + .2, 3.4), pillar(2.6, -GZ + .2, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -GZ + .2));
   const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, -GZ - .1); gate.castShadow = false; env.add(gate);
-  const lamps = [];
+  const lamps = []; let dressSite = () => {};
   // ---- The far world. The hall is a terrace; beyond its edge the Galleries fall away for miles.
   const farG = new THREE.Group(); scene.add(farG); const skyG = new THREE.Group(); scene.add(skyG); const drift = []; const SITES = { S: [0, 0, 0], A: [-92, 5, -52], B: [-92, -5, 58], F: [-205, 12, 0] }; const marksFar = {}; let site = 'S', flight = null;
   if (vista) {
@@ -192,8 +196,15 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   const put = (kind, x, z, turn = 0, k = 1) => loadGLB(kind).then(m => { if (!m || dead) return null; const o = m.clone(true); o.scale.setScalar(GLB[kind][1] * k); o.position.set(x, 0, z); o.rotation.y = turn; o.traverse(c => { c.userData.decor = kind; }); o.userData.home = k; return o; });
   if (real) {
     put('gate', 0, -GZ).then(o => o && env.add(o));
-    DECOR.forEach(([kind, x0, z0, turn, k], i) => { const x = x0 * DK, z = z0 * DK; put(kind, x, z, turn * 1.57, k || 1).then(o => { if (!o) return; o.userData.i = i; decor.add(o);
-      if (kind === 'lamp') { const l = new THREE.PointLight(0xffc878, 0, 9); l.position.set(x, 2.6, z); scene.add(l); o.userData.light = l; lamps.push(o); if (i % 2 === 0) { l.intensity = 16; } } }); });
+    dressSite = id => {
+      for (const o of [...decor.children]) { if (o.userData.light) scene.remove(o.userData.light); decor.remove(o); } const mySite = id;
+      (DECORS[id] || DECORS.S).forEach(([kind, x0, z0, turn, k = 1], i) => { const x = x0 * DK, z = z0 * DK; const add = o => { if (!o || site !== mySite) return; o.userData.i = i; o.traverse(c => { c.userData.decor = kind; }); decor.add(o);
+          if (kind === 'lamp') { const l = new THREE.PointLight(0xffc878, i % 2 === 0 ? 16 : 0, 9); l.position.set(x, 2.6, z); scene.add(l); o.userData.light = l; } };
+        if (kind === 'spires') { const g = new THREE.Group(); const rr = rng(seed + i * 13 + 5); for (let j = 0; j < 9; j++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(.25 + rr() * .45, 2.2 + rr() * 4.2, 5), new THREE.MeshStandardMaterial({ color: j % 3 ? 0x2a1f3f : 0x5a2d6a, roughness: .9, flatShading: true })); sp.position.set((rr() - .5) * 3.4, 1.6, (rr() - .5) * 3.4); sp.rotation.z = (rr() - .5) * .5; sp.rotation.x = (rr() - .5) * .4; sp.castShadow = true; g.add(sp); } g.position.set(x, 0, z); g.scale.setScalar(k); add(g); }
+        else if (kind === 'pond') { const g = new THREE.Group(); const w = new THREE.Mesh(new THREE.CircleGeometry(5.2, 36), new THREE.MeshStandardMaterial({ color: 0x7fd6f0, roughness: .12, metalness: .5, emissive: 0x2a6a88, emissiveIntensity: .55, transparent: true, opacity: .92 })); w.rotation.x = -Math.PI / 2; w.position.y = .03; w.scale.set(1, 1.5, 1); const rim = new THREE.Mesh(new THREE.RingGeometry(5.1, 5.7, 36), new THREE.MeshStandardMaterial({ color: 0x4a5a48, roughness: 1 })); rim.rotation.x = -Math.PI / 2; rim.position.y = .035; rim.scale.set(1, 1.5, 1); g.add(w, rim); g.position.set(x, 0, z); add(g); }
+        else if (kind === 'reeds') loadGLB('mirror_reed').then(m => { if (!m || dead) return; const g = new THREE.Group(); for (let j = 0; j < 3; j++) { const t = m.clone(true); t.scale.setScalar(2.6 + j * .5); t.position.set((j - 1) * 1.1, 0, (j % 2) * .9); t.rotation.y = j * 2.1; g.add(t); } g.position.set(x, 0, z); g.rotation.y = turn * 1.57; add(g); });
+        else put(kind, x, z, turn * 1.57, k).then(add); });
+    };
     // a loose ring of forest behind everything, kept off the camera's side of the hall
     for (let i = 0; i < 0; i++) { const a = r0() * Math.PI * 2, d = 12 + r0() * 9; const x = Math.cos(a) * d - 3, z = Math.sin(a) * d; if (x > 3.5 && Math.abs(z) < 12) continue; if (z > 6 && Math.abs(x) < 5) continue; put(r0() < .6 ? 'tree_a' : 'tree_b', x, z, r0() * 6, .8 + r0() * .7).then(o => o && env.add(o)); }
   }
@@ -251,7 +262,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     return a.getClip().duration / speed * 1000;
   }
   // Stand at a site with no flight (start of a room, or a reload mid-expedition).
-  function placeAt(id) { site = id || 'S'; if (!vista) return; const p = SITES[site]; farG.position.set(-p[0], -p[1], -p[2]); here.position.set(0, 0, 0); for (const k in marksFar) marksFar[k].visible = k !== site; }
+  function placeAt(id) { site = id || 'S'; if (!vista) return; const p = SITES[site]; farG.position.set(-p[0], -p[1], -p[2]); here.position.set(0, 0, 0); for (const k in marksFar) marksFar[k].visible = k !== site; dressSite(site); }
   const api = {
     // look at a tile: used when a Seeker is selected and when something worth watching happens
     focus(x, y, snap) { focus.set(clampX(wx(y)), 0, clampZ(wz(x))); if (snap) focNow.copy(focus); },

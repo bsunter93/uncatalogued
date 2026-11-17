@@ -14,6 +14,9 @@ const DECOR = {
   column_fallen: ['Fallen column', 'Marble', 'It came down a long time ago. The moss on the break is older than the moss on the floor.'],
   plinth: ['Empty plinth', 'Label polished', 'Whatever stood here is gone and the dome lies beside it. Somebody has been keeping the label plate clean.'],
   mushrooms: ['Bellcap cluster', 'Uncatalogued', 'Taller than a Seeker. They dim when you stand close and brighten again when you look away.'],
+  spires: ['Thorn spires', 'Grown overnight', 'Black thorns taller than a Seeker, all leaning the same way. The Overgrowth put them up to keep something in.'],
+  pond: ['The Still Pond', 'No bottom found', 'The water does not move when you throw a stone in. The stone does not come back up either.'],
+  reeds: ['Mirror reeds', 'Specimen bed', 'They grow toward their own reflections. Around the pond that means they grow in a ring.'],
   tree_a: ['Gallery oak', 'Rooted through the floor', 'The roots have lifted the tiles in a ring. An expedition left its instruments at the base and the tree has started to grow around them.'],
   tree_b: ['Tagged willow', 'Specimen 9', 'The brass tag on the trunk is stamped with a number and a date. The date has not happened yet.'],
 };
