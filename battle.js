@@ -47,7 +47,7 @@ export function mountBattle(root, onFinish) {
   const run = G.state.run; const spec = run.spec; const reg = D.REGIONS[spec.region];
   let log = []; try { const sv = JSON.parse(store.get('unc.run') || 'null'); if (sv && sv.at === run.at) log = sv.log; } catch { /* start over */ }
   let st; try { st = C.replay(spec, log); } catch { log = []; st = C.createRun(spec); }
-  let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
+  let focusOn = ''; let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
@@ -85,6 +85,7 @@ export function mountBattle(root, onFinish) {
       st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'flora' ? p.id : p.kind, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
     marks(m); drawLines(); head(); actions(); cards(); panel(); hint();
+    const fu = unit(sel); if (live(fu) && focusOn !== sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx) { const first = !focusOn; focusOn = sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx; sc.focus(fu.x, fu.y, first); }
     sc.beacons(st.room.props.filter(p => !p.done).map(p => [p.x, p.y, p.kind === 'wonder' ? 2 : 1.35, p.kind === 'wonder' ? 0x9fe8ff : p.kind === 'cache' ? 0xffd05a : 0x8ff0a8]));
   }
   function targets() { // what a click can do right now: Map "x,y" -> action
@@ -264,10 +265,12 @@ export function mountBattle(root, onFinish) {
   async function play(ev, before) {
     const vp = new Map(before.map(u => [u.id, { x: u.x, y: u.y }]));
     const at = id => { if (!vp.has(id)) { const u = unit(id); vp.set(id, u ? { x: u.x, y: u.y } : { x: 0, y: 0 }); } return vp.get(id); };
+    let theirs = false;
     for (const e of ev) {
+      if (e.e === 'text' && /^(Witnessed|Notices)/.test(e.msg)) { const v0 = at(e.id); sc.focus(v0.x, v0.y); await sleep(350); }
       if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (theirs) sc.focus(v.x, v.y); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
@@ -276,7 +279,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { const v = at(e.id); sc.gone(e.id); e.e === 'flee' ? snd.flee() : snd.die(); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
       else if (e.e === 'spawn') { const u = unit(e.id); if (u) { sc.add({ id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant }); sc.burst(u.x, u.y, 0xb6e33a); vp.set(u.id, { x: u.x, y: u.y }); await sleep(180); } }
       else if (e.e === 'eat') { const v = at(e.id); float(v.x, v.y, 'Feeds', 'txt'); await sleep(220); }
-      else if (e.e === 'phase') { banner(e.who === 'c' ? 'The Cabinet moves' : 'Your turn'); snd.turn(e.who === 'c'); await sleep(e.who === 'c' ? 520 : 380); }
+      else if (e.e === 'phase') { theirs = e.who === 'c'; banner(e.who === 'c' ? 'The Cabinet moves' : 'Your turn'); snd.turn(e.who === 'c'); await sleep(e.who === 'c' ? 520 : 380); }
       else if (e.e === 'tele') { const m = new Map(); for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (e.line.axis === 'row' ? y === e.line.i : x === e.line.i) m.set(x + ',' + y, 'danger'); sc.marks(m); snd.warn(); await sleep(380); }
       else if (e.e === 'purge') { banner('Purge'); snd.warn(); await sleep(300); }
       else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); if (e.e !== 'trapset') sc.burst(e.x, e.y); await sleep(160); }

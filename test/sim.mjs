@@ -3,12 +3,12 @@ import * as C from '../core.js';
 const D = C.D;
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 function botAction(st, r) {
-  if (C.canAdvance(st)) {
+  if (C.canAdvance(st) && !st.units.some(u => u.side === 'c' && !u.dead && !u.fled && u.hunter && !(u.calm > 0))) {
     // grab props nearby first sometimes
     return { t: 'next', c: r.int(2) };
   }
   const sk = st.units.filter(u => u.side === 's' && !u.dead);
-  const foes = st.units.filter(u => u.side === 'c' && !u.dead && !u.fled && C.isHostile(st, u));
+  const foes = st.units.filter(u => u.side === 'c' && !u.dead && !u.fled && (C.isHostile(st, u) || (u.hunter && !(u.calm > 0))));
   for (const u of sk) {
     if (u.ap <= 0) continue;
     const inR = foes.filter(f => md(u, f) <= C.weaponRange(st, u)).sort((a, b) => a.hp - b.hp)[0];

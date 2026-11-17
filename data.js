@@ -44,7 +44,7 @@ export const SPECIES = {
   mossback: { name: 'Mossback', latin: 'Testudo hortensis', region: 'verdant', hp: 38, dmg: [7, 10], armor: 2, move: 2, range: 1, ai: 'grazer', mat: 'living_sap',
     blurb: 'A grazing animal with a garden on its back. The garden is older than the animal.',
     behavior: 'Ignores you until something hurts it. After that it charges whoever is nearest and does not calm down.' },
-  glasswing: { name: 'Glasswing', latin: 'Vitrea fugax', region: 'verdant', hp: 9, dmg: [2, 3], armor: 0, move: 5, range: 1, ai: 'skittish', mat: 'sporeglass',
+  glasswing: { name: 'Glasswing', latin: 'Vitrea fugax', region: 'verdant', hp: 9, dmg: [2, 3], armor: 0, move: 5, range: 1, ai: 'skittish', mat: 'sporeglass', prey: true,
     blurb: 'You can read the wall label through its wings.',
     behavior: 'Keeps three tiles between itself and anyone. Leaves the room for good once wounded. Approach from two sides or not at all.' },
   gulper: { name: 'Gulper Vine', latin: 'Faux radicans', region: 'verdant', hp: 22, dmg: [7, 9], armor: 1, move: 0, range: 3, ai: 'ambush', mat: 'thorn_resin',

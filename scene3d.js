@@ -54,7 +54,7 @@ function prepRig(g, kind) {
   g.scene = wrap;
 }
 for (const k in GLB) loadGLB(k);
-const S = 1.25, GW = 8, GH = 6;
+const S = 1.1, GW = 14, GH = 10; const TR = 17, GZ = GW * S / 2 + 1.9, DK = 1.5; // terrace radius, gate distance, how far scenery sits out
 const wx = y => (y - (GH - 1) / 2) * S, wz = x => ((GW - 1) / 2 - x) * S;
 const PAL = {
   verdant: { fog: 0x140c30, sky: 0x0e0822, ground: ['#33661f', '#4a8a24', '#6aa524', '#3d2a66', '#55309a'], key: 0xfff0c8, fill: 0x8fa0d8, rim: 0xff4fd8, leaf: [0x2f7d32, 0x1f5a3a, 0x5a2d91, 0x8a3ffc], glow: [0xff5fd2, 0xffe14a, 0xb46bff], trunk: 0x2a1b3a, stone: 0x8d8aa0 },
@@ -129,7 +129,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   for (let i = 0; i < 900; i++) { const c = pal.ground[1 + Math.floor(r0() * 2)]; cx.fillStyle = c; cx.globalAlpha = .1 + r0() * .25; cx.beginPath(); cx.ellipse(r0() * 1024, r0() * 1024, 12 + r0() * 60, 8 + r0() * 40, r0() * 3, 0, 7); cx.fill(); }
   for (let i = 0; i < 16; i++) { cx.fillStyle = pal.ground[3 + Math.floor(r0() * 2)]; cx.globalAlpha = .12 + r0() * .2; const x = 300 + r0() * 424, y = 250 + r0() * 524; for (let j = 0; j < 7; j++) { cx.beginPath(); cx.ellipse(x + (r0() - .5) * 90, y + (r0() - .5) * 90, 10 + r0() * 34, 8 + r0() * 26, r0() * 3, 0, 7); cx.fill(); } }
   cx.globalAlpha = 1; const gt = new THREE.CanvasTexture(cv); gt.colorSpace = THREE.SRGBColorSpace;
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(vista ? 13 : 26, 64), new THREE.MeshStandardMaterial({ map: gt, roughness: .95 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; here.add(ground);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(vista ? TR : 30, 64), new THREE.MeshStandardMaterial({ map: gt, roughness: .95 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; here.add(ground);
   // faint tile seams so the board reads without looking like a spreadsheet
   const seam = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .07 })); { const v = []; for (let x = 0; x <= GW; x++) v.push(wx(-.5), .012, wz(x - .5), wx(GH - .5), .012, wz(x - .5)); for (let y = 0; y <= GH; y++) v.push(wx(y - .5), .012, wz(-.5), wx(y - .5), .012, wz(GW - .5)); seam.geometry.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); } here.add(seam);
   // surroundings
@@ -138,8 +138,8 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   const pillar = (x, z, h) => { const g = G(P(cyl(.3, .36, h, 8), mat(pal.stone), 0, h / 2, 0), P(box(.9, .2, .9), mat(pal.stone), 0, h + .1, 0), region === 'clockwork' ? P(tor(.7, .08, 16), mat(0xc9a24a, { metalness: .8, roughness: .3 }), 0, h * .7, 0, { r: [Math.PI / 2, 0, 0] }) : P(sph(.22, 0), glow(pal.glow[2], 1.5), 0, h + .45, 0)); g.position.set(x, 0, z); return g; };
   const real = region === 'verdant'; const decor = new THREE.Group(); here.add(decor);
   if (!real) for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
-  if (!real) env.add(pillar(-2.6, -7.4, 3.4), pillar(2.6, -7.4, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -7.4));
-  const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, real ? -7.7 : -7.6); gate.castShadow = false; env.add(gate);
+  if (!real) env.add(pillar(-2.6, -GZ + .2, 3.4), pillar(2.6, -GZ + .2, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -GZ + .2));
+  const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, -GZ - .1); gate.castShadow = false; env.add(gate);
   const lamps = [];
   // ---- The far world. The hall is a terrace; beyond its edge the Galleries fall away for miles.
   const farG = new THREE.Group(); scene.add(farG); const skyG = new THREE.Group(); scene.add(skyG); const drift = []; const SITES = { S: [0, 0, 0], A: [-92, 5, -52], B: [-92, -5, 58], F: [-205, 12, 0] }; const marksFar = {}; let site = 'S', flight = null;
@@ -156,8 +156,8 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     const pt = new THREE.CanvasTexture(pc); pt.colorSpace = THREE.SRGBColorSpace; const planet = new THREE.Mesh(new THREE.CircleGeometry(95, 48), new THREE.MeshBasicMaterial({ map: pt, fog: false, transparent: true, opacity: .8, depthWrite: false })); planet.position.set(-700, 250, -260); planet.lookAt(0, 20, 0); skyG.add(planet);
     const ringP = new THREE.Mesh(new THREE.RingGeometry(120, 170, 64), new THREE.MeshBasicMaterial({ color: 0xd8c8f0, fog: false, transparent: true, opacity: .32, side: THREE.DoubleSide, depthWrite: false })); ringP.position.copy(planet.position); ringP.lookAt(0, 20, 0); ringP.rotateX(1.25); skyG.add(ringP);
     // the terrace: rock falling away under the hall
-    const cliff = new THREE.Mesh(new THREE.CylinderGeometry(13, 8.5, 26, 28, 4, true), fm(0x3a2f52)); cliff.position.y = -13.02; const cp = cliff.geometry.attributes.position; for (let i = 0; i < cp.count; i++) { if (cp.getY(i) < 12.9) { cp.setX(i, cp.getX(i) * (1 + (rs() - .5) * .22)); cp.setZ(i, cp.getZ(i) * (1 + (rs() - .5) * .22)); } } cliff.geometry.computeVertexNormals(); here.add(cliff);
-    for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2 + rs() * .1; if (Math.cos(a) > .55 || Math.cos(a) < -.25) continue; const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(.5 + rs() * .7, 0), fm(rs() < .5 ? 0x8d8aa0 : 0x5a5478)); rk.position.set(Math.cos(a) * (12.6 + rs() * .5), .1, Math.sin(a) * (12.6 + rs() * .5)); rk.rotation.set(rs() * 3, rs() * 3, rs() * 3); rk.castShadow = true; here.add(rk); }
+    const cliff = new THREE.Mesh(new THREE.CylinderGeometry(TR, TR * .66, 26, 28, 4, true), fm(0x3a2f52)); cliff.position.y = -13.02; const cp = cliff.geometry.attributes.position; for (let i = 0; i < cp.count; i++) { if (cp.getY(i) < 12.9) { cp.setX(i, cp.getX(i) * (1 + (rs() - .5) * .22)); cp.setZ(i, cp.getZ(i) * (1 + (rs() - .5) * .22)); } } cliff.geometry.computeVertexNormals(); here.add(cliff);
+    for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2 + rs() * .1; if (Math.cos(a) > .55 || Math.cos(a) < -.25) continue; const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(.5 + rs() * .7, 0), fm(rs() < .5 ? 0x8d8aa0 : 0x5a5478)); rk.position.set(Math.cos(a) * (TR - .4 + rs() * .5), .1, Math.sin(a) * (TR - .4 + rs() * .5)); rk.rotation.set(rs() * 3, rs() * 3, rs() * 3); rk.castShadow = true; here.add(rk); }
     // the valley floor far below, and ridges of canopy stepping away into haze
     const floor = new THREE.Mesh(new THREE.CircleGeometry(1100, 48), fm(0x356f52)); floor.rotation.x = -Math.PI / 2; floor.position.y = -46; farG.add(floor);
     const canopy = [0x3f8f4a, 0x2f7a52, 0x4a8a6a, 0x57a04a, 0x2f6f5a, 0x6a5aa8];
@@ -176,26 +176,26 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     for (const [x, z, w] of [[-18, -14, 5], [-30, 20, 8], [-70, -40, 14], [-120, 50, 22], [-8, 16, 3]]) { const ray = new THREE.Mesh(new THREE.CylinderGeometry(w * .35, w, 220, 12, 1, true), new THREE.MeshBasicMaterial({ color: 0xbfe8ff, transparent: true, opacity: .05, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false })); ray.position.set(x, 60, z); ray.rotation.z = .16; farG.add(ray); drift.push(Object.assign(ray, { userData: { ray: 1, ph: x } })); }
     // the places this expedition can go next, standing where you can see them
     const beam = c => new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 240, 10, 1, true), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .34, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
-    for (const id in SITES) { const [x, y, z] = SITES[id]; const L = new THREE.Group(); L.position.set(x, y, z); const top = new THREE.Mesh(new THREE.CylinderGeometry(13, 13, .5, 28), fm(id === 'A' ? 0x3a5a2a : 0x57a04a)); top.position.y = -.26; const under = new THREE.Mesh(new THREE.CylinderGeometry(13, 8.5, 26, 20, 1, true), fm(0x3a2f52)); under.position.y = -13.4; L.add(top, under);
+    for (const id in SITES) { const [x, y, z] = SITES[id]; const L = new THREE.Group(); L.position.set(x, y, z); const top = new THREE.Mesh(new THREE.CylinderGeometry(TR, TR, .5, 28), fm(id === 'A' ? 0x3a5a2a : 0x57a04a)); top.position.y = -.26; const under = new THREE.Mesh(new THREE.CylinderGeometry(TR, TR * .66, 26, 20, 1, true), fm(0x3a2f52)); under.position.y = -13.4; L.add(top, under);
       const bm = beam(id === 'A' ? 0xff6a4a : id === 'B' ? 0x8fe8ff : id === 'F' ? 0xff7ae0 : 0xffe9a8); bm.position.y = 110; L.add(bm); drift.push(Object.assign(bm, { userData: { beam: 1, ph: x } }));
       if (id === 'A') for (let i = 0; i < 16; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(.6 + rs() * 1.2, 5 + rs() * 9, 5), fm(i % 3 ? 0x2a1f3f : 0x5a2d6a)); const a = rs() * 6.3, d = 2 + rs() * 9; sp.position.set(Math.cos(a) * d, 3, Math.sin(a) * d); sp.rotation.z = (rs() - .5) * .5; L.add(sp); }
       if (id === 'B') { const pond = new THREE.Mesh(new THREE.CircleGeometry(8, 28), new THREE.MeshStandardMaterial({ color: 0x7fd6f0, roughness: .15, metalness: .4, emissive: 0x2a6a88, emissiveIntensity: .6 })); pond.rotation.x = -Math.PI / 2; pond.position.y = .02; L.add(pond); loadGLB('tree_b').then(m => { if (!m || dead) return; for (const [tx, tz] of [[9, 3], [-8, -6], [2, -10]]) { const t = m.clone(true); t.scale.setScalar(7); t.position.set(tx, 0, tz); L.add(t); } }); }
       if (id === 'F') loadGLB('tree_a').then(m => { if (!m || dead) return; const t = m.clone(true); t.scale.setScalar(60); t.position.set(-4, 0, 0); L.add(t); });
-      if (id === 'S') loadGLB('gate').then(m => { if (!m || dead) return; const t = m.clone(true); t.scale.setScalar(GLB.gate[1]); t.position.set(0, 0, -7.6); L.add(t); });
+      if (id === 'S') loadGLB('gate').then(m => { if (!m || dead) return; const t = m.clone(true); t.scale.setScalar(GLB.gate[1]); t.position.set(0, 0, -GZ); L.add(t); });
       farG.add(L); marksFar[id] = L; const tag = document.createElement('div'); tag.className = 'sitetag'; tag.hidden = true; L.userData.tag = tag; }
     scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x3a5a3a, .9)); const hemiFar = new THREE.DirectionalLight(0xfff0d0, 1.1); hemiFar.position.set(-40, 60, 0); scene.add(hemiFar);
   }
   const put = (kind, x, z, turn = 0, k = 1) => loadGLB(kind).then(m => { if (!m || dead) return null; const o = m.clone(true); o.scale.setScalar(GLB[kind][1] * k); o.position.set(x, 0, z); o.rotation.y = turn; o.traverse(c => { c.userData.decor = kind; }); o.userData.home = k; return o; });
   if (real) {
-    put('gate', 0, -7.6).then(o => o && env.add(o));
-    DECOR.forEach(([kind, x, z, turn, k], i) => put(kind, x, z, turn * 1.57, k || 1).then(o => { if (!o) return; o.userData.i = i; decor.add(o);
-      if (kind === 'lamp') { const l = new THREE.PointLight(0xffc878, 0, 9); l.position.set(x, 2.6, z); scene.add(l); o.userData.light = l; lamps.push(o); if (i % 2 === 0) { l.intensity = 16; } } }));
+    put('gate', 0, -GZ).then(o => o && env.add(o));
+    DECOR.forEach(([kind, x0, z0, turn, k], i) => { const x = x0 * DK, z = z0 * DK; put(kind, x, z, turn * 1.57, k || 1).then(o => { if (!o) return; o.userData.i = i; decor.add(o);
+      if (kind === 'lamp') { const l = new THREE.PointLight(0xffc878, 0, 9); l.position.set(x, 2.6, z); scene.add(l); o.userData.light = l; lamps.push(o); if (i % 2 === 0) { l.intensity = 16; } } }); });
     // a loose ring of forest behind everything, kept off the camera's side of the hall
     for (let i = 0; i < 0; i++) { const a = r0() * Math.PI * 2, d = 12 + r0() * 9; const x = Math.cos(a) * d - 3, z = Math.sin(a) * d; if (x > 3.5 && Math.abs(z) < 12) continue; if (z > 6 && Math.abs(x) < 5) continue; put(r0() < .6 ? 'tree_a' : 'tree_b', x, z, r0() * 6, .8 + r0() * .7).then(o => o && env.add(o)); }
   }
   for (let i = 0; i < 70; i++) { const a = r0() * Math.PI * 2, d = 1 + r0() * 11; const f = P(sph(.03 + r0() * .035, 0), glow(pal.glow[Math.floor(r0() * 3)], 1.1 + r0() * .8), Math.cos(a) * d, .06 + r0() * .1, Math.sin(a) * d - .5); f.castShadow = false; env.add(f); }
   for (let i = 0; i < (vista ? 0 : 70); i++) { const a = r0() * Math.PI * 2, d = 4 + r0() * 9; const b = P(cone(.16 + r0() * .2, .3 + r0() * .5, 5), mat(pal.leaf[Math.floor(r0() * pal.leaf.length)]), Math.cos(a) * d, .2, Math.sin(a) * d - .5); if (Math.abs(b.position.x) < 4.2 && Math.abs(b.position.z) < 5.4) continue; env.add(b); }
-  const pl1 = new THREE.PointLight(pal.glow[2], 14, 12); pl1.position.set(0, 2.2, -6.6); scene.add(pl1); const pl2 = new THREE.PointLight(pal.glow[0], 9, 10); pl2.position.set(-5, 1.4, 2); scene.add(pl2);
+  const pl1 = new THREE.PointLight(pal.glow[2], 14, 12); pl1.position.set(0, 2.2, -GZ + 1); scene.add(pl1); const pl2 = new THREE.PointLight(pal.glow[0], 9, 10); pl2.position.set(-5, 1.4, 2); scene.add(pl2);
   const fn = 46, fp = new Float32Array(fn * 3), fs = []; for (let i = 0; i < fn; i++) { fp[i * 3] = (r0() - .5) * 16; fp[i * 3 + 1] = .3 + r0() * 3; fp[i * 3 + 2] = (r0() - .5) * 16 - 1; fs.push(r0() * 6); }
   const flies = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(fp, 3)), new THREE.PointsMaterial({ color: pal.glow[1], size: .06, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false })); here.add(flies);
 
@@ -204,7 +204,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   const mm = { reach: new THREE.MeshBasicMaterial({ color: 0x9ff0e0, transparent: true, opacity: .2, depthWrite: false }), threat: new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: .26, depthWrite: false }), mv: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8, depthWrite: false }), ab: new THREE.MeshBasicMaterial({ color: 0xffd05a, transparent: true, opacity: .34, depthWrite: false }), danger: new THREE.MeshBasicMaterial({ color: 0xff4a3a, transparent: true, opacity: .4, depthWrite: false }) };
   const mg = { reach: new THREE.PlaneGeometry(S * .93, S * .93), threat: new THREE.PlaneGeometry(S * .97, S * .97), mv: new THREE.CircleGeometry(.09, 16), ab: new THREE.PlaneGeometry(S * .92, S * .92), danger: new THREE.PlaneGeometry(S * .96, S * .96) };
   const lineG = new THREE.Group(); here.add(lineG); const threatG = new THREE.Group(); here.add(threatG); const beaconG = new THREE.Group(); here.add(beaconG); const beaconGeo = new THREE.OctahedronGeometry(.11, 0); const arrowGeo = new THREE.ConeGeometry(.11, .3, 6); const lineM = new THREE.MeshBasicMaterial({ color: 0xff5a48, transparent: true, opacity: .85, depthWrite: false }); const lm = new THREE.LineDashedMaterial({ color: 0xff6a5a, dashSize: .16, gapSize: .12, transparent: true, opacity: .9 });
-  const ringGeo = new THREE.RingGeometry(.4, .47, 28); const ringM = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .95, side: THREE.DoubleSide, depthWrite: false });
+  const ringGeo = new THREE.RingGeometry(.34, .4, 28); const ringM = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .95, side: THREE.DoubleSide, depthWrite: false });
   const RM = { sel: ringM(0xffffff), hostile: ringM(0xff5a4a), tg: ringM(0xffd05a), calm: ringM(0x7fe0c0), spent: ringM(0x8090a8) };
 
   const units = new Map(), props = new Map(); let rocks = new THREE.Group(); here.add(rocks); const labels = document.createElement('div'); labels.className = 'labels'; el.append(labels);
@@ -213,7 +213,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     const g = new THREE.Group(); let sc = 1;
     const dress = (body, real) => {
       body.rotation.y = u.side === 'c' ? (real ? .5 : 0) : real ? Math.PI - .5 : Math.PI; // seekers face up the hall, turned enough to show a profile
-      sc = (real ? GLB[u.kind][1] : ({ orchardmother: 1.9, regulator: 1.7, warden: 1.15, mossback: 1.1 }[u.kind] || 1) * 1.3); if (u.variant === 'overgrown') sc *= 1.35; body.scale.setScalar(sc);
+      sc = .86 * (real ? GLB[u.kind][1] : ({ orchardmother: 1.9, regulator: 1.7, warden: 1.15, mossback: 1.1 }[u.kind] || 1) * 1.3); if (u.variant === 'overgrown') sc *= 1.35; body.scale.setScalar(sc);
       if (u.variant) body.traverse(m => { if (m.isMesh) m.material = m.material.clone(); });
       if (u.variant === 'gilded') body.traverse(m => { if (m.isMesh) { m.material.map = null; m.material.emissiveMap = null; m.material.emissive.set(0x5a3a00); m.material.color.set(0xe0b040); m.material.metalness = .7; m.material.roughness = .3; m.material.needsUpdate = true; } });
       if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
@@ -248,10 +248,12 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   // Stand at a site with no flight (start of a room, or a reload mid-expedition).
   function placeAt(id) { site = id || 'S'; if (!vista) return; const p = SITES[site]; farG.position.set(-p[0], -p[1], -p[2]); here.position.set(0, 0, 0); for (const k in marksFar) marksFar[k].visible = k !== site; }
   const api = {
+    // look at a tile: used when a Seeker is selected and when something worth watching happens
+    focus(x, y, snap) { focus.set(clampX(wx(y)), 0, clampZ(wz(x))); if (snap) focNow.copy(focus); },
     place: placeAt,
     names(n) { if (!vista) return; for (const k in marksFar) { const tag = marksFar[k].userData.tag; tag.textContent = k === 'S' ? 'Where you came in' : n[k] || ''; if (!tag.parentNode) labels.append(tag); } },
     // Fly to another site: the hall falls away behind and the place you could see arrives underneath you.
-    travel(id) { if (!vista || !SITES[id] || id === site) { placeAt(id); return Promise.resolve(); } zoom = 1; const from = farG.position.clone(); const p = SITES[id]; const to = new THREE.Vector3(-p[0], -p[1], -p[2]);
+    travel(id) { if (!vista || !SITES[id] || id === site) { placeAt(id); return Promise.resolve(); } const zoomWas = zoom; zoom = 1; setTimeout(() => { zoom = zoomWas; }, 3300); const from = farG.position.clone(); const p = SITES[id]; const to = new THREE.Vector3(-p[0], -p[1], -p[2]);
       labels.style.opacity = 0; marksFar[site].visible = false; return new Promise(res => { flight = { from, delta: to.clone().sub(from), t0: performance.now(), ms: 3200, done: () => { flight = null; placeAt(id); labels.style.opacity = 1; res(); } }; }); },
     setRoom(st) {
       for (const o of units.values()) { o.g.removeFromParent(); o.lab.remove(); } units.clear(); for (const o of props.values()) o.removeFromParent(); props.clear(); rocks.removeFromParent(); rocks = new THREE.Group(); here.add(rocks);
@@ -304,12 +306,15 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   let down = null; renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   function decorAt(e) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); const h = ray.intersectObjects(decor.children, true)[0]; if (!h) return null; let o = h.object; while (o.parent && o.parent !== decor) o = o.parent; return o; }
   renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) return onTile(t[0], t[1]); const d = decorAt(e); if (d) { d.userData.poke = performance.now(); if (d.userData.light) d.userData.light.intensity = d.userData.light.intensity ? 0 : 16; else spark(d.position, pal.glow[d.userData.i % 3], 14); onDecor && onDecor(d.userData.decor, !!(d.userData.light && d.userData.light.intensity)); } });
-  const hover = new THREE.Mesh(new THREE.RingGeometry(.5, .56, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; here.add(hover);
+  const hover = new THREE.Mesh(new THREE.RingGeometry(.5 * S / 1.25, .56 * S / 1.25, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; here.add(hover);
   renderer.domElement.addEventListener('pointermove', e => { const bb = renderer.domElement.getBoundingClientRect(); ptr.x = (e.clientX - bb.left) / bb.width - .5; ptr.y = (e.clientY - bb.top) / bb.height - .5; const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
   renderer.domElement.addEventListener('pointerleave', () => { hover.visible = false; });
   // scroll to zoom toward whatever is under the pointer; scroll back out to see the whole hall
-  let zoom = 1, zoomNow = 1; const focus = new THREE.Vector3(), focNow = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
-  renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); const was = zoom; zoom = Math.min(1, Math.max(.28, zoom * (e.deltaY > 0 ? 1.12 : .89))); if (zoom < was) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); if (ray.ray.intersectPlane(plane, hitP)) focus.set(Math.max(-5, Math.min(5, hitP.x)), 0, Math.max(-6, Math.min(6, hitP.z))); } }, { passive: false });
+  let zoom = .5, zoomNow = .5; const focus = new THREE.Vector3(), focNow = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
+  renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); const was = zoom; zoom = Math.min(1, Math.max(.22, zoom * (e.deltaY > 0 ? 1.12 : .89))); if (zoom < was && was > .95) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); if (ray.ray.intersectPlane(plane, hitP)) focus.set(clampX(hitP.x), 0, clampZ(hitP.z)); } }, { passive: false });
+  const clampX = v => Math.max(-GH * S / 2, Math.min(GH * S / 2, v)), clampZ = v => Math.max(-GW * S / 2 - 1, Math.min(GW * S / 2 + 1, v)); let dragging = false;
+  renderer.domElement.addEventListener('pointermove', e => { if (!down || !(e.buttons & 1)) return; const dx = e.clientX - down[0], dy = e.clientY - down[1]; if (!dragging && Math.hypot(dx, dy) < 12) return; if (!dragging) { dragging = true; down[2] = e.clientX; down[3] = e.clientY; } const k = .03 * (zoomNow + .25); focus.z = clampZ(focus.z + (e.clientX - down[2]) * k); focus.x = clampX(focus.x + (e.clientY - down[3]) * k * 1.6); down[2] = e.clientX; down[3] = e.clientY; renderer.domElement.style.cursor = 'grabbing'; });
+  window.addEventListener('pointerup', () => { dragging = false; });
   let hovKey = ''; renderer.domElement.addEventListener('pointermove', e => { const t = tileAt(e); const d = t ? null : decorAt(e); renderer.domElement.style.cursor = t || d ? 'pointer' : 'default'; const k = t ? t.join(',') : d ? 'd' + d.userData.i : ''; if (k !== hovKey) { hovKey = k; onHover && onHover(t, d ? d.userData.decor : null); } });
   renderer.domElement.addEventListener('pointerleave', () => { if (hovKey) { hovKey = ''; onHover && onHover(null, null); } });
 

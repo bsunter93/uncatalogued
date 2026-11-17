@@ -196,6 +196,7 @@ var UncEngine = (() => {
       range: 1,
       ai: "skittish",
       mat: "sporeglass",
+      prey: true,
       blurb: "You can read the wall label through its wings.",
       behavior: "Keeps three tiles between itself and anyone. Leaves the room for good once wounded. Approach from two sides or not at all."
     },
@@ -678,9 +679,9 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 2;
-  var W = 8;
-  var H = 6;
+  var VERSION = 3;
+  var W = 14;
+  var H = 10;
   function hashStr(s) {
     let h = 2166136261 >>> 0;
     for (let i = 0; i < s.length; i++) {
@@ -945,7 +946,9 @@ var UncEngine = (() => {
       boss: [[["regulator", 1], ["mite", 2], ["pollinator", 1]]]
     }
   };
-  var MOOD0 = { pack: "hostile", scavenger: "hostile", predator: "hostile", boss_orchard: "hostile", boss_regulator: "hostile", grazer: "docile", mender: "docile", sentinel: "docile", skittish: "wary", ambush: "territorial" };
+  var NOTICE = { pack: 2, predator: 3, scavenger: 2 };
+  var AMBIENT = { verdant: ["mossback", "glasswing"], clockwork: ["coilfawn", "pollinator"] };
+  var MOOD0 = { pack: "roam", scavenger: "roam", predator: "roam", boss_orchard: "hostile", boss_regulator: "hostile", grazer: "docile", mender: "docile", sentinel: "docile", skittish: "wary", ambush: "territorial" };
   var md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   var K = (x, y) => y * W + x;
   var DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -994,7 +997,7 @@ var UncEngine = (() => {
     const room = st.room = { type, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
     for (let tries = 0; tries < 30; tries++) {
       room.rock.fill(0);
-      const n = r.range(4, 7);
+      const n = r.range(10, 17);
       for (let i = 0; i < n; i++) room.rock[K(r.range(2, W - 1), r.int(H))] = 1;
       const seen = /* @__PURE__ */ new Set([0]), q = [[0, 0]];
       let open = 0;
@@ -1014,7 +1017,7 @@ var UncEngine = (() => {
     const sk = seekers(st);
     sk.forEach((u, i) => {
       u.x = i < 4 ? 0 : 1;
-      u.y = i % 4 + 1;
+      u.y = i % 4 + 3;
       if (st.roomIdx > 0) {
         if (u.dead) {
           u.dead = false;
@@ -1057,8 +1060,11 @@ var UncEngine = (() => {
     if (st.tier >= 4 && etype === "boss") tpl[1][1]++;
     if (sp.mods.hunt && etype !== "elite" && etype !== "boss") tpl.push([REGIONS[reg].elite, 1]);
     if (sp.type === "observe" && (last || etype === "quiet")) tpl.push([REGIONS[reg].observe, last ? 3 : 1]);
+    if (etype !== "boss" && !(sp.intro && st.roomIdx === 0)) {
+      for (const k of AMBIENT[reg] || []) if (!tpl.some((t) => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
+    }
     for (const [kind, n] of tpl) for (let i = 0; i < n; i++) {
-      const p = spot(SPECIES[kind].boss ? 5 : 4);
+      const p = spot(SPECIES[kind].boss ? 9 : 5);
       if (p) spawn(st, kind, p[0], p[1], r, ev, true);
     }
     const addProp = (kind, id, o = {}) => {
@@ -1107,7 +1113,8 @@ var UncEngine = (() => {
       armor: S.armor + fl((st.tier - 1) / 2),
       move: S.move,
       range: S.range,
-      mood: MOOD0[S.ai],
+      mood: natural || MOOD0[S.ai] !== "roam" ? MOOD0[S.ai] : "hostile",
+      hunter: MOOD0[S.ai] === "roam" || MOOD0[S.ai] === "hostile",
       home: { x, y },
       shield: 0,
       studied: 0,
@@ -1256,7 +1263,12 @@ var UncEngine = (() => {
   function provoke(st, src, t) {
     if (t.side !== "c") return;
     t.calm = 0;
-    if (t.ai === "grazer") t.mood = "hostile";
+    const beast = src && src.side === "c";
+    if (t.mood === "roam" && !beast) t.mood = "hostile";
+    if (t.ai === "grazer") {
+      t.mood = "hostile";
+      t.grudge = beast ? src.id : 0;
+    }
     if (t.ai === "mender") t.mood = "flee";
     if (t.ai === "sentinel" && src) {
       t.mood = "hostile";
@@ -1304,9 +1316,9 @@ var UncEngine = (() => {
     t.dead = true;
     t.hp = 0;
     ev.push({ e: "die", id: t.id });
-    for (const w of st.units) if (w.ai === "sentinel" && w.grudge === t.id) {
+    for (const w of st.units) if (w.grudge === t.id) {
       w.grudge = 0;
-      w.mood = "docile";
+      if (w.ai === "sentinel" || w.ai === "grazer") w.mood = "docile";
     }
     const S = SPECIES[t.kind];
     const bled = t.bleed > 0, hadPoison = t.poison;
@@ -1516,7 +1528,7 @@ var UncEngine = (() => {
   }
   function isHostile(st, c) {
     if (c.side !== "c" || !alive(c) || c.calm > 0) return false;
-    if (c.mood === "hostile") return true;
+    if (c.mood === "hostile") return !(c.grudge && st.units.some((u) => u.id === c.grudge && u.side === "c" && alive(u)));
     if (c.ai === "ambush") return seekers(st).some((s) => alive(s) && md(s, c) <= 3);
     return false;
   }
@@ -1524,10 +1536,10 @@ var UncEngine = (() => {
     return !st.outcome && !creatures(st).some((c) => isHostile(st, c));
   }
   function targetsOf(st, c) {
-    if (c.ai === "sentinel" && c.grudge) {
+    if (c.grudge) {
       const g = st.units.find((u) => u.id === c.grudge && alive(u));
       if (g) return [g];
-      return [];
+      if (c.ai === "sentinel") return [];
     }
     let t = friends(st);
     if (SPECIES[c.kind] && SPECIES[c.kind].hunts) t = t.concat(creatures(st).filter((o) => SPECIES[o.kind].prey));
@@ -1616,7 +1628,11 @@ var UncEngine = (() => {
       if (adj) return { k: "atk", tgt: adj.id, label: "Cornered" };
       return { k: "idle", label: "Wary" };
     }
-    if (c.ai === "grazer" && c.mood === "docile") return { k: "idle", label: "Grazing" };
+    if (c.ai === "grazer" && c.mood === "docile") {
+      const fl0 = st.room.props.filter((p) => !p.done && p.kind === "flora").sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0];
+      if (fl0 && md(fl0, c) <= 1) return { k: "idle", graze: fl0.pid, label: "Grazing" };
+      return { k: "idle", mv: (c.id + st.turn) % 2 ? stepToward(st, c, fl0 || c.home, 1) : null, label: fl0 ? "Ambling to graze" : "Grazing" };
+    }
     if (c.ai === "mender") {
       if (c.mood === "flee") return { k: "flee", label: "Fleeing" };
       const t2 = creatures(st).filter((o) => o !== c && SPECIES[o.kind].mech && o.hp < o.max && md(o, c) <= 4).sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id)[0];
@@ -1663,9 +1679,58 @@ var UncEngine = (() => {
       }
       return { k: "tele", line: best, tgt: t2 ? t2.id : 0, mv: t2 ? approach(st, c, t2) : null, label: "Marking a line" };
     }
+    if (c.mood === "roam") {
+      if (c.ai === "predator" || S.hunts) {
+        const prey = creatures(st).filter((o) => o !== c && SPECIES[o.kind].prey && md(o, c) <= 8).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
+        if (prey) return { k: "atk", tgt: prey.id, mv: approach(st, c, prey), prey: true, label: "Stalking the " + SPECIES[prey.kind].name };
+      }
+      const way = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]][(c.id * 5 + fl(st.turn / 2) * 3 + st.roomIdx) % 8];
+      const lead = c.ai === "pack" ? creatures(st).filter((o) => o.kind === c.kind && o.mood === "roam").sort((a, b) => a.id - b.id)[0] : c;
+      const goal = lead && lead !== c ? lead : { x: Math.max(4, Math.min(W - 1, c.home.x + way[0] * 3)), y: Math.max(0, Math.min(H - 1, c.home.y + way[1] * 2)) };
+      return { k: "idle", mv: stepToward(st, c, goal, 2, lead && lead !== c ? 1 : 0), label: c.ai === "pack" ? "Roaming" : c.ai === "scavenger" ? "Scenting the air" : "Prowling" };
+    }
     const t = pickTarget(st, c, targetsOf(st, c));
     if (!t) return { k: "idle", label: c.ai === "sentinel" ? "Standing guard" : "Waiting" };
     return { k: "atk", tgt: t.id, mv: approach(st, c, t), label: "Hunting" };
+  }
+  function stepToward(st, c, goal, steps, stopAt = 0) {
+    if (!goal || c.root > 0) return null;
+    const d0 = Math.abs(c.x - goal.x) + Math.abs(c.y - goal.y);
+    if (d0 <= stopAt) return null;
+    const { dist, par } = reach(st, c, Math.min(steps, moveRange(st, c)));
+    let best = null, bd = d0;
+    for (const [k] of dist) {
+      const x = k % W, y = fl(k / W);
+      const d = Math.abs(x - goal.x) + Math.abs(y - goal.y);
+      if (d < bd && d >= stopAt) {
+        bd = d;
+        best = [x, y];
+      }
+    }
+    return best ? { to: best, path: pathFrom(par, best[0], best[1]) } : null;
+  }
+  function witness(st, c, what, ev) {
+    const seen = st.room.seenActs || (st.room.seenActs = {});
+    const key = c.kind + ":" + what;
+    if (seen[key]) return;
+    const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
+    if (!w || md(w, c) > 7) return;
+    seen[key] = 1;
+    st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2;
+    st.res.xp += 4;
+    ev.push({ e: "text", id: c.id, msg: what === "kill" ? "Witnessed: a kill" : what === "feed" ? "Witnessed: feeding" : "Witnessed: grazing" }, { e: "study", id: c.id, by: w.id, n: 2, left: 0, seen: what });
+  }
+  function notice(st, ev) {
+    const sk = seekers(st).filter(alive);
+    const woke = [];
+    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (NOTICE[c.ai] || 2))) woke.push(c);
+    for (let i = 0; i < woke.length; i++) {
+      const c = woke[i];
+      if (c.mood !== "roam") continue;
+      c.mood = "hostile";
+      ev.push({ e: "text", id: c.id, msg: "Notices you" });
+      for (const o of creatures(st)) if (o.mood === "roam" && o.kind === c.kind && md(o, c) <= 4) woke.push(o);
+    }
   }
   function creatureAttack(st, c, t, ev) {
     const r = R(st);
@@ -1715,8 +1780,13 @@ var UncEngine = (() => {
     }
     const t = p.tgt ? st.units.find((u) => u.id === p.tgt && alive(u)) : null;
     if (p.k === "atk") {
-      if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== "ambush" || md(c, t) === 1)) creatureAttack(st, c, t, ev);
-    } else if (p.k === "pull") {
+      if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== "ambush" || md(c, t) === 1)) {
+        const beast = t.side === "c";
+        creatureAttack(st, c, t, ev);
+        if (beast && !alive(t) && alive(c)) witness(st, c, "kill", ev);
+      }
+    } else if (p.k === "idle" && p.graze) witness(st, c, "graze", ev);
+    else if (p.k === "pull") {
       if (t && !t.fx.anchor) {
         let best = null, bd = 99;
         for (const [dx, dy] of DIRS) {
@@ -1743,6 +1813,7 @@ var UncEngine = (() => {
         c.hp = Math.min(c.max, c.hp + 10);
         c.dmg = [c.dmg[0] + 2, c.dmg[1] + 2];
         ev.push({ e: "eat", id: c.id, x: cp.x, y: cp.y });
+        witness(st, c, "feed", ev);
       }
     } else if (p.k === "heal") {
       if (t) heal(st, t, fl(6 * tierScale(st.tier) / 100), ev);
@@ -1875,6 +1946,11 @@ var UncEngine = (() => {
     throw e;
   };
   function apply(st, a) {
+    const ev = applyAction(st, a);
+    if (!st.outcome) notice(st, ev);
+    return ev;
+  }
+  function applyAction(st, a) {
     if (st.outcome) bad("The expedition is over.");
     const ev = [];
     if (a.t === "abandon") {
@@ -1890,7 +1966,7 @@ var UncEngine = (() => {
       for (const c of st.room.corpses) addMat(st, c.mat, c.n);
       st.res.rooms++;
       st.res.xp += 15;
-      if (st.room.type !== "quiet") st.res.cases.push("standard");
+      if (st.room.type !== "quiet" && !creatures(st).some((c) => c.hunter && c.calm <= 0)) st.res.cases.push("standard");
       if (st.roomIdx >= 2) {
         finish(st, "win", ev);
         return ev;
@@ -2463,6 +2539,7 @@ var UncEngine = (() => {
         pay(state, assembleCost(op.base, tier));
         const x = ctx.rng.int(100);
         out.item = addItem(state, makeItem(ctx.rng, op.base, x < 55 ? 1 : x < 90 ? 2 : 3, tier), now, fresh);
+        void def;
         break;
       }
       case "reboard": {

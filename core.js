@@ -2,8 +2,8 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 2;
-export const W = 8, H = 6;
+export const VERSION = 3;
+export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
 export function hashStr(s) { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -132,7 +132,9 @@ const ENC = {
     boss: [[['regulator', 1], ['mite', 2], ['pollinator', 1]]],
   },
 };
-const MOOD0 = { pack: 'hostile', scavenger: 'hostile', predator: 'hostile', boss_orchard: 'hostile', boss_regulator: 'hostile', grazer: 'docile', mender: 'docile', sentinel: 'docile', skittish: 'wary', ambush: 'territorial' };
+// 'roam' means it has not noticed the party and is living its own life.
+const NOTICE = { pack: 2, predator: 3, scavenger: 2 }; const AMBIENT = { verdant: ['mossback', 'glasswing'], clockwork: ['coilfawn', 'pollinator'] };
+const MOOD0 = { pack: 'roam', scavenger: 'roam', predator: 'roam', boss_orchard: 'hostile', boss_regulator: 'hostile', grazer: 'docile', mender: 'docile', sentinel: 'docile', skittish: 'wary', ambush: 'territorial' };
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const K = (x, y) => y * W + x;
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -163,14 +165,14 @@ function enterRoom(st, type, ev) {
   const room = st.room = { type, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
   // rocks: keep the two left columns open, keep the floor connected
   for (let tries = 0; tries < 30; tries++) {
-    room.rock.fill(0); const n = r.range(4, 7);
+    room.rock.fill(0); const n = r.range(10, 17);
     for (let i = 0; i < n; i++) room.rock[K(r.range(2, W - 1), r.int(H))] = 1;
     const seen = new Set([0]), q = [[0, 0]]; let open = 0; for (let i = 0; i < W * H; i++) if (!room.rock[i]) open++;
     while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy; if (inb(nx, ny) && !room.rock[K(nx, ny)] && !seen.has(K(nx, ny))) { seen.add(K(nx, ny)); q.push([nx, ny]); } } }
     if (seen.size === open) break;
   }
   const sk = seekers(st); sk.forEach((u, i) => {
-    u.x = i < 4 ? 0 : 1; u.y = (i % 4) + 1;
+    u.x = i < 4 ? 0 : 1; u.y = (i % 4) + 3;
     if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * 30 / 100)); }
     u.shield = u.m.shieldStart || 0; u.shieldPeak = u.shield; u.cds = {}; u.charges = u.sh.devCharges; u.phase = u.m.phase ? 1 : 0; u.ap = 2;
     u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = 0; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false; u.last = null; u.streak = 0; u.wrath = 0; u.usedStub = false;
@@ -184,7 +186,9 @@ function enterRoom(st, type, ev) {
   if (st.tier >= 4 && etype === 'boss') tpl[1][1]++;
   if (sp.mods.hunt && etype !== 'elite' && etype !== 'boss') tpl.push([D.REGIONS[reg].elite, 1]);
   if (sp.type === 'observe' && (last || etype === 'quiet')) tpl.push([D.REGIONS[reg].observe, last ? 3 : 1]);
-  for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 5 : 4); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
+  // the hall has residents that have nothing to do with you
+  if (etype !== 'boss' && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
+  for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 9 : 5); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
   // props
   const addProp = (kind, id, o = {}) => { const p = spot(2); if (p) room.props.push({ pid: room.pid++, kind, id, x: p[0], y: p[1], ...o }); };
   let nf = type === 'quiet' ? 3 : r.int(3); if (sp.type === 'harvest') nf += last ? 2 : 1; if (sp.intro && st.roomIdx === 0) nf = 0;
@@ -200,7 +204,7 @@ function enterRoom(st, type, ev) {
 function spawn(st, kind, x, y, r, ev, natural) {
   const S = D.SPECIES[kind]; const hs = fl(tierScale(st.tier, 45) * (S.boss ? 150 : 140) / 100), ds = tierScale(st.tier, 36);
   const u = { id: st.uid++, side: 'c', kind, name: S.name, ai: S.ai, x, y, max: fl(S.hp * hs / 100), dmg: [fl(S.dmg[0] * ds / 100), fl(S.dmg[1] * ds / 100)], armor: S.armor + fl((st.tier - 1) / 2), move: S.move, range: S.range,
-    mood: MOOD0[S.ai], home: { x, y }, shield: 0, studied: 0, tc: 0, bleed: 0, poison: 0, mark: 0, root: 0, stun: 0, calm: 0, echo: 0 };
+    mood: natural || MOOD0[S.ai] !== 'roam' ? MOOD0[S.ai] : 'hostile', hunter: MOOD0[S.ai] === 'roam' || MOOD0[S.ai] === 'hostile', home: { x, y }, shield: 0, studied: 0, tc: 0, bleed: 0, poison: 0, mark: 0, root: 0, stun: 0, calm: 0, echo: 0 };
   if (natural && !S.boss && r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100))) {
     u.variant = r.pick(['pale', 'gilded', 'overgrown']);
     if (u.variant === 'overgrown') { u.max = fl(u.max * 150 / 100); u.dmg = [fl(u.dmg[0] * 130 / 100), fl(u.dmg[1] * 130 / 100)]; }
@@ -263,8 +267,9 @@ function hurt(st, src, t, amt, ev, o = {}) {
   return amt;
 }
 function provoke(st, src, t) {
-  if (t.side !== 'c') return; t.calm = 0;
-  if (t.ai === 'grazer') t.mood = 'hostile';
+  if (t.side !== 'c') return; t.calm = 0; const beast = src && src.side === 'c';
+  if (t.mood === 'roam' && !beast) t.mood = 'hostile';
+  if (t.ai === 'grazer') { t.mood = 'hostile'; t.grudge = beast ? src.id : 0; }
   if (t.ai === 'mender') t.mood = 'flee';
   if (t.ai === 'sentinel' && src) { t.mood = 'hostile'; t.grudge = src.side === 'c' ? src.id : 0; }
   if (D.SPECIES[t.kind].prey && src) for (const w of creatures(st)) if (w.ai === 'sentinel' && w !== src) { w.mood = 'hostile'; w.grudge = src.side === 'c' ? src.id : 0; w.calm = 0; }
@@ -278,7 +283,7 @@ function kill(st, src, t, ev) {
   if (t.side === 'a') { t.dead = true; ev.push({ e: 'die', id: t.id }); return; }
   if (st.room.wonder === 'growing_fossil' && !st.room.firstDeath) { st.room.firstDeath = true; t.hp = fl(t.max / 2); ev.push({ e: 'text', id: t.id, msg: 'Gets back up' }); return; }
   st.room.firstDeath = true; t.dead = true; t.hp = 0; ev.push({ e: 'die', id: t.id });
-  for (const w of st.units) if (w.ai === 'sentinel' && w.grudge === t.id) { w.grudge = 0; w.mood = 'docile'; }
+  for (const w of st.units) if (w.grudge === t.id) { w.grudge = 0; if (w.ai === 'sentinel' || w.ai === 'grazer') w.mood = 'docile'; }
   const S = D.SPECIES[t.kind]; const bled = t.bleed > 0, hadPoison = t.poison;
   st.res.kills[t.kind] = (st.res.kills[t.kind] || 0) + 1; st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1;
   if (!t.noLoot) st.res.xp += S.boss ? 75 : S.elite ? 35 : 8;
@@ -360,7 +365,7 @@ function gainStudy(st, u, t, pts, ev) {
 export function studyValue(st, u) { let p = 1 + (u.m.study || 0) + (u.fx.t_curious ? 1 : 0); if (st.room.props.some(q => !q.done && q.id === 'lantern_moss' && md(q, u) <= 2)) p++; return p; }
 export function isHostile(st, c) {
   if (c.side !== 'c' || !alive(c) || c.calm > 0) return false;
-  if (c.mood === 'hostile') return true;
+  if (c.mood === 'hostile') return !(c.grudge && st.units.some(u => u.id === c.grudge && u.side === 'c' && alive(u)));
   if (c.ai === 'ambush') return seekers(st).some(s => alive(s) && md(s, c) <= 3);
   return false;
 }
@@ -368,7 +373,7 @@ export function canAdvance(st) { return !st.outcome && !creatures(st).some(c => 
 
 // ---------------------------------------------------------------- creature AI
 function targetsOf(st, c) {
-  if (c.ai === 'sentinel' && c.grudge) { const g = st.units.find(u => u.id === c.grudge && alive(u)); if (g) return [g]; return []; }
+  if (c.grudge) { const g = st.units.find(u => u.id === c.grudge && alive(u)); if (g) return [g]; if (c.ai === 'sentinel') return []; }
   let t = friends(st);
   if (D.SPECIES[c.kind] && D.SPECIES[c.kind].hunts) t = t.concat(creatures(st).filter(o => D.SPECIES[o.kind].prey));
   return t;
@@ -411,7 +416,9 @@ export function plan(st, c) {
     const adj = near.filter(s => md(s, c) === 1)[0]; if (adj) return { k: 'atk', tgt: adj.id, label: 'Cornered' };
     return { k: 'idle', label: 'Wary' };
   }
-  if (c.ai === 'grazer' && c.mood === 'docile') return { k: 'idle', label: 'Grazing' };
+  if (c.ai === 'grazer' && c.mood === 'docile') { const fl0 = st.room.props.filter(p => !p.done && p.kind === 'flora').sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0];
+    if (fl0 && md(fl0, c) <= 1) return { k: 'idle', graze: fl0.pid, label: 'Grazing' };
+    return { k: 'idle', mv: (c.id + st.turn) % 2 ? stepToward(st, c, fl0 || c.home, 1) : null, label: fl0 ? 'Ambling to graze' : 'Grazing' }; }
   if (c.ai === 'mender') {
     if (c.mood === 'flee') return { k: 'flee', label: 'Fleeing' };
     const t = creatures(st).filter(o => o !== c && D.SPECIES[o.kind].mech && o.hp < o.max && md(o, c) <= 4).sort((a, b) => (a.hp / a.max) - (b.hp / b.max) || a.id - b.id)[0];
@@ -442,8 +449,35 @@ export function plan(st, c) {
     for (let x = 0; x < W; x++) { const n = sk.filter(s => s.x === x).length * 10; if (n > bn) { bn = n; best = { axis: 'col', i: x }; } }
     return { k: 'tele', line: best, tgt: t ? t.id : 0, mv: t ? approach(st, c, t) : null, label: 'Marking a line' };
   }
+  if (c.mood === 'roam') {
+    if (c.ai === 'predator' || S.hunts) { const prey = creatures(st).filter(o => o !== c && D.SPECIES[o.kind].prey && md(o, c) <= 8).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (prey) return { k: 'atk', tgt: prey.id, mv: approach(st, c, prey), prey: true, label: 'Stalking the ' + D.SPECIES[prey.kind].name }; }
+    const way = [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]][(c.id * 5 + fl(st.turn / 2) * 3 + st.roomIdx) % 8]; const lead = c.ai === 'pack' ? creatures(st).filter(o => o.kind === c.kind && o.mood === 'roam').sort((a, b) => a.id - b.id)[0] : c;
+    const goal = lead && lead !== c ? lead : { x: Math.max(4, Math.min(W - 1, c.home.x + way[0] * 3)), y: Math.max(0, Math.min(H - 1, c.home.y + way[1] * 2)) };
+    return { k: 'idle', mv: stepToward(st, c, goal, 2, lead && lead !== c ? 1 : 0), label: c.ai === 'pack' ? 'Roaming' : c.ai === 'scavenger' ? 'Scenting the air' : 'Prowling' };
+  }
   const t = pickTarget(st, c, targetsOf(st, c)); if (!t) return { k: 'idle', label: c.ai === 'sentinel' ? 'Standing guard' : 'Waiting' };
   return { k: 'atk', tgt: t.id, mv: approach(st, c, t), label: 'Hunting' };
+}
+// A short walk toward a place, for creatures going about their day.
+function stepToward(st, c, goal, steps, stopAt = 0) {
+  if (!goal || c.root > 0) return null; const d0 = Math.abs(c.x - goal.x) + Math.abs(c.y - goal.y); if (d0 <= stopAt) return null;
+  const { dist, par } = reach(st, c, Math.min(steps, moveRange(st, c))); let best = null, bd = d0;
+  for (const [k] of dist) { const x = k % W, y = fl(k / W); const d = Math.abs(x - goal.x) + Math.abs(y - goal.y); if (d < bd && d >= stopAt) { bd = d; best = [x, y]; } }
+  return best ? { to: best, path: pathFrom(par, best[0], best[1]) } : null;
+}
+// The party sees something happen between residents and writes it down. Once per kind of event per room.
+function witness(st, c, what, ev) {
+  const seen = st.room.seenActs || (st.room.seenActs = {}); const key = c.kind + ':' + what; if (seen[key]) return;
+  const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (!w || md(w, c) > 7) return;
+  seen[key] = 1; st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2; st.res.xp += 4;
+  ev.push({ e: 'text', id: c.id, msg: what === 'kill' ? 'Witnessed: a kill' : what === 'feed' ? 'Witnessed: feeding' : 'Witnessed: grazing' }, { e: 'study', id: c.id, by: w.id, n: 2, left: 0, seen: what });
+}
+// Anything still living its own life notices the party when they come close, and its kin take the alarm.
+function notice(st, ev) {
+  const sk = seekers(st).filter(alive); const woke = [];
+  for (const c of creatures(st)) if (c.mood === 'roam' && c.calm <= 0 && sk.some(s => md(s, c) <= (NOTICE[c.ai] || 2))) woke.push(c);
+  for (let i = 0; i < woke.length; i++) { const c = woke[i]; if (c.mood !== 'roam') continue; c.mood = 'hostile'; ev.push({ e: 'text', id: c.id, msg: 'Notices you' });
+    for (const o of creatures(st)) if (o.mood === 'roam' && o.kind === c.kind && md(o, c) <= 4) woke.push(o); }
 }
 function creatureAttack(st, c, t, ev) {
   const r = R(st); let dmg = r.range(c.dmg[0], c.dmg[1]);
@@ -461,9 +495,10 @@ function act(st, c, ev) {
   if (p.root) { const t = st.units.find(u => u.id === p.root); if (t && alive(t) && !t.fx.anchor) { t.root = 1; ev.push({ e: 'text', id: t.id, msg: 'Rooted' }, { e: 'status', id: t.id, s: 'root' }); } }
   if (p.mv && p.mv.path.length) { walk(st, c, p.mv.path, ev); if (!alive(c)) return; }
   const t = p.tgt ? st.units.find(u => u.id === p.tgt && alive(u)) : null;
-  if (p.k === 'atk') { if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== 'ambush' || md(c, t) === 1)) creatureAttack(st, c, t, ev); }
+  if (p.k === 'atk') { if (t && md(c, t) <= Math.max(1, c.range) && (c.ai !== 'ambush' || md(c, t) === 1)) { const beast = t.side === 'c'; creatureAttack(st, c, t, ev); if (beast && !alive(t) && alive(c)) witness(st, c, 'kill', ev); } }
+  else if (p.k === 'idle' && p.graze) witness(st, c, 'graze', ev);
   else if (p.k === 'pull') { if (t && !t.fx.anchor) { let best = null, bd = 99; for (const [dx, dy] of DIRS) { const x = c.x + dx, y = c.y + dy; if (free(st, x, y)) { const d = Math.abs(x - t.x) + Math.abs(y - t.y); if (d < bd) { bd = d; best = [x, y]; } } } if (best) { t.x = best[0]; t.y = best[1]; ev.push({ e: 'move', id: t.id, path: [best], shove: true }, { e: 'text', id: t.id, msg: 'Dragged' }); } } }
-  else if (p.k === 'eat') { const cp = st.room.corpses[p.ci]; if (cp && md(cp, c) <= 1) { st.room.corpses.splice(p.ci, 1); c.max += 4; c.hp = Math.min(c.max, c.hp + 10); c.dmg = [c.dmg[0] + 2, c.dmg[1] + 2]; ev.push({ e: 'eat', id: c.id, x: cp.x, y: cp.y }); } }
+  else if (p.k === 'eat') { const cp = st.room.corpses[p.ci]; if (cp && md(cp, c) <= 1) { st.room.corpses.splice(p.ci, 1); c.max += 4; c.hp = Math.min(c.max, c.hp + 10); c.dmg = [c.dmg[0] + 2, c.dmg[1] + 2]; ev.push({ e: 'eat', id: c.id, x: cp.x, y: cp.y }); witness(st, c, 'feed', ev); } }
   else if (p.k === 'heal') { if (t) heal(st, t, fl(6 * tierScale(st.tier) / 100), ev); }
   else if (p.k === 'seed') { const r = R(st); let n = 0; for (let i = 0; i < 40 && n < 2; i++) { const x = c.x + r.range(-2, 2), y = c.y + r.range(-2, 2); if (free(st, x, y)) { const u = spawn(st, 'thornling', x, y, r, ev, false); u.noLoot = true; n++; } } }
   else if (p.k === 'tele') { c.tele = p.line; ev.push({ e: 'tele', id: c.id, line: p.line }); if (t && md(c, t) === 1) creatureAttack(st, c, t, ev); }
@@ -522,7 +557,8 @@ export function abilRange(st, u, id) { const a = D.ABILITIES[id]; return a.range
 
 const bad = msg => { const e = new Error(msg); e.illegal = true; throw e; };
 // Apply one player action. Throws on anything illegal. Returns the list of events for animation.
-export function apply(st, a) {
+export function apply(st, a) { const ev = applyAction(st, a); if (!st.outcome) notice(st, ev); return ev; }
+function applyAction(st, a) {
   if (st.outcome) bad('The expedition is over.');
   const ev = [];
   if (a.t === 'abandon') { finish(st, 'retreat', ev); return ev; }
@@ -530,7 +566,7 @@ export function apply(st, a) {
   if (a.t === 'next') {
     if (!canAdvance(st)) bad('Something here is still hunting you.');
     for (const c of st.room.corpses) addMat(st, c.mat, c.n);
-    st.res.rooms++; st.res.xp += 15; if (st.room.type !== 'quiet') st.res.cases.push('standard');
+    st.res.rooms++; st.res.xp += 15; if (st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0)) st.res.cases.push('standard');
     if (st.roomIdx >= 2) { finish(st, 'win', ev); return ev; }
     let type = 'standard'; if (st.roomIdx === 0) { if (a.c !== 0 && a.c !== 1) bad('Choose a path.'); type = a.c === 0 ? 'elite' : 'quiet'; }
     st.turns++; enterRoom(st, type, ev); return ev;
