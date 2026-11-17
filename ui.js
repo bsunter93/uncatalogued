@@ -8,7 +8,8 @@ export const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const art = (key, o = {}) => `<span class="art">${plate(key, o)}</span>`;
-export const itemArt = it => art(it.sing || it.base);
+const PAINTED = new Set('thorncaster marrow_cleaver spore_sling pulse_rifle arc_lance echo_blade chitin_plate barkweave relay_harness mirror_carapace phase_shroud compound_lens targeting_visor oracle_shard resin_charm capacitor_band bait_satchel lucky_knot leechroot symbiote_graft neural_shunt venom_sac fold_gland lure_pod barrier_seed pulse_emitter drone_core blink_anchor gravity_knot second_heart hungry_compass borrowed_moment unfinished_machine'.split(' '));
+export const itemArt = it => { const k = it.sing || it.base; return PAINTED.has(k) ? `<span class="art pic"><img src="assets/items/${k}.jpg" alt="" loading="lazy"></span>` : art(k); };
 const PORTRAIT = { vanguard: 1, tracker: 1, naturalist: 1 };
 export const face = arch => PORTRAIT[arch] ? `<span class="face ph ${arch}"><img src="assets/portraits/${arch}.jpg" alt=""></span>` : `<span class="face">${plate(arch)}</span>`;
 

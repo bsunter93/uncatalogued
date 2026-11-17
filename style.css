@@ -401,3 +401,24 @@ table.rank tr.me td { color: var(--gilt); }
 .shab { display: grid; gap: 8px; } .shab > div { display: flex; gap: 10px; border-left: 3px solid var(--k); padding-left: 9px; } .shab img { width: 48px; height: 48px; border-radius: 4px; flex: none; } .shab p { font-size: 13.5px; margin: 2px 0; } .shab small { font: 11px var(--mono); color: var(--ink2); }
 .shgear { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 @media (max-width: 860px) { .shtop { grid-template-columns: 1fr; } .shport { width: 100%; max-height: 260px; } .tracker { max-width: 100%; flex-basis: 100%; order: 3; } .game .act img { width: 34px; height: 34px; } .game .actions { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); } .sheetbtn { writing-mode: horizontal-tb; position: absolute; top: -18px; right: 0; margin: 0; padding: 1px 6px; border: 1px solid rgba(232, 241, 250, .2); border-radius: 3px; display: none; } }
+
+/* House style: dark leather and worn brass, after the painted icons. Applied wherever the game itself is on screen. */
+.art.pic { padding: 0 !important; background: #0c0a14 !important; overflow: hidden; border-radius: 4px; box-shadow: 0 0 0 1px #6b5526, 0 0 0 2px #1a1408; }
+.art.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .art.pic { width: 58px; height: 58px; flex: none; } .item.mini .art.pic { width: 44px; height: 44px; }
+.game, .sheetveil { --brass: #b8964a; --brass2: #6b5526; --hide: #17121f; --hide2: #221a2c; }
+.game .trk, .game .info, .game .scard, .game .act, .sheetbtn, .modal.sheet {
+  background: linear-gradient(180deg, rgba(34, 26, 44, .94), rgba(18, 14, 26, .94)); border: 1px solid var(--brass2);
+  box-shadow: inset 0 0 0 1px rgba(184, 150, 74, .16), inset 0 1px 0 rgba(255, 226, 160, .12), 0 6px 18px rgba(0, 0, 0, .5); backdrop-filter: none; border-radius: 5px; }
+.game .act { border-left: 3px solid var(--k); }
+.game .act:hover:not(:disabled) { background: linear-gradient(180deg, rgba(58, 44, 70, .97), rgba(30, 22, 40, .97)); border-color: var(--brass); border-left-color: var(--k); }
+.game .act img, .shab img { border-radius: 3px; box-shadow: 0 0 0 1px var(--brass2), 0 0 0 2px #0a0710; }
+.game .act b, .game .scard .nm, .trk .goal { color: #f3ead6; } .game .act small, .game .scard .sub { color: #a99a7c; }
+.game .act.end.ready, .game .act.adv { background: linear-gradient(180deg, #d9b765, #9c7a30); border-color: #f1d998; } .game .act.end.ready b, .game .act.adv b { color: #1a1206; } .game .act.end.ready small, .game .act.adv small { color: #3d2e10; }
+.game .scard[aria-pressed="true"] { border-color: var(--brass); background: linear-gradient(180deg, rgba(66, 50, 78, .97), rgba(34, 26, 44, .97)); box-shadow: 0 0 0 1px var(--brass), 0 0 22px rgba(217, 183, 101, .28); }
+.game .scard .face { border-color: var(--brass); box-shadow: 0 0 0 2px #0a0710; } .game .scard .bar i { background: linear-gradient(90deg, #5fd6a0, #a8f0c8); }
+.game .label, .trk .trh .label, .modal.sheet .label { color: var(--brass); } .trk .next b { color: #e8c36a; } .game .hint { color: #e9e0cc; } .game .hint b { color: #fff; }
+.game .htop .link, .game .info .x { color: #d9c9a0; }
+.game .info h4, .modal.sheet h2 { color: #f3ead6; } .modal.sheet { background: linear-gradient(180deg, #241b2f, #140f1d); border-color: var(--brass); } .modal.sheet h3 { color: var(--brass); border-bottom: 1px solid rgba(184, 150, 74, .25); padding-bottom: 5px; }
+.modal.sheet .shport { border: 1px solid var(--brass); box-shadow: 0 0 0 3px #0a0710, 0 0 0 4px var(--brass2); } .modal.sheet .item { background: rgba(12, 9, 18, .6); border-color: var(--brass2); }
+.sheetveil { background: rgba(8, 5, 14, .84); }
