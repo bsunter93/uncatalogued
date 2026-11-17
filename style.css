@@ -487,3 +487,5 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .float.weak { color: #ffe08a; border: 1px solid #e8c36a; background: rgba(40, 26, 4, .9); } .float.resist { color: #c7c9d1; border: 1px solid #8a8f9a; background: rgba(16, 16, 22, .9); }
 .hc-wr { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; font-size: 12.5px; } .hc-wr span { padding: 5px 8px; border-radius: 3px; border: 1px solid rgba(184, 150, 74, .3); line-height: 1.25; }
 .hc-wr b { display: block; font: 600 9.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1px; } .hc-wr .wk { border-color: rgba(240, 98, 74, .6); color: #ffd0c6; } .hc-wr .wk b { color: #f0624a; } .hc-wr .rs { border-color: rgba(90, 169, 238, .6); color: #cfe6ff; } .hc-wr .rs b { color: #5aa9ee; } .hc-wr .un { color: #8f8068; border-style: dashed; }
+
+.face.ph.tinkerer { --fx: 50%; --fy: 24%; }

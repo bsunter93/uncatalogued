@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
-const GLB = { vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
+const GLB = { tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
   glasswing: ['glasswing', 1.25], gulper: ['gulper', 1.7], carrion: ['carrion', 1.35], hush: ['hush', 2.1], mite: ['mite', .85], pollinator: ['pollinator', 1.15], coilfawn: ['coilfawn', 1.55], warden: ['warden', 2.4], mantis: ['mantis', 1.75], regulator: ['regulator', 4.2],
   // things on the board
   rock: ['p_boulder', 1.45], cache: ['p_cache', 1.0], lantern_moss: ['p_lantern_moss', 1.05], snare_vine: ['p_snare_vine', 1.15], heartfruit: ['p_heartfruit', 1.0], mirror_reed: ['p_mirror_reed', 1.2],
@@ -21,6 +21,7 @@ const DECOR = [['survey', -5.6, 3.2, .9], ['crates', -5.2, 6.4, .4], ['case_brok
 const RIG = {
   vanguard: ['hobb_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Right_Hand_Sword_Slash', heavy: 'Charged_Slash', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
   tracker: ['sile_anim', { idle: 'Idle', walk: 'Walk_Forward_with_Bow_Aimed', attack: 'Archery_Shot', skill: 'Draw_and_Shoot_from_Back', guard: 'CrouchLookAroundBow', hit: 'Hit_Reaction_with_Bow', die: 'Knock_Down', study: 'Lower_Weapon_Look_Raise', cheer: 'Victory_Cheer' }, 700],
+  tinkerer: ['tamsin_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 720],
   naturalist: ['oyelaran_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 760],
 };
 // Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
