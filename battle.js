@@ -20,6 +20,23 @@ const DECOR = {
 // What kind of action each button is. The colour on the button says the same thing.
 const KIND = { attack: 'Attack', defend: 'Defend', control: 'Control', support: 'Support', device: 'Device', lore: 'Knowledge', flow: '' };
 const ABIL_KIND = { brace: 'defend', riposte: 'defend', shove: 'attack', deadeye: 'attack', spore_dart: 'attack', arc_pulse: 'attack', mark: 'control', snare: 'control', soothe: 'control', mend: 'support', overclock: 'support', drone: 'device' };
+// How each kind of creature behaves, and the one thing worth knowing when you meet it.
+const NATURE = {
+  pack: ['Pack hunter', 'Weak alone. Kill or scatter them one at a time before they gather round a single Seeker.'],
+  predator: ['Predator', 'It picks a Seeker and commits. Brace, or put a snare in its path.'],
+  ambush: ['Ambusher', 'It waits for you to come within reach. Fight it from range.'],
+  grazer: ['Grazer', 'Harmless unless hurt. A safe subject for study.'],
+  skittish: ['Skittish', 'It runs from anything close. Study it from the edge of your range.'],
+  scavenger: ['Scavenger', 'It comes for the dead and feeds to heal. Clear the bodies or kill it first.'],
+  mender: ['Mender', 'It repairs the others. Deal with it before the things it tends.'],
+  sentinel: ['Sentinel', 'It guards a place and holds a grudge. Leave its ground and it lets you go.'],
+  boss_orchard: ['Great one', 'It cannot be calmed. Watch for what it grows between its turns.'],
+  boss_regulator: ['Great one', 'It cannot be calmed. The red line on the floor is where it strikes next.'],
+};
+const STATUS = u => { const s = []; const add = (on, cls, t, d) => { if (on) s.push(`<span class="st ${cls}" title="${d}">${t}</span>`); };
+  add(u.shield > 0, 'buff', 'Shield ' + u.shield, 'Absorbs damage before health'); add(u.taunt > 0, 'buff', 'Braced', 'Drawing attacks'); add(u.rip > 0, 'buff', 'Riposte', 'Strikes back when hit in melee'); add(u.calm > 0, 'buff', 'Calm ' + u.calm, 'Will not hunt unless hurt');
+  add(u.bleed > 0, 'bad', 'Bleeding ' + u.bleed, 'Loses health each turn'); add(u.poison > 0, 'bad', 'Poisoned ' + u.poison, 'Loses health each turn, fading by one'); add(u.mark > 0, 'bad', 'Marked', 'Takes 25% more damage'); add(u.root > 0, 'bad', 'Held ' + u.root, 'Cannot move'); add(u.stun > 0, 'bad', 'Stunned', 'Loses its turn');
+  return s.length ? `<div class="sts2">${s.join('')}</div>` : '<p class="dim" style="font-size:12.5px">No active effects.</p>'; };
 const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
 const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt=""><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -29,7 +46,7 @@ export function mountBattle(root, onFinish) {
   const run = G.state.run; const spec = run.spec; const reg = D.REGIONS[spec.region];
   let log = []; try { const sv = JSON.parse(store.get('unc.run') || 'null'); if (sv && sv.at === run.at) log = sv.log; } catch { /* start over */ }
   let st; try { st = C.replay(spec, log); } catch { log = []; st = C.createRun(spec); }
-  let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
+  let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
@@ -39,7 +56,8 @@ export function mountBattle(root, onFinish) {
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
-  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); }, region: spec.region, seed: spec.seed });
+  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
+    onHover: (t, d) => { const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
@@ -133,23 +151,31 @@ export function mountBattle(root, onFinish) {
   }
   function panel() {
     const el = $('.info', root); let h = '';
-    const u = info?.u != null ? unit(info.u) : null; const p = info?.p != null ? st.room.props.find(q => q.pid === info.p && !q.done) : null;
+    const pinned = info; const info2 = info || hov; const u = info2?.u != null ? unit(info2.u) : null; const p = info2?.p != null ? st.room.props.find(q => q.pid === info2.p && !q.done) : null;
     if (u && live(u) && u.side === 'c') {
-      const S = D.SPECIES[u.kind]; const sg = stage(u.kind); const tot = (G.state.cat['f:' + u.kind]?.study || 0) + (st.res.study[u.kind] || 0); const cap = u.variant ? 5 : 3; const pl = C.plan(st, u); const t = pl.tgt && unit(pl.tgt);
-      h = `<div class="plate">${art(u.kind, { variant: u.variant })}</div><p class="label">${sg < 0 ? 'New to your Catalogue' : C.STAGE_NAME[sg]}</p><h4>${u.variant ? esc(D.VARIANTS[u.variant].name) + ' ' : ''}${esc(S.name)}</h4><p class="lat">${esc(S.latin)}</p>
-        <dl class="kv" style="margin-top:8px"><dt>Health</dt><dd class="num">${u.hp}/${u.max}${u.armor ? ' · armor ' + u.armor : ''}</dd><dt>Bite</dt><dd class="num">${u.dmg[1] ? u.dmg[0] + '-' + u.dmg[1] : 'none'}</dd>
-        <dt>Now</dt><dd style="color:${C.isHostile(st, u) ? 'var(--hostile)' : 'var(--calm)'}">${esc(pl.label)}${t && pl.k !== 'heal' ? ': ' + esc(t.name) : ''}</dd>
-        <dt>Studied</dt><dd><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></dd></dl>
-        ${u.variant ? `<p style="margin-top:8px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
-        <p style="margin-top:8px;font-size:13.5px">${sg >= 1 ? esc(S.behavior) : `<span class="dim">${esc(S.blurb)} Its habits are unrecorded. ${Math.max(1, 4 - tot)} more study and the Catalogue will say how it behaves.</span>`}</p>
-        ${!C.isHostile(st, u) && S.ai !== 'skittish' ? '<p class="dim" style="font-size:13px;margin-top:6px">It is leaving you alone. You do not have to fight it.</p>' : ''}`;
-    } else if (info?.d) {
-      const [nm, tag, txt] = DECOR[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
+      const S = D.SPECIES[u.kind]; const sg = stage(u.kind); const tot = (G.state.cat['f:' + u.kind]?.study || 0) + (st.res.study[u.kind] || 0); const cap = u.variant ? 5 : 3; const pl = C.plan(st, u); const t = pl.tgt && unit(pl.tgt); const [nat, tip] = NATURE[S.ai] || ['Creature', '']; const host = C.isHostile(st, u);
+      h = `<div class="hc-art">${art(u.kind, { variant: u.variant })}<span class="hc-tier">Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]}</span></div>
+        <p class="label">${esc(nat)} · ${esc(reg.short)}${sg < 0 ? ' · new to you' : ' · ' + C.STAGE_NAME[sg]}</p><h4>${u.variant ? esc(D.VARIANTS[u.variant].name) + ' ' : ''}${esc(S.name)}</h4><p class="lat">${esc(S.latin)}</p>
+        <div class="hc-hp"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><span class="num">${u.hp} / ${u.max}</span></div>
+        <div class="hc-stats"><span><b class="num">${u.dmg[1] ? u.dmg[0] + '-' + u.dmg[1] : '0'}</b>bite</span><span><b class="num">${u.armor || 0}</b>armor</span><span><b class="num">${S.move}</b>move</span><span><b class="num">${S.range > 1 ? S.range : 1}</b>reach</span></div>
+        <p class="hc-now" style="color:${host ? 'var(--hostile)' : 'var(--calm)'}">${esc(pl.label)}${t && pl.k !== 'heal' ? ': ' + esc(t.name) : ''}</p>
+        ${STATUS(u)}
+        <p style="margin-top:8px;font-size:13.5px">${esc(S.blurb)} ${sg >= 1 ? esc(S.behavior) : ''}</p>
+        ${sg >= 1 ? `<p class="hc-tip"><b>Tip</b> ${esc(tip)}</p>` : `<p class="hc-tip"><b>Unrecorded</b> Its habits are not in your Catalogue. ${Math.max(1, 4 - tot)} more stud${4 - tot === 1 ? 'y' : 'ies'} and this card will say how it behaves and how to handle it.</p>`}
+        ${u.armor ? `<p class="dim" style="font-size:12.5px;margin-top:6px">Armor ${u.armor} is taken off every hit, so many small hits do little. Poison and Bleed ignore it.</p>` : ''}
+        ${u.variant ? `<p style="margin-top:6px;font-size:13px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
+        <div class="hc-foot"><span>Studied</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
+    } else if (u && live(u) && u.side === 's') {
+      h = `<div class="hc-art">${art(u.kind)}</div><p class="label">${esc(D.ARCHETYPES[u.kind].name)} · level ${u.sh.lvl}</p><h4>${esc(u.name)}</h4>
+        <div class="hc-hp ally"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><span class="num">${Math.max(0, u.hp)} / ${u.max}</span></div>
+        <div class="hc-stats"><span><b class="num">${u.sh.w.min}-${u.sh.w.max}</b>damage</span><span><b class="num">${u.armor}</b>armor</span><span><b class="num">${u.move}</b>move</span><span><b class="num">${u.ap}</b>actions</span></div>${STATUS(u)}`;
+    } else if (info2?.d) {
+      const info = info2; const [nm, tag, txt] = DECOR[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
     } else if (p) {
       const F = p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
       h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
     }
-    if (h) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h;
+    if (h && pinned) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h; el.classList.toggle('hovering', !pinned);
     el.innerHTML = h; el.hidden = !h;
   }
   function hint() {
