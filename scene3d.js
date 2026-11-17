@@ -156,9 +156,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
 
   // tile markers
   const marks = new THREE.Group(); scene.add(marks); const mk = {};
-  const mm = { mv: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .55, depthWrite: false }), ab: new THREE.MeshBasicMaterial({ color: 0xffd05a, transparent: true, opacity: .34, depthWrite: false }), danger: new THREE.MeshBasicMaterial({ color: 0xff4a3a, transparent: true, opacity: .4, depthWrite: false }) };
-  const mg = { mv: new THREE.CircleGeometry(.13, 16), ab: new THREE.PlaneGeometry(S * .92, S * .92), danger: new THREE.PlaneGeometry(S * .96, S * .96) };
-  const lineG = new THREE.Group(); scene.add(lineG); const lm = new THREE.LineDashedMaterial({ color: 0xff6a5a, dashSize: .16, gapSize: .12, transparent: true, opacity: .9 });
+  const mm = { reach: new THREE.MeshBasicMaterial({ color: 0x9ff0e0, transparent: true, opacity: .2, depthWrite: false }), threat: new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: .26, depthWrite: false }), mv: new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .8, depthWrite: false }), ab: new THREE.MeshBasicMaterial({ color: 0xffd05a, transparent: true, opacity: .34, depthWrite: false }), danger: new THREE.MeshBasicMaterial({ color: 0xff4a3a, transparent: true, opacity: .4, depthWrite: false }) };
+  const mg = { reach: new THREE.PlaneGeometry(S * .93, S * .93), threat: new THREE.PlaneGeometry(S * .97, S * .97), mv: new THREE.CircleGeometry(.09, 16), ab: new THREE.PlaneGeometry(S * .92, S * .92), danger: new THREE.PlaneGeometry(S * .96, S * .96) };
+  const lineG = new THREE.Group(); scene.add(lineG); const threatG = new THREE.Group(); scene.add(threatG); const beaconG = new THREE.Group(); scene.add(beaconG); const beaconGeo = new THREE.OctahedronGeometry(.11, 0); const arrowGeo = new THREE.ConeGeometry(.11, .3, 6); const lineM = new THREE.MeshBasicMaterial({ color: 0xff5a48, transparent: true, opacity: .85, depthWrite: false }); const lm = new THREE.LineDashedMaterial({ color: 0xff6a5a, dashSize: .16, gapSize: .12, transparent: true, opacity: .9 });
   const ringGeo = new THREE.RingGeometry(.4, .47, 28); const ringM = c => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .95, side: THREE.DoubleSide, depthWrite: false });
   const RM = { sel: ringM(0xffffff), hostile: ringM(0xff5a4a), tg: ringM(0xffd05a), calm: ringM(0x7fe0c0), spent: ringM(0x8090a8) };
 
@@ -218,11 +218,17 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     },
     marks(map) {
       for (const k in mk) { marks.remove(mk[k]); delete mk[k]; }
-      for (const [k, cls] of map) { const [x, y] = k.split(',').map(Number); const m = new THREE.Mesh(mg[cls], mm[cls]); m.rotation.x = -Math.PI / 2; m.position.set(wx(y), cls === 'mv' ? .03 : .02, wz(x)); m.renderOrder = 2; marks.add(m); mk[k + cls] = m; }
+      const put = (k, cls, x, y, h) => { const m = new THREE.Mesh(mg[cls], mm[cls]); m.rotation.x = -Math.PI / 2; m.position.set(wx(y), h, wz(x)); m.renderOrder = 2; marks.add(m); mk[k + cls] = m; };
+      for (const [k, cls] of map) { const [x, y] = k.split(',').map(Number); if (cls === 'mv') { put(k, 'reach', x, y, .018); put(k, 'mv', x, y, .03); } else put(k, cls, x, y, .02); }
     },
+    // tiles a hovered creature could strike next turn
+    threat(list) { threatG.clear(); for (const [x, y] of list) { const m = new THREE.Mesh(mg.threat, mm.threat); m.rotation.x = -Math.PI / 2; m.position.set(wx(y), .024, wz(x)); m.renderOrder = 3; threatG.add(m); } },
+    // a marker over everything on the board that can be used, studied or gathered
+    beacons(list) { beaconG.clear(); for (const [x, y, h, c] of list) { const m = new THREE.Mesh(beaconGeo, new THREE.MeshBasicMaterial({ color: c || 0xffd05a })); m.position.set(wx(y), h || 1.5, wz(x)); m.userData.y = h || 1.5; beaconG.add(m); } },
     lines(list) {
       lineG.clear();
-      for (const [a, b] of list) { const pts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push(new THREE.Vector3(wx(a.y) + (wx(b.y) - wx(a.y)) * t, .25 + Math.sin(t * Math.PI) * .7, wz(a.x) + (wz(b.x) - wz(a.x)) * t)); } const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lm); l.computeLineDistances(); lineG.add(l); }
+      for (const [a, b] of list) { const A = new THREE.Vector3(wx(a.y), .5, wz(a.x)), Bv = new THREE.Vector3(wx(b.y), .55, wz(b.x)); const mid = A.clone().lerp(Bv, .5); mid.y = 1.2 + A.distanceTo(Bv) * .12; const curve = new THREE.QuadraticBezierCurve3(A, mid, Bv);
+        lineG.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 18, .035, 5), lineM)); const head = new THREE.Mesh(arrowGeo, lineM); const tan = curve.getTangent(1); head.position.copy(Bv); head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan); lineG.add(head); }
     },
     async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } if (o.mixer) play(o, 'idle'); },
     lunge(id, tid, crit) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z);
@@ -284,7 +290,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     for (const o of props.values()) { if (o.userData.hover) o.position.y = Math.sin(t * 1.5) * .06; if (o.userData.use) o.scale.setScalar(1 + Math.sin(t * 5) * .05); }
     const pa = flies.geometry.attributes.position; for (let i = 0; i < fn; i++) { pa.array[i * 3 + 1] += Math.sin(t * .8 + fs[i]) * .003; pa.array[i * 3] += Math.cos(t * .5 + fs[i]) * .002; } pa.needsUpdate = true;
     for (const k in mk) if (k.endsWith('mv')) mk[k].scale.setScalar(1 + Math.sin(t * 4) * .12);
-    gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25;
+    gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25; lineM.opacity = .6 + Math.sin(t * 4) * .25;
+    for (const m of beaconG.children) { m.position.y = m.userData.y + Math.sin(t * 2.2 + m.position.x) * .08; m.rotation.y = t * 1.6; }
+    for (const k in mk) if (k.endsWith('reach')) mk[k].material.opacity = .17 + Math.sin(t * 2.4) * .05;
     for (const d of decor.children) { const p = d.userData.poke; if (p) { const k = (now - p) / 420; if (k >= 1) { d.userData.poke = 0; d.rotation.z = 0; } else d.rotation.z = Math.sin(k * Math.PI * 3) * .05 * (1 - k); } if (d.userData.light && d.userData.light.intensity) d.userData.light.intensity = 15 + Math.sin(t * 9 + d.userData.i) * 1.2; }
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
     zoomNow += (zoom - zoomNow) * .14; focNow.lerp(zoom < .98 ? focus : ORIGIN, .12);

@@ -58,7 +58,7 @@ export function mountBattle(root, onFinish) {
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
-    onHover: (t, d) => { const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
+    onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
   const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; if (sl === 'weapon' || sl === 'head' || sl === 'body') g[sl] = it.base; } return g; };
@@ -81,6 +81,7 @@ export function mountBattle(root, onFinish) {
       st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'flora' ? p.id : p.kind, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
     marks(m); drawLines(); head(); actions(); cards(); panel(); hint();
+    sc.beacons(st.room.props.filter(p => !p.done).map(p => [p.x, p.y, p.kind === 'wonder' ? 2 : 1.35, p.kind === 'wonder' ? 0x9fe8ff : p.kind === 'cache' ? 0xffd05a : 0x8ff0a8]));
   }
   function targets() { // what a click can do right now: Map "x,y" -> action
     const m = new Map(); const u = unit(sel); if (!live(u) || busy || st.outcome) return m;
@@ -196,6 +197,32 @@ export function mountBattle(root, onFinish) {
     el.innerHTML = t;
   }
   function float(x, y, txt, cls = '') { const f = document.createElement('div'); f.className = 'float ' + cls; f.textContent = txt; const p = sc.screen(x, y, 1.5); f.style.left = p.left + '%'; f.style.top = p.top + '%'; board.append(f); setTimeout(() => f.remove(), cls.includes('why') ? 1900 : 900); }
+  // What the tile under the pointer means right now, in a line. Answers "can I go there, and if not, why".
+  const tip = document.createElement('div'); tip.className = 'tiletip'; tip.hidden = true; board.append(tip);
+  function tipFor(t) {
+    sc.threat([]); if (!t || busy || st.outcome) { tip.hidden = true; return; }
+    const [x, y] = t; const me = unit(sel); const o = C.unitAt(st, x, y); const p = propAt(x, y); const a = targets().get(x + ',' + y); let txt = '', cls = '';
+    if (o && o.side === 'c' && live(o)) {
+      if (C.isHostile(st, o)) { const S = D.SPECIES[o.kind]; const seen = new Set(); for (const [k] of C.moveTiles(st, o)) { const tx = k % C.W, ty = Math.floor(k / C.W); for (let dy = -S.range; dy <= S.range; dy++) for (let dx = -S.range; dx <= S.range; dx++) { const nx = tx + dx, ny = ty + dy; if (Math.abs(dx) + Math.abs(dy) <= S.range && nx >= 0 && ny >= 0 && nx < C.W && ny < C.H && !st.room.rock[ny * C.W + nx]) seen.add(nx + ',' + ny); } }
+        sc.threat([...seen].map(k => k.split(',').map(Number))); }
+      if (!live(me)) txt = o.name || D.SPECIES[o.kind].name;
+      else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'Use device on'} ${D.SPECIES[o.kind].name}` : 'Out of range or not a valid target'; cls = a ? 'go' : 'no'; }
+      else if (a && a.t === 'atk') { txt = `Attack · ${me.sh.w.min}-${me.sh.w.max} damage · 1 action`; cls = 'atk'; }
+      else if (me.ap < 1) { txt = 'No actions left this turn'; cls = 'no'; }
+      else { txt = `Out of reach (${md(me, o)} tiles, weapon reaches ${C.weaponRange(st, me)}). Click to move closer`; cls = 'far'; }
+      if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
+    } else if (o && o.side === 's') { txt = o.id === sel ? `${o.name} · selected` : `Select ${o.name}`; }
+    else if (st.room.rock[y * C.W + x]) { txt = 'Blocked: boulders'; cls = 'no'; }
+    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'} · 1 action` : near ? 'No actions left this turn' : p.walk ? 'Step onto it, or stand beside it to gather' : 'Stand beside it to use it'; cls = a ? 'go' : 'far'; }
+    else if (!live(me)) txt = '';
+    else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : 'Use device'} here` : 'Out of range'; cls = a ? 'go' : 'no'; }
+    else if (a && a.t === 'move') { const d = C.moveTiles(st, me).get(y * C.W + x); txt = `Move here · ${d} step${d === 1 ? '' : 's'} · 1 action`; cls = 'go'; }
+    else if (me.ap < 1) { txt = 'No actions left this turn'; cls = 'no'; }
+    else if (![...C.moveTiles(st, me).values()].some(d => d > 0)) { txt = `${me.name} is boxed in: every tile beside them is taken`; cls = 'no'; }
+    else { txt = `Too far this turn: ${me.name} moves ${me.move} tiles per action`; cls = 'far'; }
+    if (!txt) { tip.hidden = true; return; }
+    const q = sc.screen(x, y, .15); tip.textContent = txt; tip.className = 'tiletip ' + cls; tip.style.left = q.left + '%'; tip.style.top = q.top + '%'; tip.hidden = false;
+  }
   // A short fading line over the selected Seeker saying why nothing happened.
   function say(txt, at) { const u = at || unit(sel) || mine()[0]; if (!u) return toast(txt); float(u.x, u.y, txt, 'txt why'); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
@@ -229,7 +256,7 @@ export function mountBattle(root, onFinish) {
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log }));
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
-    busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]);
+    busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
     await play(ev, before); busy = false;
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
@@ -294,6 +321,7 @@ export function mountBattle(root, onFinish) {
       if (best) { info = null; say(best.far <= C.weaponRange(st, me) ? 'Closing in' : 'Out of range. Moving closer'); return send({ t: 'move', u: me.id, x: best.x, y: best.y }); }
       return say(`Out of range: weapon reaches ${C.weaponRange(st, me)}, target is ${dist} away, and there is no way closer`);
     }
+    if (live(me) && !mode && !o && !p && !a) { say(st.room.rock[y * C.W + x] ? 'Blocked: boulders' : me.ap < 1 ? 'No actions left this turn' : `Too far: ${me.name} moves ${me.move} tiles per action`); }
     if (live(me) && mode && !o) { const nm = mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'; say(`${nm} cannot be used there`); }
     if (mode) mode = null;
     armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
