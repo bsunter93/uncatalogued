@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 14;
+export const VERSION = 15;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -620,7 +620,8 @@ function trail(st, leadId, ev) { const L = st.units.find(u => u.id === leadId); 
 export function apply(st, a) {
   const calm = exploring(st) && a.t !== 'end' && a.t !== 'next' && a.t !== 'abandon' && a.t !== 'wander';
   const ev = applyAction(st, a); if (!st.outcome) notice(st, ev);
-  if (calm && exploring(st)) { if (a.t === 'move' && !a.solo) trail(st, a.u, ev); endTurn(st, ev, true); if (!st.outcome) notice(st, ev); }
+  if (calm && a.t === 'move' && !a.solo && !st.outcome) { const quiet = exploring(st); trail(st, a.u, ev); if (quiet) notice(st, ev); } // the others still close up on the step that gets the party noticed, so a fight never starts with them strung out behind
+  if (calm && exploring(st)) { endTurn(st, ev, true); if (!st.outcome) notice(st, ev); }
   return ev; }
 function applyAction(st, a) {
   if (st.outcome) bad('The expedition is over.');

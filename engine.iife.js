@@ -791,7 +791,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 14;
+  var VERSION = 15;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2267,8 +2267,12 @@ var UncEngine = (() => {
     const calm = exploring(st) && a.t !== "end" && a.t !== "next" && a.t !== "abandon" && a.t !== "wander";
     const ev = applyAction(st, a);
     if (!st.outcome) notice(st, ev);
+    if (calm && a.t === "move" && !a.solo && !st.outcome) {
+      const quiet = exploring(st);
+      trail(st, a.u, ev);
+      if (quiet) notice(st, ev);
+    }
     if (calm && exploring(st)) {
-      if (a.t === "move" && !a.solo) trail(st, a.u, ev);
       endTurn(st, ev, true);
       if (!st.outcome) notice(st, ev);
     }
