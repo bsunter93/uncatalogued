@@ -45,14 +45,31 @@ const FIXTURE = {
   lamp: ['Gallery lamp', 'Still fed', 'Light it and whatever is not hunting you drifts toward it and stays. A creature held by the light only notices you if you stand right beside it.'],
   case: ['Specimen case', 'Seal intact', 'Something was put in here a long time ago. It may still be a specimen. It may still be alive.'],
 };
+const FIXTURE_CW = { bellcap: ['Steam vent', 'Under pressure', 'Open the valve and it blows. Every creature within two tiles seizes for a turn. The great ones ignore it. Once only.'], case: ['Parts case', 'Seal intact', 'Something was packed in here a long time ago. It may still be a specimen. It may still be wound.'] };
 const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
 const off = why => `aria-disabled="true" data-why="${why}"`;
 const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt=""><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
+// The same places in the Clockwork Wilds, where things are built and not grown.
+const DECOR_CW = {
+  survey: ['Tinker bench', 'Left mid-task', 'Half-built animals in rows, each a little closer to finished than the last. The newest one has no maker\'s mark.'],
+  crates: ['Parts crates', 'Third Expedition', 'Springs sorted by size, every drawer labelled. One drawer is labelled with your name.'],
+  case_broken: ['Orrery', 'Still turning', 'It models a sky with one more world than the charts allow. That world is the only one that never completes an orbit.'],
+  lamp: ['Gas lamp', 'Still fed', 'Teal glass and a copper feed pipe. It lights when touched. The pipe is not connected to anything.'],
+  column_fallen: ['Great gear', 'Thrown clear', 'It came off something much larger. The teeth are worn on one side only, as if it turned the same quarter turn for an age.'],
+  plinth: ['Boiler', 'At pressure', 'The gauge reads full. The firebox is cold and has been for years.'],
+  mushrooms: ['Floor vent', 'Breathing', 'Steam comes up in a slow rhythm. Stand over it long enough and you start breathing in time.'],
+  tree_a: ['Brass oak', 'Assembled', 'Every leaf is enamel on a wire stem. Some of the stems have grown.'],
+  tree_b: ['Chain willow', 'Specimen 9', 'The tag on the trunk is stamped with a number and a date. The date has not happened yet.'],
+  spires: ['Smokestacks', 'Foundry line', 'Still warm. Whatever they vent for is working somewhere underneath you.'],
+  pond: ['Coolant pool', 'No bottom found', 'It glows and does not ripple. A dropped spanner goes down slowly and keeps its shine the whole way.'],
+  reeds: ['Mirror reeds', 'Specimen bed', 'The only grown things here. They lean toward the pool and away from the machines.'],
+};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
 export function mountBattle(root, onFinish) {
   const run = G.state.run; const spec = run.spec; const reg = D.REGIONS[spec.region];
+  const LORE = spec.region === 'clockwork' ? { ...DECOR, ...DECOR_CW } : DECOR; const CWF = spec.region === 'clockwork';
   let log = []; try { const sv = JSON.parse(store.get('unc.run') || 'null'); if (sv && sv.at === run.at) log = sv.log; } catch { /* start over */ }
   let st; try { st = C.replay(spec, log); } catch { log = []; st = C.createRun(spec); }
   let focusOn = ''; let hov = null; let sel = null, mode = null, info = null, busy = false, armed = null, retreatArmed = false, shownRoom = -1;
@@ -65,8 +82,8 @@ export function mountBattle(root, onFinish) {
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
-  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
-    onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
+  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!LORE[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
+    onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed });
   // which far place the party is standing in: the start, one of the two doors, or the last room
   const siteNow = () => st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
   if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow() }; } // local testing hooks
@@ -188,10 +205,10 @@ export function mountBattle(root, onFinish) {
         <div class="hc-hp ally"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><span class="num">${Math.max(0, u.hp)} / ${u.max}</span></div>
         <div class="hc-stats"><span><b class="num">${u.sh.w.min}-${u.sh.w.max}</b>damage</span><span><b class="num">${u.armor}</b>armor</span><span><b class="num">${u.move}</b>move</span><span><b class="num">${u.ap}</b>actions</span></div>${STATUS(u)}`;
     } else if (info2?.d) {
-      const info = info2; const [nm, tag, txt] = DECOR[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
+      const info = info2; const [nm, tag, txt] = LORE[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
     } else if (p) {
-      const F = p.kind === 'fixture' ? { name: FIXTURE[p.id][0], blurb: FIXTURE[p.id][2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
-      h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + FIXTURE[p.id][1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
+      const F = p.kind === 'fixture' ? { name: ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id])[0], blurb: ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id])[2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
+      h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id])[1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
     }
     if (h && pinned) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h; el.classList.toggle('hovering', !pinned);
     el.innerHTML = h; el.hidden = !h;
@@ -227,7 +244,7 @@ export function mountBattle(root, onFinish) {
       if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
     } else if (o && o.side === 's') { txt = o.id === sel ? `${o.name} · selected` : `Select ${o.name}`; }
     else if (st.room.rock[y * C.W + x]) { txt = 'Blocked: boulders'; cls = 'no'; }
-    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'} · 1 action` : near ? 'No actions left this turn' : p.walk ? 'Step onto it, or stand beside it to gather' : 'Stand beside it to use it'; cls = a ? 'go' : 'far'; }
+    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'} · 1 action` : near ? 'No actions left this turn' : p.walk ? 'Step onto it, or stand beside it to gather' : 'Stand beside it to use it'; cls = a ? 'go' : 'far'; }
     else if (!live(me)) txt = '';
     else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : 'Use device'} here` : 'Out of range'; cls = a ? 'go' : 'no'; }
     else if (a && a.t === 'move') { const d = C.moveTiles(st, me).get(y * C.W + x); txt = `Move here · ${d} step${d === 1 ? '' : 's'} · 1 action`; cls = 'go'; }
@@ -261,7 +278,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'tele') push('A strike is marked on the floor.', 'foe');
       else if (e.e === 'purge') push('The marked line is purged.', 'foe');
       else if (e.e === 'trapset') push('A snare is set.', 'ally'); else if (e.e === 'trap') push('A snare snaps shut.', 'ally'); else if (e.e === 'burst') push('A pulse goes off.', 'ally');
-      else if (e.e === 'fx') push({ spores: 'The Bellcap breathes out a cloud of spores.', lit: 'The lamp is lit.', unlit: 'The lamp is put out.', specimen: 'The case holds a preserved specimen. Sample taken.', alive: 'The case opens. Something inside was still alive.' }[e.what], 'ally');
+      else if (e.e === 'fx') push({ spores: CWF ? 'The vent blows a wall of steam.' : 'The Bellcap breathes out a cloud of spores.', lit: 'The lamp is lit.', unlit: 'The lamp is put out.', specimen: 'The case holds a preserved specimen. Sample taken.', alive: 'The case opens. Something inside was still alive.' }[e.what], 'ally');
       else if (e.e === 'prop') { const p = S.room.props.find(q => q.pid === e.pid); push(p ? `${p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Taken' : 'Gathered'}: ${p.kind === 'flora' ? D.FLORA[p.id].name : p.kind === 'wonder' ? D.WONDERS[p.id].name : 'a sealed case'}.` : 'Something is gathered.', 'ally'); }
     }
   }
@@ -293,7 +310,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'tele') { const m = new Map(); for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) if (e.line.axis === 'row' ? y === e.line.i : x === e.line.i) m.set(x + ',' + y, 'danger'); sc.marks(m); snd.warn(); await sleep(380); }
       else if (e.e === 'purge') { banner('Purge'); snd.warn(); await sleep(300); }
       else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); if (e.e !== 'trapset') sc.burst(e.x, e.y); await sleep(160); }
-      else if (e.e === 'fx') { const T = { spores: ['Spores', 0xb6e33a], lit: ['Lit', 0xffc878], unlit: ['Dark', 0x8090a8], specimen: ['A preserved specimen', 0xffd05a], alive: ['It was still alive', 0xff5a4a] }[e.what]; float(e.x, e.y, T[0], 'study'); sc.burst(e.x, e.y, T[1]); if (e.what === 'spores') { for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) sc.burst(e.x + dx, e.y + dy, 0xb6e33a); } snd.pick(); await sleep(320); }
+      else if (e.e === 'fx') { const T = { spores: [CWF ? 'Steam' : 'Spores', CWF ? 0xe8f4ff : 0xb6e33a], lit: ['Lit', 0xffc878], unlit: ['Dark', 0x8090a8], specimen: ['A preserved specimen', 0xffd05a], alive: ['It was still alive', 0xff5a4a] }[e.what]; float(e.x, e.y, T[0], 'study'); sc.burst(e.x, e.y, T[1]); if (e.what === 'spores') { for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) sc.burst(e.x + dx, e.y + dy, 0xb6e33a); } snd.pick(); await sleep(320); }
       else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); snd.pick(); } await sleep(200); }
     }
   }

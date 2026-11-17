@@ -705,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 5;
+  var VERSION = 6;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2110,9 +2110,15 @@ var UncEngine = (() => {
           if (p.spent) bad("It has nothing left to give.");
           p.spent = true;
           ev.push({ e: "fx", pid: p.pid, what: "spores", x: p.x, y: p.y });
-          for (const c of creatures(st)) if (md(c, p) <= 2 && !SPECIES[c.kind].boss && !SPECIES[c.kind].mech) {
-            c.calm = Math.max(c.calm, 2);
-            ev.push({ e: "text", id: c.id, msg: "Drowsy" }, { e: "status", id: c.id, s: "calm" });
+          const steam = st.spec.region === "clockwork";
+          for (const c of creatures(st)) if (md(c, p) <= 2 && !SPECIES[c.kind].boss) {
+            if (steam) {
+              c.stun = Math.max(c.stun, 1);
+              ev.push({ e: "text", id: c.id, msg: "Seized" }, { e: "status", id: c.id, s: "stun" });
+            } else if (!SPECIES[c.kind].mech) {
+              c.calm = Math.max(c.calm, 2);
+              ev.push({ e: "text", id: c.id, msg: "Drowsy" }, { e: "status", id: c.id, s: "calm" });
+            }
           }
         } else if (p.id === "lamp") {
           p.lit = !p.lit;

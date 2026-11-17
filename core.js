@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 5;
+export const VERSION = 6;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -602,7 +602,9 @@ function applyAction(st, a) {
     const p = st.room.props.find(q => q.pid === a.p && !q.done); if (!p) bad('Nothing there.'); if (md(u, p) > 1) bad('Stand next to it.');
     if (p.kind === 'fixture') { need(1); u.ap--;
       if (p.id === 'bellcap') { if (p.spent) bad('It has nothing left to give.'); p.spent = true; ev.push({ e: 'fx', pid: p.pid, what: 'spores', x: p.x, y: p.y });
-        for (const c of creatures(st)) if (md(c, p) <= 2 && !D.SPECIES[c.kind].boss && !D.SPECIES[c.kind].mech) { c.calm = Math.max(c.calm, 2); ev.push({ e: 'text', id: c.id, msg: 'Drowsy' }, { e: 'status', id: c.id, s: 'calm' }); } }
+        // spores put living things to sleep; in the Wilds the same fixture is a steam vent that seizes machines for a turn
+        const steam = st.spec.region === 'clockwork';
+        for (const c of creatures(st)) if (md(c, p) <= 2 && !D.SPECIES[c.kind].boss) { if (steam) { c.stun = Math.max(c.stun, 1); ev.push({ e: 'text', id: c.id, msg: 'Seized' }, { e: 'status', id: c.id, s: 'stun' }); } else if (!D.SPECIES[c.kind].mech) { c.calm = Math.max(c.calm, 2); ev.push({ e: 'text', id: c.id, msg: 'Drowsy' }, { e: 'status', id: c.id, s: 'calm' }); } } }
       else if (p.id === 'lamp') { p.lit = !p.lit; ev.push({ e: 'fx', pid: p.pid, what: p.lit ? 'lit' : 'unlit', x: p.x, y: p.y }); }
       else if (p.id === 'case') { p.done = true; const r = R(st); const reg = st.spec.region;
         if (r.pct(55)) { const k = D.REGIONS[reg].observe; st.res.samples[k] = (st.res.samples[k] || 0) + 1; st.res.xp += 8; ev.push({ e: 'fx', pid: p.pid, what: 'specimen', x: p.x, y: p.y, kind: k }); }
