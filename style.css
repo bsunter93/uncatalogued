@@ -369,3 +369,35 @@ table.rank tr.me td { color: var(--gilt); }
 .face.ph img { width: 100%; height: 100%; object-fit: cover; display: block; transform: scale(2.1); transform-origin: var(--fx, 50%) var(--fy, 22%); }
 .face.ph.vanguard { --fx: 44%; --fy: 20%; } .face.ph.tracker { --fx: 52%; --fy: 22%; } .face.ph.naturalist { --fx: 74%; --fy: 26%; }
 .game .scard { grid-template-columns: 46px 1fr; } .game .scard .face { width: 46px; height: 46px; border-radius: 50%; border: 1px solid rgba(232, 241, 250, .4); grid-row: span 3; }
+
+/* Mission tracker, top left. Collapses to a pill. */
+.tracker { max-width: 340px; } .htop { align-items: flex-start; }
+.trk { background: rgba(8, 12, 30, .8); backdrop-filter: blur(8px); border: 1px solid rgba(232, 241, 250, .2); border-radius: var(--r); padding: 10px 12px; font-size: 13.5px; display: flex; flex-direction: column; gap: 7px; text-align: left; }
+.trk .trh { display: flex; justify-content: space-between; gap: 12px; align-items: center; } .trk .trh .link { font-size: 12px; }
+.trk .goal { display: flex; gap: 8px; font-size: 14.5px; line-height: 1.35; } .trk .goal b { font-weight: 600; } .trk .goal.ok { color: var(--calm); }
+.trk .chk { flex: none; width: 16px; height: 16px; margin-top: 2px; border: 1.5px solid currentColor; border-radius: 3px; display: grid; place-items: center; font-size: 11px; }
+.trk .step { display: flex; gap: 10px; align-items: center; font: 11px var(--mono); color: var(--ink2); text-transform: uppercase; letter-spacing: .06em; }
+.trk .next { color: #d6deee; } .trk .next b { color: var(--gilt); font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-right: 4px; }
+.trk .won { font-size: 12.5px; color: var(--gilt); border-top: 1px solid rgba(232, 241, 250, .14); padding-top: 7px; } .trk .won b { font-weight: 600; }
+.trk.min { flex-direction: row; align-items: center; gap: 10px; padding: 7px 11px; cursor: pointer; } .trk.min b { font-weight: 600; } .trk.min span:last-child { color: var(--ink2); font-size: 12.5px; } .trk.min .ok { color: var(--calm); }
+/* Action buttons: icon, name, and a colour for what kind of action it is. */
+.act { --k: rgba(232, 241, 250, .4); }
+.k-attack { --k: #f0624a; } .k-defend { --k: #5aa9ee; } .k-control { --k: #b388f5; } .k-support { --k: #5fd6a0; } .k-device { --k: #f2a53b; } .k-lore { --k: #6fd6ff; }
+.game .act { flex-direction: row; align-items: center; gap: 9px; padding: 6px 9px 6px 6px; border-left: 3px solid var(--k); min-height: 58px; }
+.game .act img { width: 44px; height: 44px; border-radius: 4px; flex: none; box-shadow: 0 0 0 1px rgba(0, 0, 0, .6); }
+.game .act .tx { display: flex; flex-direction: column; min-width: 0; } .game .act .tx small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kd { font: 600 9px var(--mono); font-style: normal; text-transform: uppercase; letter-spacing: .08em; color: var(--k); }
+.game .act .kd { position: absolute; top: 4px; right: 6px; }
+.game .act[aria-pressed="true"] { border-color: var(--k); background: color-mix(in srgb, var(--k) 22%, rgba(10, 14, 34, .85)); box-shadow: 0 0 16px color-mix(in srgb, var(--k) 45%, transparent); }
+.game .act:disabled img { filter: grayscale(1); }
+.game .actions { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .game .mid { max-width: 820px; }
+.game .scards { position: relative; } .game .scard { position: relative; }
+.sheetbtn { align-self: stretch; margin-left: -6px; margin-right: 4px; padding: 0 8px; font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink2); border: 1px solid rgba(232, 241, 250, .2); border-left: 0; border-radius: 0 var(--r) var(--r) 0; background: rgba(10, 14, 34, .72); writing-mode: vertical-rl; }
+.sheetbtn:hover { color: var(--ink); background: rgba(40, 56, 110, .9); }
+/* Hero sheet */
+.sheetveil { z-index: 60; } .modal.sheet { max-width: 760px; max-height: calc(100vh - 32px); overflow-y: auto; position: relative; gap: 12px; }
+.modal.sheet > .x { position: absolute; top: 14px; right: 16px; } .modal.sheet h3 { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--ink2); margin-top: 6px; }
+.shtop { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: start; } .shport { width: 240px; aspect-ratio: 1; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line2); }
+.shab { display: grid; gap: 8px; } .shab > div { display: flex; gap: 10px; border-left: 3px solid var(--k); padding-left: 9px; } .shab img { width: 48px; height: 48px; border-radius: 4px; flex: none; } .shab p { font-size: 13.5px; margin: 2px 0; } .shab small { font: 11px var(--mono); color: var(--ink2); }
+.shgear { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+@media (max-width: 860px) { .shtop { grid-template-columns: 1fr; } .shport { width: 100%; max-height: 260px; } .tracker { max-width: 100%; flex-basis: 100%; order: 3; } .game .act img { width: 34px; height: 34px; } .game .actions { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); } .sheetbtn { writing-mode: horizontal-tb; position: absolute; top: -18px; right: 0; margin: 0; padding: 1px 6px; border: 1px solid rgba(232, 241, 250, .2); border-radius: 3px; display: none; } }

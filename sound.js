@@ -1,6 +1,6 @@
 // Sound, synthesized in the browser. No audio files. Starts on the first tap, because browsers require that.
 let ctx = null, master = null, amb = null, chime = null;
-let on = true; try { on = localStorage.getItem('unc.snd') !== '0'; } catch { /* private mode */ }
+let on = false; try { on = localStorage.getItem('unc.snd') === '1'; } catch { /* private mode */ }
 const SCALE = [220, 261.6, 293.7, 349.2, 392, 440, 523.3, 587.3];
 
 function boot() {

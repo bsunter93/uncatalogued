@@ -1,5 +1,5 @@
 // The expedition screen: board, input, and playback of what the rules engine reports.
-import { C, D, G, $, esc, art, face, store, toast } from './ui.js';
+import { C, D, G, $, esc, art, face, store, toast, itemCard } from './ui.js';
 import { createScene } from './scene3d.js';
 import { snd } from './sound.js';
 
@@ -17,6 +17,11 @@ const DECOR = {
   tree_a: ['Gallery oak', 'Rooted through the floor', 'The roots have lifted the tiles in a ring. An expedition left its instruments at the base and the tree has started to grow around them.'],
   tree_b: ['Tagged willow', 'Specimen 9', 'The brass tag on the trunk is stamped with a number and a date. The date has not happened yet.'],
 };
+// What kind of action each button is. The colour on the button says the same thing.
+const KIND = { attack: 'Attack', defend: 'Defend', control: 'Control', support: 'Support', device: 'Device', lore: 'Knowledge', flow: '' };
+const ABIL_KIND = { brace: 'defend', riposte: 'defend', shove: 'attack', deadeye: 'attack', spore_dart: 'attack', arc_pulse: 'attack', mark: 'control', snare: 'control', soothe: 'control', mend: 'support', overclock: 'support', drone: 'device' };
+const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
+const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt=""><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
@@ -28,7 +33,7 @@ export function mountBattle(root, onFinish) {
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
-    <div class="hud htop"><div class="rooms"></div><div class="obj grow"></div><span class="label turn"></span><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
+    <div class="hud htop"><div class="tracker"></div><span class="grow"></span><span class="label turn"></span><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
     <div class="panel info" hidden></div>
     <div class="hud hbot"><div class="scards"></div><div class="mid"><div class="hint"></div><div class="actions"></div></div></div></div>`;
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
@@ -95,29 +100,36 @@ export function mountBattle(root, onFinish) {
     if (spec.type === 'harvest') return [`Gather flora: <span class="num">${Math.min(4, rs.floraN)}/4</span>`, rs.floraN >= 4];
     return [`Open the <b>sealed case</b>${st.roomIdx < 2 ? ' in the last room' : ' at the far wall'}.`, rs.objCache];
   }
+  let trkMin = store.get('unc.trk') === '1';
   function head() {
-    $('.rooms', root).innerHTML = [0, 1, 2].map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
-    const [t, ok] = objective(); const o = $('.obj', root); const w = st.room.wonder && D.WONDERS[st.room.wonder]; o.innerHTML = t + (w ? `<small>${esc(w.name)}. ${esc(w.effect)}</small>` : ''); $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off'; o.classList.toggle('ok', !!ok);
-    $('.turn', root).textContent = `${reg.short} · Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · Room ${st.roomIdx + 1} of 3 · Turn ${st.turn}`;
+    const [t, ok] = objective(); const w = st.room.wonder && D.WONDERS[st.room.wonder]; const hunting = foes().filter(c => C.isHostile(st, c)).length; const adv = C.canAdvance(st);
+    const next = st.outcome ? '' : ok && st.roomIdx >= 2 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
+    const pips = [0, 1, 2].map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
+    $('.tracker', root).innerHTML = trkMin ? `<button class="trk min" data-act="trk" aria-expanded="false"><span class="rooms">${pips}</span><b>${MISSION[spec.type] || 'Mission'}</b><span class="${ok ? 'ok' : ''}">${ok ? 'Objective met' : 'Show mission'}</span></button>`
+      : `<div class="trk"><div class="trh"><span class="label">${MISSION[spec.type] || 'Mission'} · ${esc(reg.short)}</span><button class="link" data-act="trk" aria-expanded="true">Hide</button></div>
+        <p class="goal ${ok ? 'ok' : ''}"><span class="chk">${ok ? '&#10003;' : ''}</span><span>${t}</span></p>
+        <div class="step"><span class="rooms">${pips}</span><span>Room ${st.roomIdx + 1} of 3</span></div>
+        ${next ? `<p class="next"><b>Next</b> ${next}</p>` : ''}${w ? `<p class="won"><b>${esc(w.name)}.</b> ${esc(w.effect)}</p>` : ''}</div>`;
+    $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · Turn ${st.turn}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off';
     $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You lose most cases.' : 'Retreat';
   }
   function actions() {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
     const b = []; const dis = busy || !live(u);
     if (live(u)) {
-      b.push(`<button class="act" data-mode="study" aria-pressed="${mode?.k === 'study'}" ${dis || u.ap < 1 ? 'disabled' : ''}><b>Study</b><small>1 action · range 3</small></button>`);
+      b.push(btn('lore', 'study', 'Study', 'learn a creature · 1 action', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Catalogue a creature without killing it" ${dis || u.ap < 1 ? 'disabled' : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
-        b.push(`<button class="act" data-abil="${id}" aria-pressed="${mode?.id === id}" ${dis || cd > 0 || (!free && u.ap < A.ap) ? 'disabled' : ''}><b>${esc(A.name)}</b><small>${cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free'}</small></button>`); }
+        b.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis || cd > 0 || (!free && u.ap < A.ap) ? 'disabled' : ''}`)); }
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
-        b.push(`<button class="act" data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis || u.charges <= 0 || u.ap < I.ap ? 'disabled' : ''}><b>${nm}</b><small>device · ${u.charges} left</small></button>`); }
+        b.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis || u.charges <= 0 || u.ap < I.ap ? 'disabled' : ''}`)); }
     }
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0);
-    if (adv) b.push(`<button class="act adv" data-act="next" ${busy ? 'disabled' : ''}><b>${st.roomIdx >= 2 ? 'Extract' : 'Move on'}</b><small>${st.roomIdx >= 2 ? 'end the expedition' : 'nothing here is hunting you'}</small></button>`);
-    b.push(`<button class="act end ${!anyAp && !adv ? 'ready' : ''}" data-act="end" ${busy ? 'disabled' : ''}><b>End turn</b><small>${adv ? 'let the room move' : 'creatures act'}</small></button>`);
+    if (adv) b.push(btn('flow', 'move_on', st.roomIdx >= 2 ? 'Extract' : 'Move on', st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
+    b.push(btn('flow', 'end', 'End turn', adv ? 'let the room move' : 'creatures act', `data-act="end" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
     el.innerHTML = b.join('');
   }
   function cards() {
-    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button>`).join('');
+    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button><button class="sheetbtn" data-sheet="${u.id}" title="Open ${esc(u.name)}'s sheet" aria-label="Open ${esc(u.name)}'s sheet">Sheet</button>`).join('');
   }
   function panel() {
     const el = $('.info', root); let h = '';
@@ -145,7 +157,7 @@ export function mountBattle(root, onFinish) {
     if (st.outcome) t = '';
     else if (busy) t = 'The room moves.';
     else if (mode?.k === 'abil') t = `<b>${esc(D.ABILITIES[mode.id].name)}.</b> ${esc(D.ABILITIES[mode.id].desc)} Tap a lit tile, or the button again to cancel.`;
-    else if (mode?.k === 'study') t = `<b>Study.</b> Tap a lit creature within 3 tiles. Each one can be studied ${'three'} times. Enough study moves a species up a stage in your Catalogue.`;
+    else if (mode?.k === 'study') t = '<b>Study</b> is how you catalogue a creature without killing it. Each study is a field note. Enough notes reveal how the species behaves, and put your name on it in the Catalogue. Tap a lit creature within 3 tiles.';
     else if (mode?.k === 'dev') t = '<b>Device.</b> Tap a lit tile to use it.';
     else if (armed) t = '<b>It is calm.</b> Tap it again to attack anyway. It will fight back.';
     else if (C.canAdvance(st) && first && st.roomIdx === 0) t = '<b>The room is quiet.</b> Before you move on: the Mossback is harmless. Study it, pick the moss, then leave when you are ready.';
@@ -192,6 +204,21 @@ export function mountBattle(root, onFinish) {
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();
   }
+  // A Seeker's full sheet. Readable at any time; gear cannot change until the expedition ends.
+  function openSheet(id) {
+    const u = unit(id); if (!u) return; const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const A = D.ARCHETYPES[u.kind]; const w = u.sh.w; const gear = sk ? C.seekerItems(G.state, sk) : [];
+    const sts = []; if (u.bleed > 0) sts.push('Bleeding ' + u.bleed); if (u.poison > 0) sts.push('Poisoned ' + u.poison); if (u.shield > 0) sts.push('Shield ' + u.shield); if (u.taunt > 0) sts.push('Braced'); if (u.rip > 0) sts.push('Riposte ready');
+    const v = document.createElement('div'); v.className = 'veil sheetveil';
+    v.innerHTML = `<div class="modal sheet"><button class="link x" data-c="x">Close</button>
+      <div class="shtop"><img class="shport" src="assets/portraits/${u.kind}.jpg" alt="" onerror="this.remove()"><div><p class="label">${esc(A.name)} · level ${u.sh.lvl}</p><h2>${esc(u.name)}</h2><p class="dim" style="font-size:13.5px;margin-top:4px">${esc(A.bio || '')}</p>
+        <dl class="kv" style="margin-top:10px"><dt>Health</dt><dd class="num">${Math.max(0, u.hp)}/${u.max}</dd><dt>Actions</dt><dd class="num">${u.ap} this turn</dd><dt>Weapon</dt><dd class="num">${w.min}-${w.max} · ${C.weaponRange(st, u) > 1 ? 'range ' + C.weaponRange(st, u) : 'melee'}</dd><dt>Armor</dt><dd class="num">${u.armor}</dd><dt>Move</dt><dd class="num">${u.move} tiles</dd><dt>Critical</dt><dd class="num">${u.sh.crit}%</dd>${u.sh.dev ? `<dt>Device</dt><dd class="num">${u.charges} charge${u.charges === 1 ? '' : 's'} left</dd>` : ''}</dl>
+        ${sts.length ? `<p style="margin-top:8px;font-size:13px;color:var(--gilt)">${sts.join(' · ')}</p>` : ''}</div></div>
+      <h3>Abilities</h3><div class="shab">${u.sh.abilities.map(a => `<div class="k-${ABIL_KIND[a] || 'attack'}"><img src="assets/icons/${a}.jpg" alt=""><div><b>${esc(D.ABILITIES[a].name)}</b> <i class="kd">${KIND[ABIL_KIND[a] || 'attack']}</i><p>${esc(D.ABILITIES[a].desc)}</p><small>${D.ABILITIES[a].ap ? D.ABILITIES[a].ap + ' action' + (D.ABILITIES[a].ap > 1 ? 's' : '') : 'Free'} · ready every ${D.ABILITIES[a].cd} turns${(u.cds[a] || 0) > 0 ? ' · ready in ' + u.cds[a] : ''}</small></div></div>`).join('')}</div>
+      ${u.sh.res.active.length ? `<h3>Resonances awake</h3>${u.sh.res.active.map(r => `<div class="reso"><b>${D.RESONANCES[r].name}</b>${esc(D.RESONANCES[r].text)}</div>`).join('')}` : ''}
+      <h3>Gear worn</h3><p class="dim" style="font-size:13px;margin:-4px 0 8px">Gear is fixed until the expedition ends. Change it at camp.</p><div class="shgear">${gear.length ? gear.map(it => itemCard(it, { hints: false, worn: false })).join('') : '<p class="dim">Nothing equipped.</p>'}</div></div>`;
+    v.onclick = e => { if (e.target === v || e.target.closest('[data-c="x"]')) v.remove(); };
+    document.body.append(v);
+  }
   function choosePath() {
     const P = PATHS[spec.region]; const v = document.createElement('div'); v.className = 'veil';
     v.innerHTML = `<div class="modal"><p class="label">Room 2 of 3</p><h2>Two doors.</h2><div class="paths">
@@ -204,6 +231,8 @@ export function mountBattle(root, onFinish) {
   root.onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.act === 'snd') { snd.toggle(); head(); return; }
+    if (b.dataset.act === 'trk') { trkMin = !trkMin; store.set('unc.trk', trkMin ? '1' : '0'); head(); return; }
+    if (b.dataset.sheet) { openSheet(+b.dataset.sheet); return; }
     if (b.dataset.act === 'closeinfo') { info = null; armed = null; sync(); return; }
     if (busy) return; snd.click();
     if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
