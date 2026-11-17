@@ -9,6 +9,7 @@ import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
 const GLB = { vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
+  glasswing: ['glasswing', 1.25], gulper: ['gulper', 1.7], carrion: ['carrion', 1.35], hush: ['hush', 2.1], mite: ['mite', .85], pollinator: ['pollinator', 1.15], coilfawn: ['coilfawn', 1.55], warden: ['warden', 2.4], mantis: ['mantis', 1.75], regulator: ['regulator', 4.2],
   // things on the board
   rock: ['p_boulder', 1.45], cache: ['p_cache', 1.0], lantern_moss: ['p_lantern_moss', 1.05], snare_vine: ['p_snare_vine', 1.15], heartfruit: ['p_heartfruit', 1.0], mirror_reed: ['p_mirror_reed', 1.2],
   // things around it
@@ -30,6 +31,7 @@ const CLASS_CLIP = { melee: ['Right_Hand_Sword_Slash', 'Charged_Slash', 620], po
 const gearWait = {};
 const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .55; } } });
 const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
+const FLIES = { glasswing: 1.0, pollinator: .9 }; // how high the ones with wings hold themselves
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
 function loadGLB(kind) {
   if (!GLB[kind]) return null; if (glbCache[kind]) return Promise.resolve(glbCache[kind]);
@@ -217,6 +219,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
       if (u.variant) body.traverse(m => { if (m.isMesh) m.material = m.material.clone(); });
       if (u.variant === 'gilded') body.traverse(m => { if (m.isMesh) { m.material.map = null; m.material.emissiveMap = null; m.material.emissive.set(0x5a3a00); m.material.color.set(0xe0b040); m.material.metalness = .7; m.material.roughness = .3; m.material.needsUpdate = true; } });
       if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
+      if (real && FLIES[u.kind]) { body.userData.hover = true; body.userData.hoverY = FLIES[u.kind]; }
       g.add(body); return body;
     };
     const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; c.userData.sock = m.userData.sock; return c; };
@@ -284,7 +287,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
       for (const [a, b] of list) { const A = new THREE.Vector3(wx(a.y), .5, wz(a.x)), Bv = new THREE.Vector3(wx(b.y), .55, wz(b.x)); const mid = A.clone().lerp(Bv, .5); mid.y = 1.2 + A.distanceTo(Bv) * .12; const curve = new THREE.QuadraticBezierCurve3(A, mid, Bv);
         lineG.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 18, .035, 5), lineM)); const head = new THREE.Mesh(arrowGeo, lineM); const tan = curve.getTangent(1); head.position.copy(Bv); head.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan); lineG.add(head); }
     },
-    async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } if (o.mixer) play(o, 'idle'); },
+    async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; o.walking = true; if (o.real && !o.mixer && ms > 20) ms = Math.max(ms, 170); if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } o.walking = false; if (o.mixer) play(o, 'idle'); },
     lunge(id, tid, crit) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z);
       if (o.mixer) { const cc = CLASS_CLIP[o.wclass]; const nm = cc ? 'c:' + (crit && cc[1] ? cc[1] : cc[0]) : null; const ms = nm && play(o, nm, { once: true, speed: 1.3 }); if (ms) return cc[2] + (crit ? 120 : 0); play(o, crit && o.acts.heavy ? 'heavy' : 'attack', { once: true, speed: 1.35 }); return RIG[o.body.userData.rig][2]; }
       o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 110; },
@@ -334,9 +337,10 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   (function frame() {
     if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now;
     for (const [id, o] of units) {
-      const b = o.body; if (o.mixer) o.mixer.update(dt); if (!o.mixer) b.position.y = b.userData.hover ? .12 + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
+      const b = o.body; if (o.mixer) o.mixer.update(dt); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
       if (b.userData.spin) b.userData.spin.forEach((r, i) => { r.rotation.x += .01 * (i + 1); r.rotation.y += .007 * (i + 1); });
       b.position.x = b.position.z = 0;
+      if (o.real && !o.mixer && !o.kick) { const w = o.walking ? 1 : 0; b.rotation.z = Math.sin(t * (w ? 13 : 1.3) + o.phase) * (w ? .09 : .025); b.rotation.x = Math.sin(t * (w ? 6.5 : .9) + o.phase * 2) * (w ? .05 : .02); if (w && !b.userData.hover) b.position.y += Math.abs(Math.sin(t * 13 + o.phase)) * .07; }
       if (o.lunge) { const k = (now - o.lunge.t) / 220; if (k >= 1) o.lunge = null; else { const a = Math.sin(k * Math.PI) * .35; const L = Math.hypot(o.lunge.dx, o.lunge.dz) || 1; o.g.position.x = o.tx + o.lunge.dx / L * a; o.g.position.z = o.tz + o.lunge.dz / L * a; } }
       if (o.kick) { const k = (now - o.kick) / 260; if (k >= 1) { o.kick = 0; b.rotation.z = 0; } else { b.rotation.z = Math.sin(k * Math.PI * 3) * .22 * (1 - k); b.position.y += Math.sin(k * Math.PI) * .1; } }
       if (o.dying && now > o.dying) { const k = Math.min(1, (now - o.dying) / 420); o.g.scale.setScalar(1 - k * .9); o.g.position.y = -k * .3; o.g.rotation.y += .2; if (k >= 1) { o.g.visible = false; o.lab.hidden = true; o.dying = 0; o.g.scale.setScalar(1); o.g.rotation.y = 0; } }

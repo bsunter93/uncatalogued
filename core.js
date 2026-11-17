@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 3;
+export const VERSION = 4;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -33,7 +33,7 @@ export function itemTags(it) {
 export function itemScale(it) { return fl(tierScale(it.tier, 20) * (it.stat || 100) / 100 * (100 + 4 * (it.cal || 0)) / 100); }
 export function itemWeapon(it) {
   const def = itemDef(it); if (!def.w) return null; const s = itemScale(it);
-  return { min: Math.max(1, Math.round(def.w[0] * s / 100)), max: Math.max(1, Math.round(def.w[1] * s / 100)), range: def.w[2], scale: def.w[3] };
+  return { min: Math.max(1, Math.round(def.w[0] * s / 100)), max: Math.max(1, Math.round(def.w[1] * s / 100)), range: def.w[2], scale: def.w[3], fam: def.fam };
 }
 export function itemMods(it) {
   const def = itemDef(it); const m = {}; const s = itemScale(it);
@@ -261,7 +261,7 @@ function hurt(st, src, t, amt, ev, o = {}) {
       if (amt <= 0) { provoke(st, src, t); return a; } }
   }
   t.hp -= amt; if (t.side === 's') { st.res.dmgTaken += amt; if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15); }
-  ev.push({ e: 'hit', from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? (o.kind || 'dot') : null });
+  ev.push({ e: 'hit', from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? (o.kind || 'dot') : null, eff: o.eff || null });
   provoke(st, src, t);
   if (t.hp <= 0) kill(st, src, t, ev);
   return amt;
@@ -334,6 +334,7 @@ function strike(st, u, t, ev, o = {}) {
   if (fx.t_packmate && t.hitBy && t.hitBy !== u.id) pct += 15;
   if (fx.knowledge && t.side === 'c') pct += 5 * ((st.spec.stages[t.kind] || 0) + 1);
   if (t.side === 'c' && (st.spec.stages[t.kind] || 0) >= 2) pct += 10;
+  if (t.side === 'c' && t.studied) pct += 10 * t.studied; // every field note on this animal is a place to hit it
   if (fx.hungry_compass) pct += 6 * Object.keys(st.res.seen).length;
   if (fx.glass) pct += 35;
   if (u.wrath) { pct += u.wrath; u.wrath = 0; }
@@ -344,7 +345,9 @@ function strike(st, u, t, ev, o = {}) {
   if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
   if (t.mark > 0) dmg = fl(dmg * 125 / 100);
   u.last = t.id; const wasMarked = t.mark > 0; const tx = t.x, ty = t.y;
-  const dealt = hurt(st, u, t, dmg, ev, { pierce: m.pierce || 0, crit }); t.hitBy = t.hitBy || u.id;
+  // what the weapon is made of matters: each species is weak to one family and shrugs off another
+  let eff = null; const TS = t.side === 'c' ? D.SPECIES[t.kind] : null; if (TS && w.fam) { if (TS.weak === w.fam) { dmg = fl(dmg * 135 / 100); eff = 'weak'; } else if (TS.resist === w.fam) { dmg = fl(dmg * 70 / 100); eff = 'resist'; } }
+  const dealt = hurt(st, u, t, dmg, ev, { pierce: m.pierce || 0, crit, eff }); t.hitBy = t.hitBy || u.id;
   if (crit && fx.s_marksman && !u.critRef) { u.critRef = true; u.ap++; ev.push({ e: 'text', id: u.id, msg: '+1 action' }); }
   if (alive(t)) {
     if (m.bleedHit && r.int(100) < m.bleedHit) { t.bleed = 3 + (m.bleedDur || 0); t.bleedD = Math.max(t.bleedD || 0, 2 * st.tier + fl(u.sh.attr.adaptation / 3)); ev.push({ e: 'status', id: t.id, s: 'bleed' }); }
@@ -535,7 +538,7 @@ function endTurn(st, ev) {
   const r = R(st);
   for (const u of seekers(st)) {
     if (!alive(u)) continue; tickUnit(st, u, ev); if (!alive(u)) continue;
-    u.ap = u.stun > 0 ? 0 : 2; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false;
+    u.ap = u.stun > 0 ? 0 : 2; u.moved = false; u.freeUsed = false; u.freeStudy = false; u.killRef = false; u.critRef = false;
     for (const k in u.cds) u.cds[k] = Math.max(0, u.cds[k] - (st.room.wonder === 'counting_clock' ? 2 : 1));
     if (u.sh.dev === 'unfinished') u.devNow = r.pick(['lure', 'barrier', 'pulse', 'drone', 'blink', 'gravity']);
   }
@@ -581,8 +584,10 @@ function applyAction(st, a) {
     if (freeMv) u.freeUsed = true; else u.ap--; u.moved = true; walk(st, u, pathFrom(par, a.x, a.y), ev); return ev;
   }
   if (a.t === 'atk') { need(1); const t = tgt('c'); if (md(u, t) > weaponRange(st, u)) bad('Out of range.'); u.ap--; strike(st, u, t, ev); return ev; }
-  if (a.t === 'study') { need(1); const t = tgt('c'); if (md(u, t) > 3) bad('Too far to study.'); const calm = !isHostile(st, t);
-    const g = gainStudy(st, u, t, studyValue(st, u), ev); if (!g) bad('Nothing more to learn from this one.'); u.ap--;
+  if (a.t === 'study') { const t = tgt('c'); if (md(u, t) > 3) bad('Too far to study.'); const calm = !isHostile(st, t);
+    // watching something that is not hunting you costs nothing, once a turn
+    const free = calm && !u.freeStudy; if (!free) need(1);
+    const g = gainStudy(st, u, t, studyValue(st, u), ev); if (!g) bad('Nothing more to learn from this one.'); if (free) u.freeStudy = true; else u.ap--;
     if (u.fx.a_naturalist && calm && !t.sampled) { t.sampled = true; st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1; ev.push({ e: 'text', id: t.id, msg: 'Sample taken' }); }
     if (u.fx.studymark) { t.mark = 2; ev.push({ e: 'status', id: t.id, s: 'mark' }); } return ev; }
   if (a.t === 'use') {

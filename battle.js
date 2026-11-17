@@ -102,7 +102,7 @@ export function mountBattle(root, onFinish) {
       each((x, y, o) => { if (md(u, { x, y }) > I.range) return; const open = !o && !st.room.rock[y * C.W + x] && !(propAt(x, y) && !propAt(x, y).walk);
         if ((I.target === 'tile' && open) || (I.target === 'ally' && o && o.side === 's') || I.target === 'any') m.set(x + ',' + y, { t: 'dev', u: u.id, x, y }); });
     } else if (mode && mode.k === 'study') {
-      for (const c of foes()) if (md(u, c) <= 3 && c.studied < (c.variant ? 5 : 3)) m.set(c.x + ',' + c.y, { t: 'study', u: u.id, id: c.id });
+      for (const c of foes()) if (md(u, c) <= 3 && c.studied < (c.variant ? 5 : 3) && (u.ap >= 1 || (!u.freeStudy && !C.isHostile(st, c)))) m.set(c.x + ',' + c.y, { t: 'study', u: u.id, id: c.id });
     } else {
       if (u.ap >= 1 || (u.fx.freemove && !u.freeUsed)) for (const [k, d] of C.moveTiles(st, u)) if (d) m.set((k % C.W) + ',' + Math.floor(k / C.W), { t: 'move', u: u.id, x: k % C.W, y: Math.floor(k / C.W) });
       if (u.ap >= 1) { for (const c of foes()) if (md(u, c) <= C.weaponRange(st, u)) m.set(c.x + ',' + c.y, { t: 'atk', u: u.id, id: c.id });
@@ -144,7 +144,7 @@ export function mountBattle(root, onFinish) {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
     const b = []; const dis = busy || !live(u);
     if (live(u)) {
-      b.push(btn('lore', 'study', 'Study', 'learn a creature · 1 action', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Catalogue a creature without killing it" ${dis ? 'disabled' : u.ap < 1 ? off('No actions left this turn') : ''}`));
+      b.push(btn('lore', 'study', 'Study', u.freeStudy ? 'find weak points · 1 action' : 'free on a calm creature', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Each note adds 10% damage against that creature and reveals what it is weak to" ${dis ? 'disabled' : u.ap < 1 && u.freeStudy ? off('No actions left this turn') : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
         b.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
@@ -171,9 +171,10 @@ export function mountBattle(root, onFinish) {
         ${STATUS(u)}
         <p style="margin-top:8px;font-size:13.5px">${esc(S.blurb)} ${sg >= 1 ? esc(S.behavior) : ''}</p>
         ${sg >= 1 ? `<p class="hc-tip"><b>Tip</b> ${esc(tip)}</p>` : `<p class="hc-tip"><b>Unrecorded</b> Its habits are not in your Catalogue. ${Math.max(1, 4 - tot)} more stud${4 - tot === 1 ? 'y' : 'ies'} and this card will say how it behaves and how to handle it.</p>`}
+        <div class="hc-wr">${sg >= 2 || u.studied >= 2 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="rs"><b>Resists</b> ${D.FAMILY_NAME[S.resist]} weapons</span>` : sg >= 1 || u.studied >= 1 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="un"><b>Resists</b> not yet known</span>` : '<span class="un"><b>Weak to</b> not yet known</span><span class="un"><b>Resists</b> not yet known</span>'}</div>
         ${u.armor ? `<p class="dim" style="font-size:12.5px;margin-top:6px">Armor ${u.armor} is taken off every hit, so many small hits do little. Poison and Bleed ignore it.</p>` : ''}
         ${u.variant ? `<p style="margin-top:6px;font-size:13px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
-        <div class="hc-foot"><span>Studied</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
+        <div class="hc-foot"><span>Field notes${u.studied ? ` · +${u.studied * 10}% damage to it` : ''}</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
     } else if (u && live(u) && u.side === 's') {
       h = `<div class="hc-art">${art(u.kind)}</div><p class="label">${esc(D.ARCHETYPES[u.kind].name)} · level ${u.sh.lvl}</p><h4>${esc(u.name)}</h4>
         <div class="hc-hp ally"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><span class="num">${Math.max(0, u.hp)} / ${u.max}</span></div>
@@ -192,7 +193,7 @@ export function mountBattle(root, onFinish) {
     if (st.outcome) t = '';
     else if (busy) t = 'The room moves.';
     else if (mode?.k === 'abil') t = `<b>${esc(D.ABILITIES[mode.id].name)}.</b> ${esc(D.ABILITIES[mode.id].desc)} Tap a lit tile, or the button again to cancel.`;
-    else if (mode?.k === 'study') t = '<b>Study</b> is how you catalogue a creature without killing it. Each study is a field note. Enough notes reveal how the species behaves, and put your name on it in the Catalogue. Tap a lit creature within 3 tiles.';
+    else if (mode?.k === 'study') t = '<b>Study</b> a creature within 3 tiles. Each note makes every hit on it 10% stronger. The first note shows what it is weak to, the second what it resists. Free once a turn on anything that is not hunting you.';
     else if (mode?.k === 'dev') t = '<b>Device.</b> Tap a lit tile to use it.';
     else if (armed) t = '<b>It is calm.</b> Tap it again to attack anyway. It will fight back.';
     else if (C.canAdvance(st) && first && st.roomIdx === 0) t = '<b>The room is quiet.</b> Before you move on: the Mossback is harmless. Study it, pick the moss, then leave when you are ready.';
@@ -212,7 +213,7 @@ export function mountBattle(root, onFinish) {
         sc.threat([...seen].map(k => k.split(',').map(Number))); }
       if (!live(me)) txt = o.name || D.SPECIES[o.kind].name;
       else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'Use device on'} ${D.SPECIES[o.kind].name}` : 'Out of range or not a valid target'; cls = a ? 'go' : 'no'; }
-      else if (a && a.t === 'atk') { txt = `Attack · ${me.sh.w.min}-${me.sh.w.max} damage · 1 action`; cls = 'atk'; }
+      else if (a && a.t === 'atk') { const S = D.SPECIES[o.kind], sg = stage(o.kind), f = me.sh.w.fam; txt = `Attack · ${me.sh.w.min}-${me.sh.w.max} damage · 1 action` + (sg >= 1 && S.weak === f ? ' · strong against it' : sg >= 2 && S.resist === f ? ' · it resists this weapon' : ''); cls = 'atk'; }
       else if (me.ap < 1) { txt = 'No actions left this turn'; cls = 'no'; }
       else { txt = `Out of reach (${md(me, o)} tiles, weapon reaches ${C.weaponRange(st, me)}). Click to move closer`; cls = 'far'; }
       if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
@@ -238,7 +239,7 @@ export function mountBattle(root, onFinish) {
       if (e.e === 'phase') push(e.who === 'c' ? `Round ${S.turn}: the Cabinet moves` : `Round ${S.turn}: your turn`, 'head');
       else if (e.e === 'room') push(`Room ${e.idx + 1}`, 'head');
       else if (e.e === 'move') push(`${who(e.id)} ${e.blink ? 'blinks' : e.shove ? 'is thrown' : 'moves'} ${e.path.length} tile${e.path.length === 1 ? '' : 's'}.`, cls(e.id));
-      else if (e.e === 'hit') push(e.from && !e.dot ? `${who(e.from)} hits ${who(e.id)} for ${e.n}${e.crit ? ', a critical hit' : ''}.` : `${who(e.id)} takes ${e.n}${e.dot && e.dot !== 'dot' ? ' from ' + e.dot : ' damage'}.`, cls(e.from && !e.dot ? e.from : e.id));
+      else if (e.e === 'hit') push(e.from && !e.dot ? `${who(e.from)} hits ${who(e.id)} for ${e.n}${e.crit ? ', a critical hit' : ''}${e.eff === 'weak' ? ' (it is weak to that weapon)' : e.eff === 'resist' ? ' (it resists that weapon)' : ''}.` : `${who(e.id)} takes ${e.n}${e.dot && e.dot !== 'dot' ? ' from ' + e.dot : ' damage'}.`, cls(e.from && !e.dot ? e.from : e.id));
       else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
       else if (e.e === 'shield') push(e.n < 0 ? `${who(e.id)} gains ${-e.n} shield.` : `${who(e.id)}'s shield absorbs ${e.n}.`, cls(e.id));
       else if (e.e === 'text') push(`${who(e.id)}: ${e.msg}.`, cls(e.id));
@@ -270,7 +271,7 @@ export function mountBattle(root, onFinish) {
       if (e.e === 'text' && /^(Witnessed|Notices)/.test(e.msg)) { const v0 = at(e.id); sc.focus(v0.x, v0.y); await sleep(350); }
       if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (theirs) sc.focus(v.x, v.y); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (theirs) sc.focus(v.x, v.y); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }

@@ -161,6 +161,8 @@ var UncEngine = (() => {
       name: "Thornling",
       latin: "Spinifex gregarius",
       region: "verdant",
+      weak: "relic",
+      resist: "organic",
       hp: 12,
       dmg: [4, 6],
       armor: 0,
@@ -175,6 +177,8 @@ var UncEngine = (() => {
       name: "Mossback",
       latin: "Testudo hortensis",
       region: "verdant",
+      weak: "anomalous",
+      resist: "organic",
       hp: 38,
       dmg: [7, 10],
       armor: 2,
@@ -189,6 +193,8 @@ var UncEngine = (() => {
       name: "Glasswing",
       latin: "Vitrea fugax",
       region: "verdant",
+      weak: "organic",
+      resist: "anomalous",
       hp: 9,
       dmg: [2, 3],
       armor: 0,
@@ -204,6 +210,8 @@ var UncEngine = (() => {
       name: "Gulper Vine",
       latin: "Faux radicans",
       region: "verdant",
+      weak: "relic",
+      resist: "organic",
       hp: 22,
       dmg: [7, 9],
       armor: 1,
@@ -218,6 +226,8 @@ var UncEngine = (() => {
       name: "Carrion Bloom",
       latin: "Necroflora ambulans",
       region: "verdant",
+      weak: "relic",
+      resist: "organic",
       hp: 19,
       dmg: [4, 6],
       armor: 0,
@@ -232,6 +242,8 @@ var UncEngine = (() => {
       name: "Hush",
       latin: "Silens silens",
       region: "verdant",
+      weak: "organic",
+      resist: "anomalous",
       hp: 36,
       dmg: [8, 11],
       armor: 0,
@@ -247,6 +259,8 @@ var UncEngine = (() => {
       name: "The Orchardmother",
       latin: "Mater pomorum",
       region: "verdant",
+      weak: "relic",
+      resist: "organic",
       hp: 92,
       dmg: [9, 13],
       armor: 1,
@@ -262,6 +276,8 @@ var UncEngine = (() => {
       name: "Brass Mite",
       latin: "Acarus horologii",
       region: "clockwork",
+      weak: "organic",
+      resist: "relic",
       hp: 10,
       dmg: [3, 4],
       armor: 1,
@@ -277,6 +293,8 @@ var UncEngine = (() => {
       name: "Pollinator",
       latin: "Apis fabricata",
       region: "clockwork",
+      weak: "anomalous",
+      resist: "relic",
       hp: 15,
       dmg: [0, 0],
       armor: 0,
@@ -292,6 +310,8 @@ var UncEngine = (() => {
       name: "Coilfawn",
       latin: "Cervus elasticus",
       region: "clockwork",
+      weak: "organic",
+      resist: "relic",
       hp: 17,
       dmg: [2, 4],
       armor: 0,
@@ -307,6 +327,8 @@ var UncEngine = (() => {
       name: "Warden",
       latin: "Custos ferreus",
       region: "clockwork",
+      weak: "anomalous",
+      resist: "relic",
       hp: 42,
       dmg: [8, 10],
       armor: 3,
@@ -322,6 +344,8 @@ var UncEngine = (() => {
       name: "Arc Mantis",
       latin: "Mantis fulminans",
       region: "clockwork",
+      weak: "organic",
+      resist: "relic",
       hp: 33,
       dmg: [8, 11],
       armor: 1,
@@ -339,6 +363,8 @@ var UncEngine = (() => {
       name: "The Regulator",
       latin: "Machina moderatrix",
       region: "clockwork",
+      weak: "anomalous",
+      resist: "relic",
       hp: 96,
       dmg: [9, 12],
       armor: 2,
@@ -679,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 3;
+  var VERSION = 4;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -744,7 +770,7 @@ var UncEngine = (() => {
     const def = itemDef(it);
     if (!def.w) return null;
     const s = itemScale(it);
-    return { min: Math.max(1, Math.round(def.w[0] * s / 100)), max: Math.max(1, Math.round(def.w[1] * s / 100)), range: def.w[2], scale: def.w[3] };
+    return { min: Math.max(1, Math.round(def.w[0] * s / 100)), max: Math.max(1, Math.round(def.w[1] * s / 100)), range: def.w[2], scale: def.w[3], fam: def.fam };
   }
   function itemMods(it) {
     const def = itemDef(it);
@@ -1255,7 +1281,7 @@ var UncEngine = (() => {
       st.res.dmgTaken += amt;
       if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15);
     }
-    ev.push({ e: "hit", from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? o.kind || "dot" : null });
+    ev.push({ e: "hit", from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? o.kind || "dot" : null, eff: o.eff || null });
     provoke(st, src, t);
     if (t.hp <= 0) kill(st, src, t, ev);
     return amt;
@@ -1464,6 +1490,7 @@ var UncEngine = (() => {
     if (fx.t_packmate && t.hitBy && t.hitBy !== u.id) pct += 15;
     if (fx.knowledge && t.side === "c") pct += 5 * ((st.spec.stages[t.kind] || 0) + 1);
     if (t.side === "c" && (st.spec.stages[t.kind] || 0) >= 2) pct += 10;
+    if (t.side === "c" && t.studied) pct += 10 * t.studied;
     if (fx.hungry_compass) pct += 6 * Object.keys(st.res.seen).length;
     if (fx.glass) pct += 35;
     if (u.wrath) {
@@ -1479,7 +1506,18 @@ var UncEngine = (() => {
     u.last = t.id;
     const wasMarked = t.mark > 0;
     const tx = t.x, ty = t.y;
-    const dealt = hurt(st, u, t, dmg, ev, { pierce: m.pierce || 0, crit });
+    let eff = null;
+    const TS = t.side === "c" ? SPECIES[t.kind] : null;
+    if (TS && w.fam) {
+      if (TS.weak === w.fam) {
+        dmg = fl(dmg * 135 / 100);
+        eff = "weak";
+      } else if (TS.resist === w.fam) {
+        dmg = fl(dmg * 70 / 100);
+        eff = "resist";
+      }
+    }
+    const dealt = hurt(st, u, t, dmg, ev, { pierce: m.pierce || 0, crit, eff });
     t.hitBy = t.hitBy || u.id;
     if (crit && fx.s_marksman && !u.critRef) {
       u.critRef = true;
@@ -1912,6 +1950,7 @@ var UncEngine = (() => {
       u.ap = u.stun > 0 ? 0 : 2;
       u.moved = false;
       u.freeUsed = false;
+      u.freeStudy = false;
       u.killRef = false;
       u.critRef = false;
       for (const k in u.cds) u.cds[k] = Math.max(0, u.cds[k] - (st.room.wonder === "counting_clock" ? 2 : 1));
@@ -2013,13 +2052,15 @@ var UncEngine = (() => {
       return ev;
     }
     if (a.t === "study") {
-      need(1);
       const t = tgt("c");
       if (md(u, t) > 3) bad("Too far to study.");
       const calm = !isHostile(st, t);
+      const free2 = calm && !u.freeStudy;
+      if (!free2) need(1);
       const g = gainStudy(st, u, t, studyValue(st, u), ev);
       if (!g) bad("Nothing more to learn from this one.");
-      u.ap--;
+      if (free2) u.freeStudy = true;
+      else u.ap--;
       if (u.fx.a_naturalist && calm && !t.sampled) {
         t.sampled = true;
         st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1;
