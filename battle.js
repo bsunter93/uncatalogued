@@ -51,8 +51,8 @@ export function mountBattle(root, onFinish) {
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
-    <div class="hud htop"><div class="tracker"></div><span class="grow"></span><span class="label turn"></span><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
-    <div class="panel info" hidden></div>
+    <div class="hud htop"><div class="tracker"></div><span class="grow"></span><span class="label turn"></span><button class="link" data-act="log" aria-expanded="false">Log</button><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
+    <div class="panel info" hidden></div><div class="clog" hidden><div class="clh"><span class="label">Combat log</span><button class="link" data-act="log">Close</button></div><ol></ol></div>
     <div class="hud hbot"><div class="scards"></div><div class="mid"><div class="hint"></div><div class="actions"></div></div></div></div>`;
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
   const leave = () => { snd.stop(); sc.dispose(); };
@@ -227,6 +227,36 @@ export function mountBattle(root, onFinish) {
     if (!txt) { tip.hidden = true; return; }
     const q = sc.screen(x, y, .15); tip.textContent = txt; tip.className = 'tiletip ' + cls; tip.style.left = q.left + '%'; tip.style.top = q.top + '%'; tip.hidden = false;
   }
+  // ---- Combat log: every action by everything, in plain words. Hidden until opened.
+  const clog = []; let logOpen = false;
+  function record(a, ev, S) {
+    const who = id => { const u = S.units.find(x => x.id === id); if (!u) return 'Something'; return u.side === 'c' ? (u.variant ? D.VARIANTS[u.variant].name + ' ' : '') + D.SPECIES[u.kind].name : u.name || (u.kind === 'drone' ? 'The drone' : 'An ally'); };
+    const cls = id => { const u = S.units.find(x => x.id === id); return !u ? '' : u.side === 'c' ? 'foe' : 'ally'; }; const push = (t, c = '') => clog.push({ t, c });
+    if (a) { if (a.t === 'abil') push(`${who(a.u)} uses ${D.ABILITIES[a.a].name}${a.id != null ? ' on ' + who(a.id) : ''}.`, 'ally did'); else if (a.t === 'study') push(`${who(a.u)} studies ${who(a.id)}.`, 'ally did'); else if (a.t === 'dev') push(`${who(a.u)} uses a device.`, 'ally did'); else if (a.t === 'atk') push(`${who(a.u)} attacks ${who(a.id)}.`, 'ally did'); else if (a.t === 'end') push('You end the turn.', 'sys'); else if (a.t === 'next') push(S.outcome ? 'The party extracts.' : 'The party moves on.', 'sys'); else if (a.t === 'abandon') push('The party retreats.', 'sys'); }
+    for (const e of ev) {
+      if (e.e === 'phase') push(e.who === 'c' ? `Round ${S.turn}: the Cabinet moves` : `Round ${S.turn}: your turn`, 'head');
+      else if (e.e === 'room') push(`Room ${e.idx + 1}`, 'head');
+      else if (e.e === 'move') push(`${who(e.id)} ${e.blink ? 'blinks' : e.shove ? 'is thrown' : 'moves'} ${e.path.length} tile${e.path.length === 1 ? '' : 's'}.`, cls(e.id));
+      else if (e.e === 'hit') push(e.from && !e.dot ? `${who(e.from)} hits ${who(e.id)} for ${e.n}${e.crit ? ', a critical hit' : ''}.` : `${who(e.id)} takes ${e.n}${e.dot && e.dot !== 'dot' ? ' from ' + e.dot : ' damage'}.`, cls(e.from && !e.dot ? e.from : e.id));
+      else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
+      else if (e.e === 'shield') push(e.n < 0 ? `${who(e.id)} gains ${-e.n} shield.` : `${who(e.id)}'s shield absorbs ${e.n}.`, cls(e.id));
+      else if (e.e === 'text') push(`${who(e.id)}: ${e.msg}.`, cls(e.id));
+      else if (e.e === 'status') push(`${who(e.id)} is ${{ bleed: 'bleeding', poison: 'poisoned', mark: 'marked', calm: 'calmed', root: 'held in place', stun: 'stunned' }[e.s] || e.s}.`, cls(e.id));
+      else if (e.e === 'study') push(`Field notes on ${who(e.id)}: +${e.n}.`, 'ally');
+      else if (e.e === 'die') push(`${who(e.id)} dies.`, cls(e.id));
+      else if (e.e === 'flee') push(`${who(e.id)} flees the room.`, cls(e.id));
+      else if (e.e === 'down') push(`${who(e.id)} goes down.`, cls(e.id));
+      else if (e.e === 'spawn') push(`${who(e.id)} appears.`, cls(e.id));
+      else if (e.e === 'eat') push(`${who(e.id)} feeds on the dead.`, cls(e.id));
+      else if (e.e === 'tele') push('A strike is marked on the floor.', 'foe');
+      else if (e.e === 'purge') push('The marked line is purged.', 'foe');
+      else if (e.e === 'trapset') push('A snare is set.', 'ally'); else if (e.e === 'trap') push('A snare snaps shut.', 'ally'); else if (e.e === 'burst') push('A pulse goes off.', 'ally');
+      else if (e.e === 'prop') { const p = S.room.props.find(q => q.pid === e.pid); push(p ? `${p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Taken' : 'Gathered'}: ${p.kind === 'flora' ? D.FLORA[p.id].name : p.kind === 'wonder' ? D.WONDERS[p.id].name : 'a sealed case'}.` : 'Something is gathered.', 'ally'); }
+    }
+  }
+  function drawLog() { const el = $('.clog', root); el.hidden = !logOpen; for (const bt of root.querySelectorAll('[data-act="log"]')) bt.setAttribute('aria-expanded', logOpen); if (!logOpen) return; const ol = $('ol', el); ol.innerHTML = clog.length ? clog.map(l => `<li class="${l.c}">${esc(l.t)}</li>`).join('') : '<li class="sys">Nothing has happened yet.</li>'; ol.scrollTop = ol.scrollHeight; }
+  // rebuild the log after a reload by replaying what has already happened
+  try { const S0 = C.createRun(spec); clog.push({ t: 'Room 1', c: 'head' }, { t: 'Round 1: your turn', c: 'head' }); for (const a of log) record(a, C.apply(S0, a), S0); } catch { /* the live state is what matters */ }
   // A short fading line over the selected Seeker saying why nothing happened.
   function say(txt, at) { const u = at || unit(sel) || mine()[0]; if (!u) return toast(txt); float(u.x, u.y, txt, 'txt why'); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
@@ -259,7 +289,7 @@ export function mountBattle(root, onFinish) {
     const roomWas = st.roomIdx;
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
-    log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log }));
+    log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st); drawLog();
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
@@ -296,6 +326,7 @@ export function mountBattle(root, onFinish) {
   root.onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.act === 'snd') { snd.toggle(); head(); return; }
+    if (b.dataset.act === 'log') { logOpen = !logOpen; drawLog(); return; }
     if (b.dataset.act === 'trk') { trkMin = !trkMin; store.set('unc.trk', trkMin ? '1' : '0'); head(); return; }
     if (b.dataset.sheet) { openSheet(+b.dataset.sheet); return; }
     if (b.dataset.act === 'closeinfo') { info = null; armed = null; sync(); return; }

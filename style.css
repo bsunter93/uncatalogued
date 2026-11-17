@@ -475,3 +475,11 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .labels { transition: opacity .3s; }
 .sitetag { background: rgba(14, 9, 20, .62); border: 1px solid rgba(232, 195, 106, .45); padding: 2px 10px 3px; border-radius: 3px; font-size: 14px; }
 .sitetag::after { position: absolute; left: 50%; top: 100%; margin: 0; height: 22px; background: linear-gradient(rgba(232, 195, 106, .8), transparent); }
+
+/* Combat log: closed unless asked for. */
+.clog { position: absolute; z-index: 13; left: 18px; bottom: 112px; width: 340px; max-height: min(46%, 420px); display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(34, 26, 44, .95), rgba(18, 14, 26, .95)); border: 1px solid #6b5526; border-radius: 5px; box-shadow: 0 8px 24px rgba(0, 0, 0, .55); }
+.clog[hidden] { display: none; } .clh { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid rgba(184, 150, 74, .25); } .clh .link { font-size: 12px; color: #d9c9a0; }
+.clog ol { list-style: none; margin: 0; padding: 6px 12px 10px; overflow-y: auto; font: 12.5px/1.45 var(--body); color: #d9d2c0; }
+.clog li { padding: 1px 0; } .clog li.foe { color: #ffb3a6; } .clog li.ally { color: #c9f0dc; } .clog li.did { font-weight: 600; color: #fff; } .clog li.sys { color: #a99a7c; font-style: italic; }
+.clog li.head { margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(184, 150, 74, .2); font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: #e8c36a; } .clog li.head:first-child { margin-top: 0; border-top: 0; }
+@media (max-width: 860px) { .clog { left: 10px; right: 10px; width: auto; top: 96px; max-height: 42%; } }
