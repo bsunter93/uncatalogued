@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 11;
+export const VERSION = 12;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -159,6 +159,17 @@ const propAt = (st, x, y) => st.room.props.find(p => !p.done && p.x === x && p.y
 function solid(st, x, y) { if (!inb(x, y) || st.room.rock[K(x, y)]) return true; const p = propAt(st, x, y); return !!(p && !p.walk); }
 const free = (st, x, y) => !solid(st, x, y) && !unitAt(st, x, y);
 
+// A locked chest tucked out of the way: against boulders or along the far edges where it is not seen at a glance.
+function addChest(st, r, lock) { const room = st.room; let best = null;
+  for (let i = 0; i < 60; i++) { const x = r.range(5, W - 1), y = r.int(H); if (!free(st, x, y) || !DIRS.some(([dx, dy]) => free(st, x + dx, y + dy))) continue; let n = (y === 0 || y === H - 1 ? 2 : 0) + (x === W - 1 ? 1 : 0); for (const [dx, dy] of DIRS) if (inb(x + dx, y + dy) && room.rock[K(x + dx, y + dy)]) n += 2; if (!best || n > best.n) best = { x, y, n }; }
+  if (!best) return; const chest = { pid: room.pid++, kind: 'chest', id: 'chest', x: best.x, y: best.y, lock, open: lock === 'plates' ? false : null, prog: 0 }; room.props.push(chest);
+  if (lock === 'plates') { const g = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = r.int(i + 1); [g[i], g[j]] = [g[j], g[i]]; } chest.seq = g.slice(0, 3); // three of the four marks, in an order; the fourth is a decoy
+    for (let k = 0; k < 4; k++) for (let i = 0; i < 80; i++) { const x = r.range(2, W - 2), y = r.int(H); if (free(st, x, y) && !room.props.some(p => p.x === x && p.y === y)) { room.props.push({ pid: room.pid++, kind: 'plate', id: 'plate', glyph: k, x, y, walk: true }); break; } } } }
+// Whether a chest will open now.
+export function chestOpen(st, p) { return p.lock === 'plates' ? !!p.open : p.lock === 'light' ? st.room.props.some(q => q.kind === 'fixture' && q.id === 'lamp' && q.lit && !q.done) : st.room.props.some(q => q.kind === 'fixture' && q.id === 'bellcap' && q.spent); }
+function onPlate(st, u, ev) { const pl = st.room.props.find(p => p.kind === 'plate' && p.x === u.x && p.y === u.y); const ch = st.room.props.find(p => p.kind === 'chest' && !p.done && p.lock === 'plates'); if (!pl || !ch || ch.open) return;
+  if (pl.glyph === ch.seq[ch.prog]) { ch.prog++; if (ch.prog >= ch.seq.length) { ch.open = true; ev.push({ e: 'plate', pid: pl.pid, ok: true, n: ch.prog, of: ch.seq.length }, { e: 'unlock', pid: ch.pid, x: ch.x, y: ch.y }); } else ev.push({ e: 'plate', pid: pl.pid, ok: true, n: ch.prog, of: ch.seq.length }); }
+  else { ch.prog = pl.glyph === ch.seq[0] ? 1 : 0; ev.push({ e: 'plate', pid: pl.pid, ok: ch.prog === 1, n: ch.prog, of: ch.seq.length, reset: true }); } }
 // The side place this hall can see, if the party has not been yet. One per hall, none from the last room.
 export function placeFor(st) { return !st.outcome && !st.side && st.roomIdx >= 0 && st.roomIdx < 2 && !st.wandered[st.roomIdx] ? st.places[st.roomIdx] || null : null; }
 function enterSide(st, id, ev) {
@@ -171,6 +182,7 @@ function enterSide(st, id, ev) {
   const c0 = spot(8, 11); if (c0) room.props.push({ pid: room.pid++, kind: 'wonder', id, x: c0[0], y: c0[1], place: true }); // the thing itself, to be recorded
   const finds = Object.keys(D.FINDS).filter(k => D.FINDS[k].place === id); const risk = r.int(finds.length), wake = r.pct(40);
   finds.forEach((f, i) => { const p = spot(4, 12); if (p) room.props.push({ pid: room.pid++, kind: 'find', id: f, x: p[0], y: p[1], wake: wake && i === risk }); });
+  if (r.pct(40)) addChest(st, r, 'plates');
   for (let i = 0; i < 2; i++) { const p = spot(3); if (p) room.props.push({ pid: room.pid++, kind: 'flora', id: r.pick(D.REGIONS[reg].flora.filter(f => f !== 'snare_vine')), x: p[0], y: p[1] }); }
   for (const k of AMBIENT[reg] || []) if (r.pct(60)) { const p = spot(6); if (p) spawn(st, k, p[0], p[1], r, ev, true); }
   st.turn = 1; ev.push({ e: 'side', id });
@@ -223,10 +235,11 @@ function enterRoom(st, type, ev) {
   // things in the hall that can be worked: spore caps, a lamp, an old specimen case
   if (!(sp.intro && st.roomIdx === 0)) { const nb = r.range(1, 2); for (let i = 0; i < nb; i++) addProp('fixture', 'bellcap'); addProp('fixture', 'lamp'); if (r.pct(60)) addProp('fixture', 'case'); }
   if (r.pct(wch)) { const id = sp.intro ? 'pocket_sun' : r.pick(D.REGIONS[reg].wonders); room.wonder = id; addProp('wonder', id); }
+  if (!(sp.intro && st.roomIdx === 0) && etype !== 'boss' && r.pct(type === 'quiet' ? 70 : 45)) addChest(st, r, r.pick(['plates', 'light', 'breath']));
   // nothing placed in the hall may wall part of it off
   for (let guard = 0; guard < 12; guard++) { const seen = new Set([K(0, 3)]), q = [[0, 3]]; while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy, k = K(nx, ny); if (inb(nx, ny) && !seen.has(k) && !solid(st, nx, ny)) { seen.add(k); q.push([nx, ny]); } } }
     let open = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!solid(st, x, y)) open++;
-    if (seen.size >= open) break; const fxs = room.props.filter(p => p.kind === 'fixture' && !p.done); if (!fxs.length) break; fxs[fxs.length - 1].done = true; }
+    if (seen.size >= open) break; const fxs = room.props.filter(p => (p.kind === 'fixture' || p.kind === 'chest') && !p.done); if (!fxs.length) break; fxs[fxs.length - 1].done = true; }
   ev.push({ e: 'room', idx: st.roomIdx, type });
 }
 function spawn(st, kind, x, y, r, ev, natural) {
@@ -627,7 +640,7 @@ function applyAction(st, a) {
     if (u.root > 0 && !u.fx.anchor) bad('Held in place.');
     const freeMv = u.fx.freemove && !u.freeUsed; if (!freeMv) need(1);
     const { dist, par } = reach(st, u, moveRange(st, u)); if (!dist.get(K(a.x, a.y))) bad('Out of reach.');
-    if (freeMv) u.freeUsed = true; else u.ap--; u.moved = true; walk(st, u, pathFrom(par, a.x, a.y), ev); return ev;
+    if (freeMv) u.freeUsed = true; else u.ap--; u.moved = true; walk(st, u, pathFrom(par, a.x, a.y), ev); if (alive(u)) onPlate(st, u, ev); return ev;
   }
   if (a.t === 'atk') { need(1); const t = tgt('c'); if (md(u, t) > weaponRange(st, u)) bad('Out of range.'); u.ap--; strike(st, u, t, ev); return ev; }
   if (a.t === 'study') { const t = tgt('c'); if (md(u, t) > 3) bad('Too far to study.'); const calm = !isHostile(st, t);
@@ -648,9 +661,11 @@ function applyAction(st, a) {
         if (r.pct(55)) { const k = D.REGIONS[reg].observe; st.res.samples[k] = (st.res.samples[k] || 0) + 1; st.res.xp += 8; ev.push({ e: 'fx', pid: p.pid, what: 'specimen', x: p.x, y: p.y, kind: k }); }
         else { ev.push({ e: 'fx', pid: p.pid, what: 'alive', x: p.x, y: p.y }); const k = reg === 'clockwork' ? 'mite' : 'thornling'; let put = false; for (const [dx, dy] of DIRS) { const x = p.x + dx, y = p.y + dy; if (!put && free(st, x, y)) { const c = spawn(st, k, x, y, r, ev, false); c.noLoot = true; put = true; } } } }
       return ev; }
+    if (p.kind === 'plate') bad('Step onto it.');
+    if (p.kind === 'chest') { if (!chestOpen(st, p)) bad('It will not open yet.'); need(1); u.ap--; p.done = true; st.res.cases.push('chest' + (st.side ? '@' + st.side.id : '')); st.res.xp += 12; ev.push({ e: 'chest', pid: p.pid, x: p.x, y: p.y, by: u.id }); return ev; }
     if (p.kind === 'find') { need(1); u.ap--; p.done = true; const F = D.FINDS[p.id]; const reg = st.spec.region; const r = R(st); let what = p.wake ? 'wake' : F.does;
       if (what === 'notes') { const k = r.pick(D.REGIONS[reg].fauna.filter(f => !D.SPECIES[f].boss)); st.res.seen[k] = 1; st.res.study[k] = (st.res.study[k] || 0) + 3; st.res.xp += 10; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, kind: k, by: u.id }); }
-      else if (what === 'case') { st.res.cases.push('cache'); st.res.xp += 10; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); }
+      else if (what === 'case') { st.res.cases.push('cache@' + st.side.id); st.res.xp += 10; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); }
       else if (what === 'mats') { const m = D.SPECIES[D.REGIONS[reg].observe].mat; addMat(st, m, 2); st.res.xp += 6; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, mat: m, by: u.id }); }
       else if (what === 'mend') { ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); for (const s of seekers(st)) if (alive(s)) heal(st, s, s.max, ev); }
       else if (what === 'lore') { st.res.xp += 25; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); }
@@ -852,13 +867,15 @@ function settle(state, log, ctx, fresh, out) {
   // materials
   for (const m in rs.mats) { const n = win ? rs.mats[m] : fl(rs.mats[m] / 2); if (n > 0) { state.mats[m] = (state.mats[m] || 0) + n; rep.mats[m] = n; touch('m:' + m); } }
   // cases
-  let cases = rs.cases.slice(); if (!win) cases = cases.filter(c => c === 'cache').concat(cases.filter(c => c !== 'cache' && c !== 'boss').slice(0, fl(cases.length / 3)));
+  const srcOf = c => c.split('@')[0], found = c => srcOf(c) === 'cache' || srcOf(c) === 'chest'; // things carried out by hand survive a retreat
+  let cases = rs.cases.slice(); if (!win) cases = cases.filter(found).concat(cases.filter(c => !found(c) && c !== 'boss').slice(0, fl(cases.length / 3)));
   if (spec.weekly) { const wk = weekId(now); if (state.weekly.id !== wk) state.weekly = { id: wk, done: false, best: 0 }; if (state.weekly.done) cases = cases.filter(c => c !== 'weekly'); else if (cases.includes('weekly')) state.weekly.done = true;
     if (win && spec.week === wk) { const sc = Math.max(1, 1000 + 40 * studyPts + 25 * Object.values(rs.kills).reduce((a, b) => a + b, 0) - 12 * st.turns - 2 * rs.dmgTaken); rep.weeklyScore = sc; if (sc > state.weekly.best) state.weekly.best = sc; } }
   let rf = 0; for (const s of spec.squad) rf = Math.max(rf, s.m.rareFind || 0); if (spec.mods.bloom || spec.mods.hunt) rf += 8;
-  for (const src of cases) {
+  for (const raw of cases) { const [src, at] = raw.split('@');
     const isBoss = src === 'boss'; const it = rollItem(r, { src, region: spec.region, tier: spec.tier, target: spec.target, rareFind: Math.min(25, rf), singBonus: isBoss ? Math.min(3, fl(state.stats.bossDry / 8) * 0.25) : 0 });
     if (isBoss) state.stats.bossDry = it.sing ? 0 : state.stats.bossDry + 1;
+    it.prov = { src, region: spec.region, tier: spec.tier, at: at || null, on: now }; // where it was found, kept with the item for good
     const isNew = !state.cat[it.sing ? 's:' + it.sing : 'b:' + it.base]; const id = addItem(state, it, now, fresh); rep.items.push({ id, src, isNew });
   }
   // progression

@@ -73,6 +73,10 @@ export function pairHints(it, onlySeeker) {
   }
   return out;
 }
+// Where an item was found, in a sentence.
+export function provText(p) { const reg = D.REGIONS[p.region]; const boss = reg && D.SPECIES[reg.boss] ? D.SPECIES[reg.boss].name : 'the last room';
+  const how = { standard: 'Recovered after a hall was dealt with', elite: 'Taken from an elite', boss: 'Taken from ' + boss, cache: 'A sealed case found lying in the open', chest: 'From a locked chest', contract: 'Paid out for a contract kept', weekly: 'Won in the weekly trial' }[p.src] || 'Recovered';
+  return how + (p.at && D.WONDERS[p.at] ? ' at ' + D.WONDERS[p.at].name : '') + (reg ? ', ' + reg.name : '') + ' · Tier ' + ROMAN[p.tier || 1] + '.'; }
 export function itemLines(it) {
   const def = C.itemDef(it); const L = []; const w = C.itemWeapon(it);
   if (w) L.push(`<li class="base">Damage <span class="num">${w.min}-${w.max}</span> · ${w.range > 1 ? 'Range ' + w.range : 'Melee'} · ${D.ATTR_INFO[w.scale][0]}</li>`);
@@ -84,6 +88,7 @@ export function itemLines(it) {
   (it.aff || []).forEach((a, i) => { const A = D.AFFIXES[a.id]; L.push(`<li class="aff"><span class="q q${C.affixQuality(it, i)}" title="Roll quality"></span><span>${esc(modLine(A.key, a.v))}</span><em>${esc(i === 1 ? A.suf.replace(/^of (the )?/, '') : A.pre)}</em></li>`); });
   if (it.fx) L.push(`<li class="fx"><b>${esc(D.SPECIALS[it.fx].name)}.</b> ${esc(D.SPECIALS[it.fx].text)}</li>`);
   if (it.sing) L.push(`<li class="fx">${esc(def.text)}</li>`, `<li class="lore">${esc(def.lore)}</li>`);
+  if (it.prov) L.push(`<li class="prov">${esc(provText(it.prov))}</li>`);
   return L.join('');
 }
 export function itemCard(it, o = {}) {

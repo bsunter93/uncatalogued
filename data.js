@@ -320,6 +320,7 @@ export const RARITY_TABLE = {
   standard: [45, 35, 16, 3.5, 0.5, 0],
   elite: [20, 35, 30, 12, 3, 0],
   cache: [20, 35, 30, 12, 3, 0],
+  chest: [8, 28, 38, 20, 6, 0], // hidden and locked, so worth more than a case left in the open
   contract: [10, 30, 38, 17, 5, 0],
   boss: [5, 20, 40, 27, 7.8, 0.2],
   weekly: [0, 10, 40, 35, 14, 1],
@@ -372,4 +373,13 @@ export const FINDS = {
   run_down_tree: { place: 'wound_orchard', name: 'A run-down sapling', look: 'Its key has stopped. It would take both hands to turn.', model: 'heartfruit', does: 'mats', after: 'It sheds a handful of small parts as it winds.' },
   winders_bag: { place: 'wound_orchard', name: "A winder's satchel", look: 'Hung on a branch at head height. Left, not lost.', model: 'cache', does: 'case', after: 'A sealed case and a spare key.' },
   row_marker: { place: 'wound_orchard', name: 'A row marker', look: 'A brass stake with a number and a date. The date is tomorrow.', model: 'plinth', does: 'notes', after: 'The stake lists what the row is meant to become.' },
+};
+
+// Chest locks. No lockpicking: each is a small thing to work out from what is in the hall.
+// plates: step on the floor marks in the order cut on the lid. light: it opens only where a lamp is lit. breath: it opens once a cap (or vent) in the hall has gone off.
+export const GLYPHS = { verdant: ['Leaf', 'Eye', 'Spiral', 'Star'], clockwork: ['Gear', 'Valve', 'Coil', 'Bell'] };
+export const LOCKS = {
+  plates: { verdant: 'Three marks are cut in the lid, in a row. The same marks are set in the floor of this place.', clockwork: 'Three marks are stamped in the lid, in a row. The same marks are set in the floor of this place.' },
+  light: { verdant: 'Cut in the lid: "I open only where it is bright."', clockwork: 'Stamped in the lid: "I open only where it is bright."' },
+  breath: { verdant: 'Cut in the lid: "I open when the hall has breathed."', clockwork: 'Stamped in the lid: "I open when the pipes have sung."' },
 };

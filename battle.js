@@ -99,6 +99,8 @@ export function mountBattle(root, onFinish) {
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
   const fixInfo = p => p.kind !== 'fixture' ? [] : knownSet()[spec.region + ':' + p.id] ? ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id]) : ((CWF && UNKNOWN_CW[p.id]) || UNKNOWN[p.id]);
+  const GL = D.GLYPHS[spec.region] || D.GLYPHS.verdant; const lockedChest = () => st.room.props.find(p => p.kind === 'chest' && !p.done && p.lock === 'plates'); const plateOn = p => { const c = lockedChest(); return !!c && (c.open || c.seq.slice(0, c.prog).includes(p.glyph)); };
+  const glyphPic = i => `<i class="glyph" style="background-image:url(assets/tex/${spec.region === 'clockwork' ? 'c' : 'v'}_plates.jpg);background-position:${i % 2 ? 100 : 0}% ${i > 1 ? 100 : 0}%" title="${GL[i]}"></i>`;
   const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; if (sl === 'weapon' || sl === 'head' || sl === 'body') g[sl] = it.base; } return g; };
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
@@ -116,11 +118,11 @@ export function mountBattle(root, onFinish) {
     const m = targets();
     sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, gone: !live(u), label: live(u) ? label(u) : '',
       ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
-      st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'fixture' ? 'fx_' + p.id : p.kind === 'flora' ? p.id : p.kind === 'find' ? D.FINDS[p.id].model : p.kind, lit: !!p.lit, spent: !!p.spent, use: !!m.get(p.x + ',' + p.y) && !mode }))
+      st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'fixture' ? 'fx_' + p.id : p.kind === 'flora' ? p.id : p.kind === 'find' ? D.FINDS[p.id].model : p.kind, glyph: p.glyph, on: p.kind === 'plate' && plateOn(p), lit: p.kind === 'plate' ? undefined : !!p.lit, spent: !!p.spent, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
     marks(m); drawLines(); head(); actions(); cards(); panel(); hint();
     const fu = unit(sel); if (live(fu) && focusOn !== sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx) { const first = !focusOn; focusOn = sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx; sc.focus(fu.x, fu.y, first); }
-    sc.beacons(st.room.props.filter(p => !p.done).map(p => [p.x, p.y, p.kind === 'wonder' ? 2 : 1.35, p.kind === 'fixture' ? (p.spent ? 0x6a6a72 : 0xffa53b) : p.kind === 'wonder' ? 0x9fe8ff : p.kind === 'cache' ? 0xffd05a : 0x8ff0a8]));
+    sc.beacons(st.room.props.filter(p => !p.done && p.kind !== 'plate' && !(p.kind === 'chest' && !C.chestOpen(st, p))).map(p => [p.x, p.y, p.kind === 'wonder' ? 2 : 1.35, p.kind === 'fixture' ? (p.spent ? 0x6a6a72 : 0xffa53b) : p.kind === 'wonder' ? 0x9fe8ff : p.kind === 'cache' ? 0xffd05a : 0x8ff0a8]));
   }
   function targets() { // what a click can do right now: Map "x,y" -> action
     const m = new Map(); const u = unit(sel); if (!live(u) || busy || st.outcome) return m;
@@ -140,7 +142,7 @@ export function mountBattle(root, onFinish) {
     } else {
       if (u.ap >= 1 || (u.fx.freemove && !u.freeUsed)) for (const [k, d] of C.moveTiles(st, u)) if (d) m.set((k % C.W) + ',' + Math.floor(k / C.W), { t: 'move', u: u.id, x: k % C.W, y: Math.floor(k / C.W) });
       if (u.ap >= 1) { for (const c of foes()) if (md(u, c) <= C.weaponRange(st, u)) m.set(c.x + ',' + c.y, { t: 'atk', u: u.id, id: c.id });
-        for (const p of st.room.props) if (!p.done && md(u, p) <= 1) m.set(p.x + ',' + p.y, { t: 'use', u: u.id, p: p.pid }); }
+        for (const p of st.room.props) if (!p.done && md(u, p) <= 1 && p.kind !== 'plate' && !(p.kind === 'chest' && !C.chestOpen(st, p))) m.set(p.x + ',' + p.y, { t: 'use', u: u.id, p: p.pid }); }
     }
     return m;
   }
@@ -222,8 +224,8 @@ export function mountBattle(root, onFinish) {
     } else if (info2?.d) {
       const info = info2; const [nm, tag, txt] = LORE[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
     } else if (p) {
-      const FX = fixInfo(p); const F = p.kind === 'fixture' ? { name: FX[0], blurb: FX[2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : p.kind === 'find' ? { name: D.FINDS[p.id].name, blurb: D.FINDS[p.id].look + ' Nobody has written down what it does.' } : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
-      h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + FX[1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : p.kind === 'find' ? 'Unrecorded' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
+      const FX = fixInfo(p); const F = p.kind === 'fixture' ? { name: FX[0], blurb: FX[2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : p.kind === 'find' ? { name: D.FINDS[p.id].name, blurb: D.FINDS[p.id].look + ' Nobody has written down what it does.' } : p.kind === 'chest' ? { name: C.chestOpen(st, p) ? 'A chest, unlocked' : 'A locked chest', blurb: D.LOCKS[p.lock][spec.region] + (C.chestOpen(st, p) ? ' The lock has given. It will open now.' : p.lock === 'plates' && p.prog ? ` ${p.prog} of ${p.seq.length} found.` : '') } : p.kind === 'plate' ? { name: 'A mark in the floor: ' + GL[p.glyph], blurb: 'A round plate set flush in the ground. It gives a little underfoot.' } : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
+      h = `<div class="plate">${p.kind === 'plate' ? glyphPic(p.glyph).replace('class="glyph"', 'class="glyph big"') : p.kind === 'chest' ? '<img class="chestpic" src="assets/cat/chest.jpg" alt="">' : art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + FX[1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : p.kind === 'find' ? 'Unrecorded' : p.kind === 'chest' ? 'Hidden' : p.kind === 'plate' ? 'Underfoot' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}${p.kind === 'chest' && p.lock === 'plates' ? `<p class="glyphs">${p.seq.map((g, i) => `<span class="${i < p.prog || p.open ? 'got' : ''}">${glyphPic(g)}</span>`).join('<b>then</b>')}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.kind === 'plate' ? 'Walk a Seeker onto it.' : p.kind === 'chest' ? (C.chestOpen(st, p) ? 'Stand a Seeker beside it and tap it.' : 'It will not open until its lock is answered.') : p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it.'}</p>`;
     }
     if (h && pinned) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h; el.classList.toggle('hovering', !pinned);
     el.innerHTML = h; el.hidden = !h;
@@ -259,7 +261,9 @@ export function mountBattle(root, onFinish) {
       if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
     } else if (o && o.side === 's') { txt = o.id === sel ? `${o.name} · selected` : `Select ${o.name}`; }
     else if (st.room.rock[y * C.W + x]) { txt = 'Blocked: boulders'; cls = 'no'; }
-    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'find' || (p.kind === 'fixture' && !knownSet()[spec.region + ':' + p.id]) ? 'See what it does' : p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'}${C.exploring(st) ? '' : ' · 1 action'}` : near ? 'No actions left this turn' : p.walk ? 'Click to walk to it' : 'Click to walk up to it'; cls = a ? 'go' : 'far'; }
+    else if (p && p.kind === 'plate') { txt = 'A mark in the floor: ' + GL[p.glyph] + '. Click to step onto it'; cls = 'go'; }
+    else if (p && p.kind === 'chest' && !C.chestOpen(st, p)) { txt = 'A locked chest. Click to read the lid'; cls = 'far'; }
+    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'find' || (p.kind === 'fixture' && !knownSet()[spec.region + ':' + p.id]) ? 'See what it does' : p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : p.kind === 'chest' ? 'Open the chest' : 'Take'}${C.exploring(st) ? '' : ' · 1 action'}` : near ? 'No actions left this turn' : p.walk ? 'Click to walk to it' : 'Click to walk up to it'; cls = a ? 'go' : 'far'; }
     else if (!live(me)) txt = '';
     else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : 'Use device'} here` : 'Out of range'; cls = a ? 'go' : 'no'; }
     else if (a && a.t === 'move') { const d = C.moveTiles(st, me).get(y * C.W + x); txt = `Move here · ${d} step${d === 1 ? '' : 's'} · 1 action`; cls = 'go'; }
@@ -297,6 +301,9 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'purge') push('The marked line is purged.', 'foe');
       else if (e.e === 'trapset') push('A snare is set.', 'ally'); else if (e.e === 'trap') push('A snare snaps shut.', 'ally'); else if (e.e === 'burst') push('A pulse goes off.', 'ally');
       else if (e.e === 'fx') push({ spores: CWF ? 'The vent blows a wall of steam.' : 'The Bellcap breathes out a cloud of spores.', lit: 'The lamp is lit.', unlit: 'The lamp is put out.', specimen: 'The case holds a preserved specimen. Sample taken.', alive: 'The case opens. Something inside was still alive.' }[e.what], 'ally');
+      else if (e.e === 'plate') push(e.ok ? `A mark in the floor answers: ${e.n} of ${e.of}.` : 'The wrong mark. They all go dark.', 'ally did');
+      else if (e.e === 'unlock') push('Somewhere in the hall a lock gives.', 'ally did');
+      else if (e.e === 'chest') push(`${who(e.by)} opens the chest. A sealed case comes out.`, 'ally did');
       else if (e.e === 'prop') { const p = S.room.props.find(q => q.pid === e.pid); push(p ? `${p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Taken' : 'Gathered'}: ${p.kind === 'flora' ? D.FLORA[p.id].name : p.kind === 'wonder' ? D.WONDERS[p.id].name : 'a sealed case'}.` : 'Something is gathered.', 'ally'); }
     }
   }
@@ -333,6 +340,9 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'purge') { banner('Purge'); snd.warn(); await sleep(300); }
       else if (e.e === 'burst' || e.e === 'trap' || e.e === 'trapset') { float(e.x, e.y, e.e === 'trapset' ? 'Snare set' : e.e === 'trap' ? 'Snap' : 'Pulse', 'txt'); if (e.e !== 'trapset') sc.burst(e.x, e.y); await sleep(160); }
       else if (e.e === 'fx') { const T = { spores: [CWF ? 'Steam' : 'Spores', CWF ? 0xe8f4ff : 0xb6e33a], lit: ['Lit', 0xffc878], unlit: ['Dark', 0x8090a8], specimen: ['A preserved specimen', 0xffd05a], alive: ['It was still alive', 0xff5a4a] }[e.what]; float(e.x, e.y, T[0], 'study'); sc.burst(e.x, e.y, T[1]); if (e.what === 'spores') { for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1]]) sc.burst(e.x + dx, e.y + dy, 0xb6e33a); } snd.pick(); await sleep(320); }
+      else if (e.e === 'plate') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, e.ok ? `${GL[p.glyph]} · ${e.n} of ${e.of}` : 'The marks go dark', e.ok ? 'study' : 'txt why'); sc.burst(p.x, p.y, e.ok ? 0x6fe8d0 : 0x8090a8); e.ok ? snd.pick() : snd.click(); } await sleep(260); }
+      else if (e.e === 'unlock') { sc.focus(e.x, e.y); await sleep(350); float(e.x, e.y, 'A lock gives', 'study'); sc.burst(e.x, e.y, 0xffd05a); snd.study(); await sleep(500); }
+      else if (e.e === 'chest') { float(e.x, e.y, 'Opened', 'study'); sc.burst(e.x, e.y, 0xffd05a); snd.pick(); toast('The chest: a sealed case comes out with you. It is opened at extraction.', 'good'); await sleep(420); }
       else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); snd.pick(); } await sleep(200); }
     }
   }
@@ -342,6 +352,7 @@ export function mountBattle(root, onFinish) {
     const roomWas = st.roomIdx + (st.side ? 's' : '');
     const wasCalm = C.exploring(st);
     const used = a.t === 'use' ? st.room.props.find(q => q.pid === a.p) : null;
+    const shut = st.room.props.filter(q => q.kind === 'chest' && !q.done && q.lock !== 'plates' && !C.chestOpen(st, q));
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st); drawLog();
@@ -349,6 +360,7 @@ export function mountBattle(root, onFinish) {
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
     await play(ev, before);
+    for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
     if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); }
@@ -424,7 +436,7 @@ export function mountBattle(root, onFinish) {
       if (mode?.k === 'dev') return approach(x, y, C.DEV_INFO[C.devKind(me)].range, 'The device');
       return approach(x, y, C.weaponRange(st, me), 'Weapon');
     }
-    if (live(me) && p && !a && md(me, p) > 1) return approach(x, y, 1, 'Reach'); // scenery and samples: walk up to them
+    if (live(me) && p && !a && md(me, p) > (p.kind === 'plate' ? 0 : 1)) return approach(x, y, p.kind === 'plate' ? 0 : 1, 'Reach'); // scenery and samples: walk up to them
     if (live(me) && !o && !p && !a) { if (mode) { const need = mode.k === 'abil' ? C.abilRange(st, me, mode.id) : mode.k === 'dev' ? C.DEV_INFO[C.devKind(me)].range : 3; if (md(me, { x, y }) > need) return approach(x, y, need, mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'); say('That cannot be used there'); }
       else if (st.room.rock[y * C.W + x]) say('Blocked: boulders'); else return approach(x, y, 0, 'Move'); }
     if (mode) mode = null;

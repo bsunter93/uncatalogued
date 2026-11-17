@@ -520,3 +520,9 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .game .scard { grid-template-columns: 34px 1fr; } .game .scard .face { grid-column: 1; grid-row: 1 / span 3; } .game .scard > :not(.face) { grid-column: 2; min-width: 0; }
 
 @media (max-width: 860px) { .agrp.all .agb { grid-template-columns: repeat(2, 1fr); } .agrp .act b { white-space: normal; } }
+
+.glyph { display: inline-block; width: 34px; height: 34px; border-radius: 50%; background-size: 200% 200%; box-shadow: 0 0 0 1px var(--brass2), 0 0 0 2px #0a0710; vertical-align: middle; }
+.glyph.big { width: 100%; height: auto; aspect-ratio: 1; }
+.glyphs { display: flex; align-items: center; gap: 8px; margin-top: 10px; } .glyphs b { font: 10.5px var(--mono); color: #a99a7c; text-transform: uppercase; letter-spacing: .06em; font-weight: 400; } .glyphs span { opacity: .95; } .glyphs span.got .glyph { box-shadow: 0 0 0 2px #e8c36a, 0 0 12px rgba(232, 195, 106, .8); }
+.chestpic { width: 100%; display: block; border-radius: 3px; }
+li.prov { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(184, 150, 74, .25); font: 11px var(--mono); color: #a99a7c; letter-spacing: .02em; }

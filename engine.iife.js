@@ -37,6 +37,7 @@ var UncEngine = (() => {
     assembleCost: () => assembleCost,
     buildSpec: () => buildSpec,
     canAdvance: () => canAdvance,
+    chestOpen: () => chestOpen,
     costOf: () => costOf,
     createRun: () => createRun,
     devKind: () => devKind,
@@ -93,7 +94,9 @@ var UncEngine = (() => {
     FAMILY_NAME: () => FAMILY_NAME,
     FINDS: () => FINDS,
     FLORA: () => FLORA,
+    GLYPHS: () => GLYPHS,
     LEVEL_CAP: () => LEVEL_CAP,
+    LOCKS: () => LOCKS,
     MATERIALS: () => MATERIALS,
     MILESTONES: () => MILESTONES,
     MOD_TEXT: () => MOD_TEXT,
@@ -689,6 +692,8 @@ var UncEngine = (() => {
     standard: [45, 35, 16, 3.5, 0.5, 0],
     elite: [20, 35, 30, 12, 3, 0],
     cache: [20, 35, 30, 12, 3, 0],
+    chest: [8, 28, 38, 20, 6, 0],
+    // hidden and locked, so worth more than a case left in the open
     contract: [10, 30, 38, 17, 5, 0],
     boss: [5, 20, 40, 27, 7.8, 0.2],
     weekly: [0, 10, 40, 35, 14, 1]
@@ -735,9 +740,15 @@ var UncEngine = (() => {
     winders_bag: { place: "wound_orchard", name: "A winder's satchel", look: "Hung on a branch at head height. Left, not lost.", model: "cache", does: "case", after: "A sealed case and a spare key." },
     row_marker: { place: "wound_orchard", name: "A row marker", look: "A brass stake with a number and a date. The date is tomorrow.", model: "plinth", does: "notes", after: "The stake lists what the row is meant to become." }
   };
+  var GLYPHS = { verdant: ["Leaf", "Eye", "Spiral", "Star"], clockwork: ["Gear", "Valve", "Coil", "Bell"] };
+  var LOCKS = {
+    plates: { verdant: "Three marks are cut in the lid, in a row. The same marks are set in the floor of this place.", clockwork: "Three marks are stamped in the lid, in a row. The same marks are set in the floor of this place." },
+    light: { verdant: 'Cut in the lid: "I open only where it is bright."', clockwork: 'Stamped in the lid: "I open only where it is bright."' },
+    breath: { verdant: 'Cut in the lid: "I open when the hall has breathed."', clockwork: 'Stamped in the lid: "I open when the pipes have sung."' }
+  };
 
   // core.js
-  var VERSION = 11;
+  var VERSION = 12;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1055,6 +1066,53 @@ var UncEngine = (() => {
     return !!(p && !p.walk);
   }
   var free = (st, x, y) => !solid(st, x, y) && !unitAt(st, x, y);
+  function addChest(st, r, lock) {
+    const room = st.room;
+    let best = null;
+    for (let i = 0; i < 60; i++) {
+      const x = r.range(5, W - 1), y = r.int(H);
+      if (!free(st, x, y) || !DIRS.some(([dx, dy]) => free(st, x + dx, y + dy))) continue;
+      let n = (y === 0 || y === H - 1 ? 2 : 0) + (x === W - 1 ? 1 : 0);
+      for (const [dx, dy] of DIRS) if (inb(x + dx, y + dy) && room.rock[K(x + dx, y + dy)]) n += 2;
+      if (!best || n > best.n) best = { x, y, n };
+    }
+    if (!best) return;
+    const chest = { pid: room.pid++, kind: "chest", id: "chest", x: best.x, y: best.y, lock, open: lock === "plates" ? false : null, prog: 0 };
+    room.props.push(chest);
+    if (lock === "plates") {
+      const g = [0, 1, 2, 3];
+      for (let i = 3; i > 0; i--) {
+        const j = r.int(i + 1);
+        [g[i], g[j]] = [g[j], g[i]];
+      }
+      chest.seq = g.slice(0, 3);
+      for (let k = 0; k < 4; k++) for (let i = 0; i < 80; i++) {
+        const x = r.range(2, W - 2), y = r.int(H);
+        if (free(st, x, y) && !room.props.some((p) => p.x === x && p.y === y)) {
+          room.props.push({ pid: room.pid++, kind: "plate", id: "plate", glyph: k, x, y, walk: true });
+          break;
+        }
+      }
+    }
+  }
+  function chestOpen(st, p) {
+    return p.lock === "plates" ? !!p.open : p.lock === "light" ? st.room.props.some((q) => q.kind === "fixture" && q.id === "lamp" && q.lit && !q.done) : st.room.props.some((q) => q.kind === "fixture" && q.id === "bellcap" && q.spent);
+  }
+  function onPlate(st, u, ev) {
+    const pl = st.room.props.find((p) => p.kind === "plate" && p.x === u.x && p.y === u.y);
+    const ch = st.room.props.find((p) => p.kind === "chest" && !p.done && p.lock === "plates");
+    if (!pl || !ch || ch.open) return;
+    if (pl.glyph === ch.seq[ch.prog]) {
+      ch.prog++;
+      if (ch.prog >= ch.seq.length) {
+        ch.open = true;
+        ev.push({ e: "plate", pid: pl.pid, ok: true, n: ch.prog, of: ch.seq.length }, { e: "unlock", pid: ch.pid, x: ch.x, y: ch.y });
+      } else ev.push({ e: "plate", pid: pl.pid, ok: true, n: ch.prog, of: ch.seq.length });
+    } else {
+      ch.prog = pl.glyph === ch.seq[0] ? 1 : 0;
+      ev.push({ e: "plate", pid: pl.pid, ok: ch.prog === 1, n: ch.prog, of: ch.seq.length, reset: true });
+    }
+  }
   function placeFor(st) {
     return !st.outcome && !st.side && st.roomIdx >= 0 && st.roomIdx < 2 && !st.wandered[st.roomIdx] ? st.places[st.roomIdx] || null : null;
   }
@@ -1087,6 +1145,7 @@ var UncEngine = (() => {
       const p = spot(4, 12);
       if (p) room.props.push({ pid: room.pid++, kind: "find", id: f, x: p[0], y: p[1], wake: wake && i === risk });
     });
+    if (r.pct(40)) addChest(st, r, "plates");
     for (let i = 0; i < 2; i++) {
       const p = spot(3);
       if (p) room.props.push({ pid: room.pid++, kind: "flora", id: r.pick(REGIONS[reg].flora.filter((f) => f !== "snare_vine")), x: p[0], y: p[1] });
@@ -1230,6 +1289,7 @@ var UncEngine = (() => {
       room.wonder = id;
       addProp("wonder", id);
     }
+    if (!(sp.intro && st.roomIdx === 0) && etype !== "boss" && r.pct(type === "quiet" ? 70 : 45)) addChest(st, r, r.pick(["plates", "light", "breath"]));
     for (let guard = 0; guard < 12; guard++) {
       const seen = /* @__PURE__ */ new Set([K(0, 3)]), q = [[0, 3]];
       while (q.length) {
@@ -1245,7 +1305,7 @@ var UncEngine = (() => {
       let open = 0;
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!solid(st, x, y)) open++;
       if (seen.size >= open) break;
-      const fxs = room.props.filter((p) => p.kind === "fixture" && !p.done);
+      const fxs = room.props.filter((p) => (p.kind === "fixture" || p.kind === "chest") && !p.done);
       if (!fxs.length) break;
       fxs[fxs.length - 1].done = true;
     }
@@ -2217,6 +2277,7 @@ var UncEngine = (() => {
       else u.ap--;
       u.moved = true;
       walk(st, u, pathFrom(par, a.x, a.y), ev);
+      if (alive(u)) onPlate(st, u, ev);
       return ev;
     }
     if (a.t === "atk") {
@@ -2297,6 +2358,17 @@ var UncEngine = (() => {
         }
         return ev;
       }
+      if (p.kind === "plate") bad("Step onto it.");
+      if (p.kind === "chest") {
+        if (!chestOpen(st, p)) bad("It will not open yet.");
+        need(1);
+        u.ap--;
+        p.done = true;
+        st.res.cases.push("chest" + (st.side ? "@" + st.side.id : ""));
+        st.res.xp += 12;
+        ev.push({ e: "chest", pid: p.pid, x: p.x, y: p.y, by: u.id });
+        return ev;
+      }
       if (p.kind === "find") {
         need(1);
         u.ap--;
@@ -2312,7 +2384,7 @@ var UncEngine = (() => {
           st.res.xp += 10;
           ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, kind: k, by: u.id });
         } else if (what === "case") {
-          st.res.cases.push("cache");
+          st.res.cases.push("cache@" + st.side.id);
           st.res.xp += 10;
           ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, by: u.id });
         } else if (what === "mats") {
@@ -2932,8 +3004,9 @@ var UncEngine = (() => {
         touch("m:" + m);
       }
     }
+    const srcOf = (c) => c.split("@")[0], found = (c) => srcOf(c) === "cache" || srcOf(c) === "chest";
     let cases = rs.cases.slice();
-    if (!win) cases = cases.filter((c) => c === "cache").concat(cases.filter((c) => c !== "cache" && c !== "boss").slice(0, fl(cases.length / 3)));
+    if (!win) cases = cases.filter(found).concat(cases.filter((c) => !found(c) && c !== "boss").slice(0, fl(cases.length / 3)));
     if (spec.weekly) {
       const wk = weekId(now);
       if (state.weekly.id !== wk) state.weekly = { id: wk, done: false, best: 0 };
@@ -2948,10 +3021,12 @@ var UncEngine = (() => {
     let rf = 0;
     for (const s of spec.squad) rf = Math.max(rf, s.m.rareFind || 0);
     if (spec.mods.bloom || spec.mods.hunt) rf += 8;
-    for (const src of cases) {
+    for (const raw of cases) {
+      const [src, at] = raw.split("@");
       const isBoss = src === "boss";
       const it = rollItem(r, { src, region: spec.region, tier: spec.tier, target: spec.target, rareFind: Math.min(25, rf), singBonus: isBoss ? Math.min(3, fl(state.stats.bossDry / 8) * 0.25) : 0 });
       if (isBoss) state.stats.bossDry = it.sing ? 0 : state.stats.bossDry + 1;
+      it.prov = { src, region: spec.region, tier: spec.tier, at: at || null, on: now };
       const isNew = !state.cat[it.sing ? "s:" + it.sing : "b:" + it.base];
       const id = addItem(state, it, now, fresh);
       rep.items.push({ id, src, isNew });
