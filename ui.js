@@ -9,7 +9,8 @@ export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;'
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const art = (key, o = {}) => `<span class="art">${plate(key, o)}</span>`;
 export const itemArt = it => art(it.sing || it.base);
-export const face = arch => `<span class="face">${plate(arch)}</span>`;
+const PORTRAIT = { vanguard: 1, tracker: 1, naturalist: 1 };
+export const face = arch => PORTRAIT[arch] ? `<span class="face ph ${arch}"><img src="assets/portraits/${arch}.jpg" alt=""></span>` : `<span class="face">${plate(arch)}</span>`;
 
 export const G = { key: null, state: null, world: null, firsts: {}, tab: 'board', busy: false };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } }, del(k) { try { localStorage.removeItem(k); } catch { /* */ } } };

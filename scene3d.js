@@ -5,13 +5,28 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
-const GLB = { vanguard: ['hobb', 1.5], tracker: ['sile', 1.42], naturalist: ['oyelaran', 1.6], thornling: ['thornling', 1.05], mossback: ['mossback', 1.7], orchardmother: ['orchardmother', 3.6] };
+const GLB = { vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2] };
+// Rigged heroes: file, then which library clip plays each game action.
+const RIG = {
+  vanguard: ['hobb_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Heavy_Hammer_Swing', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
+  tracker: ['sile_anim', { idle: 'Idle', walk: 'Quick_Walk', attack: 'Archery_Shot', skill: 'Draw_and_Shoot_from_Back', guard: 'CrouchLookAroundBow', hit: 'Hit_Reaction_with_Bow', die: 'Knock_Down', study: 'Lower_Weapon_Look_Raise', cheer: 'Victory_Cheer' }, 700],
+  naturalist: ['oyelaran_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 760],
+};
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
 function loadGLB(kind) {
   if (!GLB[kind]) return null; if (glbCache[kind]) return Promise.resolve(glbCache[kind]);
-  return glbWait[kind] ||= gl.loadAsync(new URL(`assets/models/${GLB[kind][0]}.glb`, import.meta.url).href).then(g => { g.scene.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .55; } } }); return glbCache[kind] = g.scene; }).catch(() => null);
+  return glbWait[kind] ||= gl.loadAsync(new URL(`assets/models/${RIG[kind] ? RIG[kind][0] : GLB[kind][0]}.glb`, import.meta.url).href).then(g => { if (RIG[kind]) prepRig(g, kind); g.scene.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .55; } } }); return glbCache[kind] = g.scene; }).catch(() => RIG[kind] ? (delete RIG[kind], delete glbWait[kind], loadGLB(kind)) : null);
+}
+// Wrap a rigged scene so it stands on the ground at unit height, and keep walk cycles in place.
+function prepRig(g, kind) {
+  g.scene.updateMatrixWorld(true); const box = new THREE.Box3(); g.scene.traverse(m => { if (m.isSkinnedMesh) { m.skeleton.update(); m.computeBoundingBox(); box.union(m.boundingBox.clone().applyMatrix4(m.matrixWorld)); } }); if (box.isEmpty()) box.setFromObject(g.scene); const h = box.max.y - box.min.y || 1; const wrap = new THREE.Group(); g.scene.scale.multiplyScalar(1 / h); g.scene.position.set(-(box.min.x + box.max.x) / 2 / h, -box.min.y / h, -(box.min.z + box.max.z) / 2 / h); wrap.add(g.scene); wrap.userData.h0 = h;
+  g.scene.traverse(m => { if (m.isSkinnedMesh) m.frustumCulled = false; });
+  const names = RIG[kind][1]; const clips = {};
+  for (const k in names) { const c = g.animations.find(a => a.name === names[k]); if (!c) continue; if (k === 'walk') for (const t of c.tracks) if (t.name.endsWith('.position') && /hips|pelvis|root/i.test(t.name)) for (let i = 0; i < t.values.length; i += 3) { t.values[i] = t.values[0]; t.values[i + 2] = t.values[2]; } clips[k] = c; }
+  wrap.userData.clips = clips; wrap.userData.rig = kind; g.scene = wrap;
 }
 for (const k in GLB) loadGLB(k);
 const S = 1.25, GW = 8, GH = 6;
@@ -124,12 +139,23 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
       if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
       g.add(body); return body;
     };
-    const ready = glbCache[u.kind]; const body = dress(ready ? ready.clone(true) : MODELS[MODELS[u.kind] ? u.kind : 'thornling'](), !!ready);
-    if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(m.clone(true), true); cur.body.rotation.y = rot; cur.real = true; cur.h = sc + .3; });
+    const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; return c; };
+    const ready = glbCache[u.kind]; const body = dress(ready ? copy(ready) : MODELS[MODELS[u.kind] ? u.kind : 'thornling'](), !!ready);
+    if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(copy(m), true); cur.body.rotation.y = rot; cur.real = true; animate(cur); cur.h = sc + .3; });
     const rg = new THREE.Mesh(ringGeo, RM.calm); rg.rotation.x = -Math.PI / 2; rg.position.y = .03; rg.scale.setScalar(sc > 2 ? 1.9 : 1.15); g.add(rg);
     g.position.set(wx(u.y), 0, wz(u.x)); scene.add(g);
     const lab = document.createElement('div'); lab.className = 'ulab ' + u.side; labels.append(lab);
-    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); return o;
+    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); animate(o); return o;
+  }
+  // Rigged units get a mixer. play() crossfades to a clip; one-shots return to idle.
+  function animate(o) {
+    const clips = o.body.userData.clips; if (!clips) return; o.mixer = new THREE.AnimationMixer(o.body); o.acts = {}; for (const k in clips) o.acts[k] = o.mixer.clipAction(clips[k]);
+    o.mixer.addEventListener('finished', e => { if (o.cur === e.action && !o.downed) play(o, 'idle'); }); o.cur = null; play(o, 'idle');
+  }
+  function play(o, name, { once = false, speed = 1, hold = false } = {}) {
+    const a = o.acts && o.acts[name]; if (!a) return 0; if (o.cur === a && !once) return 0;
+    a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once; a.timeScale = speed; a.fadeIn(.16).play(); if (o.cur && o.cur !== a) o.cur.fadeOut(.16); o.cur = a; o.downed = hold;
+    return a.getClip().duration / speed * 1000;
   }
   const api = {
     setRoom(st) {
@@ -154,11 +180,12 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
       lineG.clear();
       for (const [a, b] of list) { const pts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push(new THREE.Vector3(wx(a.y) + (wx(b.y) - wx(a.y)) * t, .25 + Math.sin(t * Math.PI) * .7, wz(a.x) + (wz(b.x) - wz(a.x)) * t)); } const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lm); l.computeLineDistances(); lineG.add(l); }
     },
-    async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } },
-    lunge(id, tid) { const o = units.get(id), t = units.get(tid); if (!o || !t) return; o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; },
-    hit(id, crit) { const o = units.get(id); if (!o) return; o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
+    async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } if (o.mixer) play(o, 'idle'); },
+    lunge(id, tid) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; if (o.mixer) { o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); play(o, 'attack', { once: true, speed: 1.35 }); return RIG[o.body.userData.rig][2]; } o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 110; },
+    act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1.2 }) : 0; },
+    hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1.3 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
     burst(x, y, c = 0x3fe0ff) { spark(new THREE.Vector3(wx(y), .3, wz(x)), c, 26); },
-    gone(id) { const o = units.get(id); if (!o) return; o.dying = performance.now(); },
+    gone(id) { const o = units.get(id); if (!o) return; if (o.mixer) { play(o, 'die', { once: true, hold: true }); o.dying = performance.now() + 1500; } else o.dying = performance.now(); },
     add(u) { unitObj(u); },
     screen(x, y, h = 1) { const v = new THREE.Vector3(wx(y), h, wz(x)).project(cam); return { left: (v.x * .5 + .5) * 100, top: (-v.y * .5 + .5) * 100 }; },
     dispose() { dead = true; ro.disconnect(); renderer.dispose(); renderer.domElement.remove(); labels.remove(); },
@@ -188,16 +215,16 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
     base.copy(cam.position); cam.userData.shift = (top + bot) / 2;
   }
   const ro = new ResizeObserver(resize); ro.observe(el); resize();
-  let dead = false; const v3 = new THREE.Vector3();
+  let dead = false, last = performance.now(); const v3 = new THREE.Vector3();
   (function frame() {
-    if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000;
+    if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now;
     for (const [id, o] of units) {
-      const b = o.body; b.position.y = b.userData.hover ? .12 + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
+      const b = o.body; if (o.mixer) o.mixer.update(dt); if (!o.mixer) b.position.y = b.userData.hover ? .12 + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
       if (b.userData.spin) b.userData.spin.forEach((r, i) => { r.rotation.x += .01 * (i + 1); r.rotation.y += .007 * (i + 1); });
       b.position.x = b.position.z = 0;
       if (o.lunge) { const k = (now - o.lunge.t) / 220; if (k >= 1) o.lunge = null; else { const a = Math.sin(k * Math.PI) * .35; const L = Math.hypot(o.lunge.dx, o.lunge.dz) || 1; o.g.position.x = o.tx + o.lunge.dx / L * a; o.g.position.z = o.tz + o.lunge.dz / L * a; } }
       if (o.kick) { const k = (now - o.kick) / 260; if (k >= 1) { o.kick = 0; b.rotation.z = 0; } else { b.rotation.z = Math.sin(k * Math.PI * 3) * .22 * (1 - k); b.position.y += Math.sin(k * Math.PI) * .1; } }
-      if (o.dying) { const k = Math.min(1, (now - o.dying) / 420); o.g.scale.setScalar(1 - k * .9); o.g.position.y = -k * .3; o.g.rotation.y += .2; if (k >= 1) { o.g.visible = false; o.lab.hidden = true; o.dying = 0; o.g.scale.setScalar(1); o.g.rotation.y = 0; } }
+      if (o.dying && now > o.dying) { const k = Math.min(1, (now - o.dying) / 420); o.g.scale.setScalar(1 - k * .9); o.g.position.y = -k * .3; o.g.rotation.y += .2; if (k >= 1) { o.g.visible = false; o.lab.hidden = true; o.dying = 0; o.g.scale.setScalar(1); o.g.rotation.y = 0; } }
       else if (!o.lunge && o.g.position.y < 0) o.g.position.y = 0;
       o.rg.rotation.z = t * .6;
       if (!o.lab.hidden) { v3.set(o.g.position.x, o.h, o.g.position.z).project(cam); o.lab.style.left = (v3.x * .5 + .5) * 100 + '%'; o.lab.style.top = (-v3.y * .5 + .5) * 100 + '%'; }
