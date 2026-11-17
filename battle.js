@@ -38,6 +38,7 @@ const STATUS = u => { const s = []; const add = (on, cls, t, d) => { if (on) s.p
   add(u.bleed > 0, 'bad', 'Bleeding ' + u.bleed, 'Loses health each turn'); add(u.poison > 0, 'bad', 'Poisoned ' + u.poison, 'Loses health each turn, fading by one'); add(u.mark > 0, 'bad', 'Marked', 'Takes 25% more damage'); add(u.root > 0, 'bad', 'Held ' + u.root, 'Cannot move'); add(u.stun > 0, 'bad', 'Stunned', 'Loses its turn');
   return s.length ? `<div class="sts2">${s.join('')}</div>` : '<p class="dim" style="font-size:12.5px">No active effects.</p>'; };
 const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
+const off = why => `aria-disabled="true" data-why="${why}"`;
 const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt=""><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
@@ -135,11 +136,11 @@ export function mountBattle(root, onFinish) {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
     const b = []; const dis = busy || !live(u);
     if (live(u)) {
-      b.push(btn('lore', 'study', 'Study', 'learn a creature · 1 action', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Catalogue a creature without killing it" ${dis || u.ap < 1 ? 'disabled' : ''}`));
+      b.push(btn('lore', 'study', 'Study', 'learn a creature · 1 action', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Catalogue a creature without killing it" ${dis ? 'disabled' : u.ap < 1 ? off('No actions left this turn') : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
-        b.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis || cd > 0 || (!free && u.ap < A.ap) ? 'disabled' : ''}`)); }
+        b.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free ? 'free' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
-        b.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis || u.charges <= 0 || u.ap < I.ap ? 'disabled' : ''}`)); }
+        b.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis ? 'disabled' : u.charges <= 0 ? off('No charges left on this device') : u.ap < I.ap ? off('Not enough actions for the device') : ''}`)); }
     }
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0);
     if (adv) b.push(btn('flow', 'move_on', st.roomIdx >= 2 ? 'Extract' : 'Move on', st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
@@ -192,7 +193,9 @@ export function mountBattle(root, onFinish) {
     else t = 'No actions left. <b>End turn.</b>';
     el.innerHTML = t;
   }
-  function float(x, y, txt, cls = '') { const f = document.createElement('div'); f.className = 'float ' + cls; f.textContent = txt; const p = sc.screen(x, y, 1.5); f.style.left = p.left + '%'; f.style.top = p.top + '%'; board.append(f); setTimeout(() => f.remove(), 900); }
+  function float(x, y, txt, cls = '') { const f = document.createElement('div'); f.className = 'float ' + cls; f.textContent = txt; const p = sc.screen(x, y, 1.5); f.style.left = p.left + '%'; f.style.top = p.top + '%'; board.append(f); setTimeout(() => f.remove(), cls.includes('why') ? 1900 : 900); }
+  // A short fading line over the selected Seeker saying why nothing happened.
+  function say(txt, at) { const u = at || unit(sel) || mine()[0]; if (!u) return toast(txt); float(u.x, u.y, txt, 'txt why'); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
 
   async function play(ev, before) {
@@ -260,6 +263,7 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.act === 'trk') { trkMin = !trkMin; store.set('unc.trk', trkMin ? '1' : '0'); head(); return; }
     if (b.dataset.sheet) { openSheet(+b.dataset.sheet); return; }
     if (b.dataset.act === 'closeinfo') { info = null; armed = null; sync(); return; }
+    if (b.getAttribute('aria-disabled') === 'true') { say(b.dataset.why); return; }
     if (busy) return; snd.click();
     if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
     if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; sync(); return; }
@@ -276,6 +280,19 @@ export function mountBattle(root, onFinish) {
       if (a.t === 'atk' && !C.isHostile(st, o) && armed !== o.id) { armed = o.id; info = { u: o.id }; return sync(); }
       if (a.t === 'use' || a.t === 'atk') info = null; return send(a);
     }
+    const me = unit(sel);
+    if (live(me) && o && o.side === 'c' && live(o)) {
+      const dist = md(me, o);
+      if (mode?.k === 'abil') { const A = D.ABILITIES[mode.id]; const rg = C.abilRange(st, me, mode.id); return say(A.target !== 'enemy' ? `${A.name} cannot target a creature` : dist > rg ? `Out of range: ${A.name} reaches ${rg}, target is ${dist} away` : `${A.name} has no effect on this one`); }
+      if (mode?.k === 'study') return say(dist > 3 ? `Out of range: Study reaches 3, target is ${dist} away` : 'Nothing more to learn from this one');
+      if (mode?.k === 'dev') return say('Out of range for the device');
+      if (me.ap < 1) return say('No actions left this turn');
+      // out of reach: close the distance with what movement is left
+      let best = null; for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far < dist && (!best || far < best.far || (far === best.far && d < best.d))) best = { x, y, far, d }; }
+      if (best) { info = null; say(best.far <= C.weaponRange(st, me) ? 'Closing in' : 'Out of range. Moving closer'); return send({ t: 'move', u: me.id, x: best.x, y: best.y }); }
+      return say(`Out of range: weapon reaches ${C.weaponRange(st, me)}, target is ${dist} away, and there is no way closer`);
+    }
+    if (live(me) && mode && !o) { const nm = mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'; say(`${nm} cannot be used there`); }
     if (mode) mode = null;
     armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
   }

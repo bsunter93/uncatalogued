@@ -456,3 +456,11 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .sts2 { display: flex; flex-wrap: wrap; gap: 5px; } .st { font: 600 10.5px var(--mono); text-transform: uppercase; letter-spacing: .05em; padding: 2px 7px; border-radius: 3px; border: 1px solid; } .st.buff { color: #8fe0c2; border-color: rgba(143, 224, 194, .5); background: rgba(143, 224, 194, .1); } .st.bad { color: #ff9a8a; border-color: rgba(255, 132, 116, .5); background: rgba(255, 132, 116, .1); }
 .hc-tip { font-size: 13px; margin-top: 8px; padding: 7px 9px; background: rgba(232, 195, 106, .08); border-left: 2px solid #e8c36a; } .hc-tip b { font: 600 10px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: #e8c36a; margin-right: 5px; }
 .hc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(184, 150, 74, .25); font: 10.5px var(--mono); text-transform: uppercase; letter-spacing: .06em; color: #a99a7c; }
+
+.act[aria-disabled="true"] { opacity: .42; cursor: help; } .act[aria-disabled="true"] img { filter: grayscale(1); }
+.float.why { color: #ffd9a0; background: rgba(20, 10, 4, .92); border: 1px solid #b8964a; padding: 3px 9px; font: 600 12px var(--body); border-radius: 4px; animation-duration: 1.9s; z-index: 30; white-space: normal; max-width: 240px; text-align: center; }
+/* Hover card always fits: it may cover the action bar while you hover, and shrinks its picture on short windows. */
+.game .info { max-height: calc(100% - 250px); } .game .info.hovering { max-height: calc(100% - 84px); overflow: hidden; z-index: 14; }
+.game .info .hc-art { aspect-ratio: 16 / 8; }
+@media (max-height: 820px) { .game .info .hc-art { aspect-ratio: 16 / 5.5; } .game .info { font-size: 13px; } .game .info p { font-size: 12.5px !important; } .hc-tip { padding: 5px 8px; margin-top: 6px; } .hc-stats b { font-size: 14px; } .hc-foot { margin-top: 7px; padding-top: 6px; } }
+@media (max-height: 640px) { .game .info .hc-art { display: none; } }
