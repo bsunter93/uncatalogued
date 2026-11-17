@@ -163,14 +163,14 @@ export function mountBattle(root, onFinish) {
   }
   let trkMin = store.get('unc.trk') === '1';
   function head() {
-    const [t, ok] = objective(); const w = st.room.wonder && D.WONDERS[st.room.wonder]; const hunting = foes().filter(c => C.isHostile(st, c)).length; const adv = C.canAdvance(st);
-    const next = st.outcome ? '' : ok && st.roomIdx >= 2 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
+    const [t, ok] = objective(); const w = st.room.wonder && D.WONDERS[st.room.wonder]; const wKnown = w && (G.state.cat['w:' + st.room.wonder] || st.room.props.some(p => p.kind === 'wonder' && p.id === st.room.wonder && p.done)); const hunting = foes().filter(c => C.isHostile(st, c)).length; const adv = C.canAdvance(st);
+    const next = st.outcome ? '' : st.side && !hunting ? 'You are off the path. Look around and try things. Head back when you are done.' : ok && st.roomIdx >= 2 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
     const pips = [0, 1, 2].map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
     $('.tracker', root).innerHTML = trkMin ? `<button class="trk min" data-act="trk" aria-expanded="false"><span class="rooms">${pips}</span><b>${MISSION[spec.type] || 'Mission'}</b><span class="${ok ? 'ok' : ''}">${ok ? 'Objective met' : 'Show mission'}</span></button>`
       : `<div class="trk"><div class="trh"><span class="label">${MISSION[spec.type] || 'Mission'} · ${esc(reg.short)}</span><button class="link" data-act="trk" aria-expanded="true">Hide</button></div>
         <p class="goal ${ok ? 'ok' : ''}"><span class="chk">${ok ? '&#10003;' : ''}</span><span>${t}</span></p>
         <div class="step"><span class="rooms">${pips}</span><span>Room ${st.roomIdx + 1} of 3</span></div>
-        ${next ? `<p class="next"><b>Next</b> ${next}</p>` : ''}${w ? `<p class="won"><b>${esc(w.name)}.</b> ${esc(w.effect)}</p>` : ''}</div>`;
+        ${next ? `<p class="next"><b>Next</b> ${next}</p>` : ''}${w ? (wKnown ? `<p class="won"><b>${esc(w.name)}.</b> ${esc(w.effect)}</p>` : `<p class="won"><b>Something about this hall is not right.</b> Find it and record it to learn what it does.</p>`) : ''}</div>`;
     $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · ${C.exploring(st) ? 'Exploring' : 'Round ' + (st.turn - fightFrom + 1)}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off';
     $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You lose most cases.' : 'Retreat';
   }

@@ -518,3 +518,5 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .agrp .act b { white-space: nowrap; }
 
 .game .scard { grid-template-columns: 34px 1fr; } .game .scard .face { grid-column: 1; grid-row: 1 / span 3; } .game .scard > :not(.face) { grid-column: 2; min-width: 0; }
+
+@media (max-width: 860px) { .agrp.all .agb { grid-template-columns: repeat(2, 1fr); } .agrp .act b { white-space: normal; } }

@@ -23,7 +23,7 @@ const LOOK = {
 const jobs = {};
 for (const k in D.SPECIES) jobs[k] = `Subject, a creature in its habitat: ${LOOK[k] || D.SPECIES[k].name}. ${D.SPECIES[k].region === 'verdant' ? 'Setting: an overgrown living gallery, violet and green light.' : 'Setting: a brass clockwork garden, amber and teal light.'}`;
 for (const k in D.FLORA) jobs[k] = `Subject, a single strange plant growing in a museum gallery: ${D.FLORA[k].name}. ${D.FLORA[k].blurb.split('.')[0]}.`;
-for (const k in D.WONDERS) jobs[k] = `Subject, an impossible landmark inside an ancient museum gallery: ${D.WONDERS[k].name.replace(/^The |^A /, '')}. ${D.WONDERS[k].blurb}`;
+for (const k in D.WONDERS) jobs[k] = D.WONDERS[k].place ? `Subject, a lonely strange place found off the path in a vast ${D.PLACES.verdant.includes(k) ? 'overgrown twilight landscape of giant trees and violet light' : 'brass and copper machine landscape under amber haze'}, seen from a little way off as a traveller first sees it: ${D.WONDERS[k].name.replace(/^The |^A /, '')}. ${D.WONDERS[k].blurb}` : `Subject, an impossible landmark inside an ancient museum gallery: ${D.WONDERS[k].name.replace(/^The |^A /, '')}. ${D.WONDERS[k].blurb}`;
 for (const k in D.MATERIALS) jobs[k] = `Subject, a rare crafting material displayed in a naturalist's specimen jar or tray on a workbench: ${D.MATERIALS[k].name}. ${D.MATERIALS[k].blurb}`;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function gen(out, body) { for (let k = 0; k < 3; k++) { try {
