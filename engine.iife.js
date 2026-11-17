@@ -705,7 +705,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 4;
+  var VERSION = 5;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1116,10 +1116,35 @@ var UncEngine = (() => {
       if (best) room.props.push({ pid: room.pid++, kind: "cache", id: "cache", x: best[0], y: best[1], obj: true });
     } else if (r.pct(type === "quiet" ? 60 : 25)) addProp("cache", "cache");
     const wch = sp.intro && st.roomIdx === 1 ? 100 : type === "quiet" ? 30 : sp.mods.bloom ? 40 : 10;
+    if (!(sp.intro && st.roomIdx === 0)) {
+      const nb = r.range(1, 2);
+      for (let i = 0; i < nb; i++) addProp("fixture", "bellcap");
+      addProp("fixture", "lamp");
+      if (r.pct(60)) addProp("fixture", "case");
+    }
     if (r.pct(wch)) {
       const id = sp.intro ? "pocket_sun" : r.pick(REGIONS[reg].wonders);
       room.wonder = id;
       addProp("wonder", id);
+    }
+    for (let guard = 0; guard < 12; guard++) {
+      const seen = /* @__PURE__ */ new Set([K(0, 3)]), q = [[0, 3]];
+      while (q.length) {
+        const [x, y] = q.pop();
+        for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy, k = K(nx, ny);
+          if (inb(nx, ny) && !seen.has(k) && !solid(st, nx, ny)) {
+            seen.add(k);
+            q.push([nx, ny]);
+          }
+        }
+      }
+      let open = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!solid(st, x, y)) open++;
+      if (seen.size >= open) break;
+      const fxs = room.props.filter((p) => p.kind === "fixture" && !p.done);
+      if (!fxs.length) break;
+      fxs[fxs.length - 1].done = true;
     }
     ev.push({ e: "room", idx: st.roomIdx, type });
   }
@@ -1642,6 +1667,8 @@ var UncEngine = (() => {
       if (!t2) return { k: "idle", label: "Waiting" };
       return { k: "atk", tgt: t2.id, mv: approach(st, c, t2), label: "Hunting" };
     }
+    const lampOn = (c.mood === "roam" || c.ai === "skittish" && !sk.some((s) => md(s, c) <= 3)) && !S.boss ? st.room.props.filter((p) => !p.done && p.lit && md(p, c) <= 8).sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0] : null;
+    if (lampOn) return { k: "idle", mv: stepToward(st, c, lampOn, 2, 1), label: md(lampOn, c) <= 1 ? "Held by the light" : "Drawn to the light" };
     if (c.ai === "skittish") {
       const near = sk.filter((s) => md(s, c) <= 3);
       if (c.hp * 2 <= c.max && c.hp < c.max) return { k: "flee", label: "Bolting" };
@@ -1761,7 +1788,7 @@ var UncEngine = (() => {
   function notice(st, ev) {
     const sk = seekers(st).filter(alive);
     const woke = [];
-    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (NOTICE[c.ai] || 2))) woke.push(c);
+    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (st.room.props.some((p) => !p.done && p.lit && md(p, c) <= 1) ? 1 : NOTICE[c.ai] || 2))) woke.push(c);
     for (let i = 0; i < woke.length; i++) {
       const c = woke[i];
       if (c.mood !== "roam") continue;
@@ -2076,6 +2103,45 @@ var UncEngine = (() => {
       const p = st.room.props.find((q) => q.pid === a.p && !q.done);
       if (!p) bad("Nothing there.");
       if (md(u, p) > 1) bad("Stand next to it.");
+      if (p.kind === "fixture") {
+        need(1);
+        u.ap--;
+        if (p.id === "bellcap") {
+          if (p.spent) bad("It has nothing left to give.");
+          p.spent = true;
+          ev.push({ e: "fx", pid: p.pid, what: "spores", x: p.x, y: p.y });
+          for (const c of creatures(st)) if (md(c, p) <= 2 && !SPECIES[c.kind].boss && !SPECIES[c.kind].mech) {
+            c.calm = Math.max(c.calm, 2);
+            ev.push({ e: "text", id: c.id, msg: "Drowsy" }, { e: "status", id: c.id, s: "calm" });
+          }
+        } else if (p.id === "lamp") {
+          p.lit = !p.lit;
+          ev.push({ e: "fx", pid: p.pid, what: p.lit ? "lit" : "unlit", x: p.x, y: p.y });
+        } else if (p.id === "case") {
+          p.done = true;
+          const r = R(st);
+          const reg = st.spec.region;
+          if (r.pct(55)) {
+            const k = REGIONS[reg].observe;
+            st.res.samples[k] = (st.res.samples[k] || 0) + 1;
+            st.res.xp += 8;
+            ev.push({ e: "fx", pid: p.pid, what: "specimen", x: p.x, y: p.y, kind: k });
+          } else {
+            ev.push({ e: "fx", pid: p.pid, what: "alive", x: p.x, y: p.y });
+            const k = reg === "clockwork" ? "mite" : "thornling";
+            let put = false;
+            for (const [dx, dy] of DIRS) {
+              const x = p.x + dx, y = p.y + dy;
+              if (!put && free(st, x, y)) {
+                const c = spawn(st, k, x, y, r, ev, false);
+                c.noLoot = true;
+                put = true;
+              }
+            }
+          }
+        }
+        return ev;
+      }
       const cost = p.kind === "flora" && u.fx.t_forager ? 0 : 1;
       need(cost);
       u.ap -= cost;
