@@ -493,3 +493,12 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 /* Catalogue record: what you know, and what is still blacked out. */
 .record { display: grid; gap: 8px; } .rec { padding: 8px 10px; border: 1px dashed rgba(184, 150, 74, .35); border-radius: 4px; } .rec.on { border-style: solid; border-color: rgba(184, 150, 74, .5); background: rgba(232, 195, 106, .05); }
 .rec p { font-size: 13.5px; margin-top: 2px; } .rec .redact { color: #3a2f48; letter-spacing: -1px; overflow: hidden; white-space: nowrap; user-select: none; } .rec small { font: 10.5px var(--mono); color: #e8c36a; text-transform: uppercase; letter-spacing: .06em; }
+/* Phone: party cards in three tidy columns, each with its Sheet button underneath. */
+@media (max-width: 860px) {
+  .game .scards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: auto auto; grid-auto-flow: column; gap: 0 6px; }
+  .game .scard { width: auto; grid-template-columns: 34px minmax(0, 1fr); gap: 2px 7px; padding: 6px; border-radius: 5px 5px 0 0; align-items: center; }
+  .game .scard .face { width: 34px; height: 34px; grid-row: span 3; } .game .scard .nm { font-size: 12.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .game .scard .nm span { display: none; } .game .scard .sub { display: none; }
+  .game .scard .bar, .game .scard .aps { grid-column: 2; }
+  .sheetbtn { display: block; position: static; writing-mode: horizontal-tb; margin: 0; padding: 3px 0; width: 100%; border: 1px solid var(--brass2, #6b5526); border-top: 0; border-radius: 0 0 5px 5px; font-size: 9.5px; }
+  .tiletip { white-space: normal; text-align: center; max-width: 70vw; }
+}
