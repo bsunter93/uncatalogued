@@ -16,18 +16,24 @@ basis = lambda x, y, z: Matrix((x, y, z)).transposed()
 spread = lambda P: (sum(abs(v[M]) + abs(v[T]) for v in P) / len(P)) if P else 0
 wide = 1 if spread([v for v in vs if v[L] > d[L] * .25]) >= spread([v for v in vs if v[L] < -d[L] * .25]) else -1  # which end is the business end
 if flip: wide = -wide
+if 'up' in a[4:]: wide = 1
+if 'down' in a[4:]: wide = -1
+if 'swap' in a[4:]: M, T = T, M
 if kind in ('blade', 'pole', 'gun', 'sling'):
     n = size / d[L]
     if kind == 'blade': dirv = Vector((0, -math.cos(math.radians(40)), math.sin(math.radians(40)))); grip = .16
     elif kind == 'pole': dirv = Vector((0, 0, 1)); grip = .45
     elif kind == 'gun': dirv = Vector((0, -math.cos(math.radians(-12)), math.sin(math.radians(-12)))); grip = .3
     else: dirv = Vector((0, 0, -1)); grip = .04
-    side = Vector((1, 0, 0)); third = dirv.cross(side); R = basis(side, third, dirv) @ basis(e[T], e[M] * (-1 if turn else 1), e[L] * wide).inverted()
+    side = Vector((1, 0, 0)); third = dirv.cross(side); src = basis(e[T], e[M] * (-1 if turn else 1), e[L] * wide)
+    if src.determinant() < 0: src = basis(-e[T], e[M] * (-1 if turn else 1), e[L] * wide)  # keep it a rotation, never a mirror
+    R = basis(side, third, dirv) @ src.inverted()
     off = dirv * (d[L] * n * (.5 - grip))
     for v, p in zip(o.data.vertices, vs): v.co = (R @ p) * n + off
 else:  # head and chest pieces arrive upright and facing the camera; just centre and size them by width
     n = size / max(d[0], d[1])
     R = Matrix.Rotation(math.pi, 3, 'Z') if turn else Matrix.Identity(3)
+    if 'lay' in a[4:]: R = Matrix.Rotation(-math.pi / 2, 3, 'X'); n = size / max(d[0], d[2])
     for v, p in zip(o.data.vertices, vs): v.co = (R @ p) * n
 o.data.update()
 for im in bpy.data.images:

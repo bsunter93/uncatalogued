@@ -22,6 +22,14 @@ const RIG = {
   tracker: ['sile_anim', { idle: 'Idle', walk: 'Walk_Forward_with_Bow_Aimed', attack: 'Archery_Shot', skill: 'Draw_and_Shoot_from_Back', guard: 'CrouchLookAroundBow', hit: 'Hit_Reaction_with_Bow', die: 'Knock_Down', study: 'Lower_Weapon_Look_Raise', cheer: 'Victory_Cheer' }, 700],
   naturalist: ['oyelaran_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 760],
 };
+// Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
+const GEAR = { marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'gun'],
+  compound_lens: ['head', 1.02, .01], targeting_visor: ['head', 1.3, .0], oracle_shard: ['head', 1.02, .05], chitin_plate: ['chest', 1.0, 0], barkweave: ['chest', 1.0, 0], relay_harness: ['chest', 1.0, 0], mirror_carapace: ['chest', .96, 0], phase_shroud: ['chest', 1.05, .03] };
+// Which clips a weapon class strikes with: [attack, critical, milliseconds until the blow lands].
+const CLASS_CLIP = { melee: ['Right_Hand_Sword_Slash', 'Charged_Slash', 620], pole: ['Thrust_Slash', 'Charged_Slash', 560], gun: ['Side_Shot', 'Cowboy_Quick_Draw_Shooting', 480], throw: ['Crouch_Pull_and_Throw', null, 820] };
+const gearWait = {};
+const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .55; } } });
+const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
 function loadGLB(kind) {
   if (!GLB[kind]) return null; if (glbCache[kind]) return Promise.resolve(glbCache[kind]);
@@ -33,7 +41,17 @@ function prepRig(g, kind) {
   g.scene.traverse(m => { if (m.isSkinnedMesh) m.frustumCulled = false; });
   const names = RIG[kind][1]; const clips = {};
   for (const k in names) { const c = g.animations.find(a => a.name === names[k]); if (!c) continue; if (k === 'walk') for (const t of c.tracks) if (t.name.endsWith('.position') && /hips|pelvis|root/i.test(t.name)) for (let i = 0; i < t.values.length; i += 3) { t.values[i] = t.values[0]; t.values[i + 2] = t.values[2]; } clips[k] = c; }
-  wrap.userData.clips = clips; wrap.userData.rig = kind; g.scene = wrap;
+  wrap.userData.clips = clips; wrap.userData.rig = kind;
+  // where gear goes, measured once on the untouched rest pose
+  wrap.updateMatrixWorld(true); const B = n => wrap.getObjectByName(n); const P = n => new THREE.Vector3().setFromMatrixPosition(B(n).matrixWorld); const sock = {};
+  try {
+    for (const side of ['Right', 'Left']) { const w = P(side + 'Hand'), e = P(side + 'ForeArm'); sock[side + 'Hand'] = { bone: side + 'Hand', at: w.clone().add(w.clone().sub(e).normalize().multiplyScalar(.055)), size: 1, inv: B(side + 'Hand').matrixWorld.clone().invert() }; }
+    const hd = P('Head'), he = P('head_end'); sock.head = { bone: 'Head', at: hd.clone().lerp(he, .56), size: hd.distanceTo(he) * .82, inv: B('Head').matrixWorld.clone().invert() };
+    const span = Math.abs(P('LeftArm').x - P('RightArm').x); const ch = P('Spine01').lerp(P('Spine'), .35); ch.x = 0; sock.chest = { bone: 'Spine01', at: ch, size: span * 1.62, inv: B('Spine01').matrixWorld.clone().invert() };
+  } catch { /* a rig without these bones just shows no gear */ }
+  wrap.userData.sock = sock;
+  gl.loadAsync(new URL(`assets/models/${RIG[kind][0].replace('_anim', '_cls')}.glb`, import.meta.url).href).then(c => { for (const a of c.animations) clips['c:' + a.name] = a; }).catch(() => {});
+  g.scene = wrap;
 }
 for (const k in GLB) loadGLB(k);
 const S = 1.25, GW = 8, GH = 6;
@@ -156,20 +174,28 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
       if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
       g.add(body); return body;
     };
-    const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; return c; };
+    const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; c.userData.sock = m.userData.sock; return c; };
     const ready = glbCache[u.kind]; const body = dress(ready ? copy(ready) : MODELS[MODELS[u.kind] ? u.kind : 'thornling'](), !!ready);
-    if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(copy(m), true); cur.body.rotation.y = rot; cur.real = true; animate(cur); cur.h = sc + .3; });
+    if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(copy(m), true); cur.body.rotation.y = rot; cur.real = true; animate(cur); wear(cur, u.gear); cur.h = sc + .3; });
     const rg = new THREE.Mesh(ringGeo, RM.calm); rg.rotation.x = -Math.PI / 2; rg.position.y = .03; rg.scale.setScalar(sc > 2 ? 1.9 : 1.15); g.add(rg);
     g.position.set(wx(u.y), 0, wz(u.x)); scene.add(g);
     const lab = document.createElement('div'); lab.className = 'ulab ' + u.side; labels.append(lab);
-    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); animate(o); return o;
+    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); animate(o); wear(o, u.gear); return o;
   }
   // Rigged units get a mixer. play() crossfades to a clip; one-shots return to idle.
   function animate(o) {
     const clips = o.body.userData.clips; if (!clips) return; o.mixer = new THREE.AnimationMixer(o.body); o.acts = {}; for (const k in clips) o.acts[k] = o.mixer.clipAction(clips[k]);
     o.mixer.addEventListener('finished', e => { if (o.cur === e.action && !o.downed) play(o, 'idle'); }); o.cur = null; play(o, 'idle');
   }
+  // Put what the Seeker has equipped on the model: weapon in hand, head piece, body armor.
+  function wear(o, gear) {
+    const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null;
+    for (const id of [gear.weapon, gear.head, gear.body]) { const G0 = GEAR[id]; if (!G0) continue; const s = sock[G0[0] === 'hand' ? 'RightHand' : G0[0]]; if (!s) continue; if (G0[0] === 'hand') o.wclass = G0[1];
+      loadGear(id).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(s.bone); if (!bone) return; const piece = m.clone(true); const k = G0[0] === 'hand' ? 1 : s.size * G0[1];
+        const W = new THREE.Matrix4().compose(s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, 0)), new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece); }); }
+  }
   function play(o, name, { once = false, speed = 1, hold = false } = {}) {
+    if (o.acts && !o.acts[name] && o.body.userData.clips[name]) o.acts[name] = o.mixer.clipAction(o.body.userData.clips[name]);
     const a = o.acts && o.acts[name]; if (!a) return 0; if (o.cur === a && !once) return 0;
     a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once; a.timeScale = speed; a.fadeIn(.16).play(); if (o.cur && o.cur !== a) o.cur.fadeOut(.16); o.cur = a; o.downed = hold;
     return a.getClip().duration / speed * 1000;
@@ -199,7 +225,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
       for (const [a, b] of list) { const pts = []; for (let i = 0; i <= 16; i++) { const t = i / 16; pts.push(new THREE.Vector3(wx(a.y) + (wx(b.y) - wx(a.y)) * t, .25 + Math.sin(t * Math.PI) * .7, wz(a.x) + (wz(b.x) - wz(a.x)) * t)); } const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lm); l.computeLineDistances(); lineG.add(l); }
     },
     async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } if (o.mixer) play(o, 'idle'); },
-    lunge(id, tid, crit) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; if (o.mixer) { if (crit && o.acts.heavy) { o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); play(o, 'heavy', { once: true, speed: 1.3 }); return RIG[o.body.userData.rig][2] + 150; } o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); play(o, 'attack', { once: true, speed: 1.35 }); return RIG[o.body.userData.rig][2]; } o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z); o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 110; },
+    lunge(id, tid, crit) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z);
+      if (o.mixer) { const cc = CLASS_CLIP[o.wclass]; const nm = cc ? 'c:' + (crit && cc[1] ? cc[1] : cc[0]) : null; const ms = nm && play(o, nm, { once: true, speed: 1.3 }); if (ms) return cc[2] + (crit ? 120 : 0); play(o, crit && o.acts.heavy ? 'heavy' : 'attack', { once: true, speed: 1.35 }); return RIG[o.body.userData.rig][2]; }
+      o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 110; },
     act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1.2 }) : 0; },
     hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1.3 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
     burst(x, y, c = 0x3fe0ff) { spark(new THREE.Vector3(wx(y), .3, wz(x)), c, 26); },
@@ -221,6 +249,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   const hover = new THREE.Mesh(new THREE.RingGeometry(.5, .56, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; scene.add(hover);
   renderer.domElement.addEventListener('pointermove', e => { const bb = renderer.domElement.getBoundingClientRect(); ptr.x = (e.clientX - bb.left) / bb.width - .5; ptr.y = (e.clientY - bb.top) / bb.height - .5; const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
   renderer.domElement.addEventListener('pointerleave', () => { hover.visible = false; });
+  // scroll to zoom toward whatever is under the pointer; scroll back out to see the whole hall
+  let zoom = 1, zoomNow = 1; const focus = new THREE.Vector3(), focNow = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
+  renderer.domElement.addEventListener('wheel', e => { e.preventDefault(); const was = zoom; zoom = Math.min(1, Math.max(.28, zoom * (e.deltaY > 0 ? 1.12 : .89))); if (zoom < was) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); if (ray.ray.intersectPlane(plane, hitP)) focus.set(Math.max(-5, Math.min(5, hitP.x)), 0, Math.max(-6, Math.min(6, hitP.z))); } }, { passive: false });
   let hovKey = ''; renderer.domElement.addEventListener('pointermove', e => { const t = tileAt(e); const d = t ? null : decorAt(e); renderer.domElement.style.cursor = t || d ? 'pointer' : 'default'; const k = t ? t.join(',') : d ? 'd' + d.userData.i : ''; if (k !== hovKey) { hovKey = k; onHover && onHover(t, d ? d.userData.decor : null); } });
   renderer.domElement.addEventListener('pointerleave', () => { if (hovKey) { hovKey = ''; onHover && onHover(null, null); } });
 
@@ -256,7 +287,8 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25;
     for (const d of decor.children) { const p = d.userData.poke; if (p) { const k = (now - p) / 420; if (k >= 1) { d.userData.poke = 0; d.rotation.z = 0; } else d.rotation.z = Math.sin(k * Math.PI * 3) * .05 * (1 - k); } if (d.userData.light && d.userData.light.intensity) d.userData.light.intensity = 15 + Math.sin(t * 9 + d.userData.i) * 1.2; }
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
-    cam.position.set(base.x + Math.sin(t * .17) * .22 + ptr.x * .7, base.y + Math.sin(t * .23) * .1 - ptr.y * .3, base.z + Math.cos(t * .13) * .12); cam.lookAt(0, .3, 0);
+    zoomNow += (zoom - zoomNow) * .14; focNow.lerp(zoom < .98 ? focus : ORIGIN, .12);
+    cam.position.set(focNow.x + base.x * zoomNow + Math.sin(t * .17) * .22 * zoomNow + ptr.x * .7 * zoomNow, base.y * zoomNow + Math.sin(t * .23) * .1 - ptr.y * .3 * zoomNow + .3 * (1 - zoomNow), focNow.z + base.z * zoomNow + Math.cos(t * .13) * .12); cam.lookAt(focNow.x, .3 + (1 - zoomNow) * .5, focNow.z);
     composer.render();
   })();
   return api;

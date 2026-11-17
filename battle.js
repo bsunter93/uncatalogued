@@ -60,6 +60,8 @@ export function mountBattle(root, onFinish) {
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
     onHover: (t, d) => { const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
+  // what each Seeker is wearing, by item type, so the scene can show it
+  const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; if (sl === 'weapon' || sl === 'head' || sl === 'body') g[sl] = it.base; } return g; };
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
   const foes = () => st.units.filter(u => u.side === 'c' && live(u));
@@ -74,7 +76,7 @@ export function mountBattle(root, onFinish) {
     if (shownRoom !== st.roomIdx) { shownRoom = st.roomIdx; sel = null; mode = null; info = null; sc.setRoom(st); }
     if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
     const m = targets();
-    sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gone: !live(u), label: live(u) ? label(u) : '',
+    sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, gone: !live(u), label: live(u) ? label(u) : '',
       ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
       st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'flora' ? p.id : p.kind, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
