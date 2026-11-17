@@ -175,7 +175,7 @@ export function mountBattle(root, onFinish) {
     for (const e of ev) {
       if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); await sleep(e.dot ? 150 : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }

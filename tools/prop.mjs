@@ -20,6 +20,7 @@ export const PROPS = {
   lantern_moss: [3500, 'A low mound of thick bright green moss growing over a stone, studded with many small round bulbs that glow warm yellow like tiny lanterns.'],
   snare_vine: [3500, 'A low flat sprawling thorny vine lying across the ground in loose coils, dark green with purple barbed thorns and a few curled tendrils, a small red warning bud at its centre.'],
   heartfruit: [3500, 'A small knee-high plant with a curved stem and broad dark leaves, bearing one large heart-shaped crimson fruit that glows softly from within, with visible veins.'],
+  w_shield2: [4000, 'IGNORE the setting. Exactly one object: a single great round shield seen straight from the front, brass and dark iron, riveted edge banding, segmented panel lines, a small glowing teal light at the centre boss. Only the front face is visible. One shield only.'],
   mirror_reed: [3500, 'A clump of tall thin reeds whose blades are flat polished silver mirrors reflecting violet and teal, growing from a small patch of dark water-worn stone.'],
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
