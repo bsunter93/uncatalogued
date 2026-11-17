@@ -5,6 +5,18 @@ import { snd } from './sound.js';
 
 const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. A good place to study. Nothing to clear, so no case for clearing it.']],
   clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. A good place to study. Nothing to clear, so no case for clearing it.']] };
+// Things around the hall that are not part of the fight. Tap one to read it.
+const DECOR = {
+  survey: ['Survey Station 4', 'Left standing', 'A brass theodolite on a tripod, aimed at the door. The sketchbook beside it is open to a drawing of this room. The trees in the drawing are shorter.'],
+  crates: ['Supply crates', 'Third Expedition', 'Specimen jars packed in straw, every one labelled and empty. The lantern on top still has oil in it. Nobody came back for these.'],
+  case_broken: ['Display Case 112', 'Seal broken', 'The plate says the specimen was collected dead. The glass was broken from the inside.'],
+  lamp: ['Gallery lamp', 'Still fed', 'Brass, with a ground-glass lens. It lights when touched. Nobody has found where the supply comes from.'],
+  column_fallen: ['Fallen column', 'Marble', 'It came down a long time ago. The moss on the break is older than the moss on the floor.'],
+  plinth: ['Empty plinth', 'Label polished', 'Whatever stood here is gone and the dome lies beside it. Somebody has been keeping the label plate clean.'],
+  mushrooms: ['Bellcap cluster', 'Uncatalogued', 'Taller than a Seeker. They dim when you stand close and brighten again when you look away.'],
+  tree_a: ['Gallery oak', 'Rooted through the floor', 'The roots have lifted the tiles in a ring. An expedition left its instruments at the base and the tree has started to grow around them.'],
+  tree_b: ['Tagged willow', 'Specimen 9', 'The brass tag on the trunk is stamped with a number and a date. The date has not happened yet.'],
+};
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
@@ -22,7 +34,7 @@ export function mountBattle(root, onFinish) {
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
-  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), region: spec.region, seed: spec.seed });
+  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); }, region: spec.region, seed: spec.seed });
   const unit = id => st.units.find(u => u.id === id);
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
@@ -119,6 +131,8 @@ export function mountBattle(root, onFinish) {
         ${u.variant ? `<p style="margin-top:8px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
         <p style="margin-top:8px;font-size:13.5px">${sg >= 1 ? esc(S.behavior) : `<span class="dim">${esc(S.blurb)} Its habits are unrecorded. ${Math.max(1, 4 - tot)} more study and the Catalogue will say how it behaves.</span>`}</p>
         ${!C.isHostile(st, u) && S.ai !== 'skittish' ? '<p class="dim" style="font-size:13px;margin-top:6px">It is leaving you alone. You do not have to fight it.</p>' : ''}`;
+    } else if (info?.d) {
+      const [nm, tag, txt] = DECOR[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
     } else if (p) {
       const F = p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
       h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;

@@ -8,7 +8,14 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
-const GLB = { vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2] };
+const GLB = { vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
+  // things on the board
+  rock: ['p_boulder', 1.45], cache: ['p_cache', 1.0], lantern_moss: ['p_lantern_moss', 1.05], snare_vine: ['p_snare_vine', 1.15], heartfruit: ['p_heartfruit', 1.0], mirror_reed: ['p_mirror_reed', 1.2],
+  // things around it
+  tree_a: ['p_tree_a', 6.4], tree_b: ['p_tree_b', 6], gate: ['p_gate', 6.2], lamp: ['p_lamp', 2.9], case_broken: ['p_case_broken', 2.1], column_fallen: ['p_column_fallen', 2.6], mushrooms: ['p_mushrooms', 1.9], plinth: ['p_plinth', 1.5], survey: ['p_survey', 2.1], crates: ['p_crates', 1.6] };
+// Scenery you can touch: [model, x, z, turn, scale]. The far side and both ends of the hall, clear of the camera.
+const DECOR = [['survey', -5.5, 3.4, .9], ['crates', -5.3, 6.1, .4], ['case_broken', -5.7, -.6, 1.2], ['case_broken', -5.3, -6.6, 2.2], ['plinth', -5.2, -3, 1.6], ['lamp', -4.7, 1.5, 0], ['lamp', -4.7, -4.8, 2], ['lamp', 4.9, 6.6, 1],
+  ['column_fallen', -7.2, 1.2, .5], ['mushrooms', -5, 4.9, 0], ['mushrooms', 4.7, -6.3, 2], ['mushrooms', -7, -4.6, 1, 1.5], ['tree_a', -9.2, 3.2, 1], ['tree_b', -8.4, -2.4, 2], ['tree_a', -6.5, 9, 3], ['tree_b', 1.5, 9.4, 0], ['tree_a', -4, -11.5, 2, .9]];
 // Rigged heroes: file, then which library clip plays each game action.
 const RIG = {
   vanguard: ['hobb_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Heavy_Hammer_Swing', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
@@ -85,7 +92,7 @@ function hero(body, trim, accent, extra, robot) {
   extra(g); g.userData.hero = 1; return g;
 }
 
-export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
+export function createScene(el, { onTile, onDecor, region = 'verdant', seed = 1 }) {
   const pal = PAL[region] || PAL.verdant;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15;
@@ -110,9 +117,19 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const env = new THREE.Group(); scene.add(env);
   const tree = (x, z, h) => { const g = G(P(cyl(.16 * h, .3 * h, 2.6 * h, 6), mat(pal.trunk, { emissive: 0x1a0f2a, emissiveIntensity: .6 }), 0, 1.3 * h, 0)); for (let i = 0; i < 4; i++) g.add(P(sph(.9 * h * (1 - i * .12), 0), mat(pal.leaf[Math.floor(r0() * pal.leaf.length)]), (r0() - .5) * h, 2.5 * h + i * .45 * h, (r0() - .5) * h, { s: [1, .7, 1] })); g.position.set(x, 0, z); return g; };
   const pillar = (x, z, h) => { const g = G(P(cyl(.3, .36, h, 8), mat(pal.stone), 0, h / 2, 0), P(box(.9, .2, .9), mat(pal.stone), 0, h + .1, 0), region === 'clockwork' ? P(tor(.7, .08, 16), mat(0xc9a24a, { metalness: .8, roughness: .3 }), 0, h * .7, 0, { r: [Math.PI / 2, 0, 0] }) : P(sph(.22, 0), glow(pal.glow[2], 1.5), 0, h + .45, 0)); g.position.set(x, 0, z); return g; };
-  for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
-  env.add(pillar(-2.6, -7.4, 3.4), pillar(2.6, -7.4, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -7.4));
-  const gate = P(new THREE.PlaneGeometry(4.2, 3.4), glow(pal.glow[2], .9), 0, 1.8, -7.6); env.add(gate);
+  const real = region === 'verdant'; const decor = new THREE.Group(); scene.add(decor);
+  if (!real) for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
+  if (!real) env.add(pillar(-2.6, -7.4, 3.4), pillar(2.6, -7.4, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -7.4));
+  const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, real ? -7.7 : -7.6); gate.castShadow = false; env.add(gate);
+  const lamps = [];
+  const put = (kind, x, z, turn = 0, k = 1) => loadGLB(kind).then(m => { if (!m || dead) return null; const o = m.clone(true); o.scale.setScalar(GLB[kind][1] * k); o.position.set(x, 0, z); o.rotation.y = turn; o.traverse(c => { c.userData.decor = kind; }); o.userData.home = k; return o; });
+  if (real) {
+    put('gate', 0, -7.6).then(o => o && env.add(o));
+    DECOR.forEach(([kind, x, z, turn, k], i) => put(kind, x, z, turn * 1.57, k || 1).then(o => { if (!o) return; o.userData.i = i; decor.add(o);
+      if (kind === 'lamp') { const l = new THREE.PointLight(0xffc878, 0, 9); l.position.set(x, 2.6, z); scene.add(l); o.userData.light = l; lamps.push(o); if (i % 2 === 0) { l.intensity = 16; } } }));
+    // a loose ring of forest behind everything, kept off the camera's side of the hall
+    for (let i = 0; i < 26; i++) { const a = r0() * Math.PI * 2, d = 12 + r0() * 9; const x = Math.cos(a) * d - 3, z = Math.sin(a) * d; if (x > 3.5 && Math.abs(z) < 12) continue; if (z > 6 && Math.abs(x) < 5) continue; put(r0() < .6 ? 'tree_a' : 'tree_b', x, z, r0() * 6, .8 + r0() * .7).then(o => o && env.add(o)); }
+  }
   for (let i = 0; i < 70; i++) { const a = r0() * Math.PI * 2, d = 1 + r0() * 11; const f = P(sph(.03 + r0() * .035, 0), glow(pal.glow[Math.floor(r0() * 3)], 1.1 + r0() * .8), Math.cos(a) * d, .06 + r0() * .1, Math.sin(a) * d - .5); f.castShadow = false; env.add(f); }
   for (let i = 0; i < 70; i++) { const a = r0() * Math.PI * 2, d = 4 + r0() * 9; const b = P(cone(.16 + r0() * .2, .3 + r0() * .5, 5), mat(pal.leaf[Math.floor(r0() * pal.leaf.length)]), Math.cos(a) * d, .2, Math.sin(a) * d - .5); if (Math.abs(b.position.x) < 4.2 && Math.abs(b.position.z) < 5.4) continue; env.add(b); }
   const pl1 = new THREE.PointLight(pal.glow[2], 14, 12); pl1.position.set(0, 2.2, -6.6); scene.add(pl1); const pl2 = new THREE.PointLight(pal.glow[0], 9, 10); pl2.position.set(-5, 1.4, 2); scene.add(pl2);
@@ -160,7 +177,8 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const api = {
     setRoom(st) {
       for (const o of units.values()) { scene.remove(o.g); o.lab.remove(); } units.clear(); for (const o of props.values()) scene.remove(o); props.clear(); scene.remove(rocks); rocks = new THREE.Group(); scene.add(rocks);
-      const r = rng(seed * 31 + st.roomIdx * 7 + 3); st.room.rock.forEach((v, i) => { if (v) { const k = MODELS.rock(r, pal); k.position.set(wx(Math.floor(i / GW)), 0, wz(i % GW)); rocks.add(k); } });
+      const r = rng(seed * 31 + st.roomIdx * 7 + 3); st.room.rock.forEach((v, i) => { if (!v) return; const X = wx(Math.floor(i / GW)), Z = wz(i % GW), turn = r() * 6, k = .85 + r() * .3; const group = rocks; const m = real && glbCache.rock; const add = (o, sc) => { o.position.set(X, 0, Z); if (sc) { o.scale.setScalar(sc); o.rotation.y = turn; } group.add(o); return o; };
+        if (m) add(m.clone(true), GLB.rock[1] * k); else { const ph = add(MODELS.rock(r, pal)); if (real) loadGLB('rock').then(g => { if (!g || group !== rocks) return; group.remove(ph); add(g.clone(true), GLB.rock[1] * k); }); } });
     },
     // list: [{id,x,y,kind,side,variant,ring,label,gone}]
     sync(list, propList, extras) {
@@ -168,7 +186,7 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
       for (const u of list) { const o = unitObj(u); seen.add(u.id); o.g.visible = !u.gone; o.lab.hidden = !!u.gone; if (u.gone) continue; o.g.position.x = o.tx = wx(u.y); o.g.position.z = o.tz = wz(u.x); o.rg.material = RM[u.ring] || RM.calm; o.rg.visible = !!u.ring; if (o.lab.innerHTML !== u.label) o.lab.innerHTML = u.label; }
       for (const [id, o] of units) if (!seen.has(id)) { scene.remove(o.g); o.lab.remove(); units.delete(id); }
       const pseen = new Set();
-      for (const p of propList) { pseen.add(p.key); let o = props.get(p.key); if (!o) { const f = MODELS[p.model] || MODELS.cache; o = f(rng(1), pal); o.position.set(wx(p.y), 0, wz(p.x)); if (p.scale) o.scale.setScalar(p.scale); scene.add(o); props.set(p.key, o); } o.userData.use = p.use; }
+      for (const p of propList) { pseen.add(p.key); let o = props.get(p.key); if (!o) { const rm = GLB[p.model] && glbCache[p.model]; if (rm) { o = new THREE.Group(); const c = rm.clone(true); c.scale.setScalar(GLB[p.model][1]); o.add(c); } else { const f = MODELS[p.model] || MODELS.cache; o = f(rng(1), pal); if (GLB[p.model]) { const holder = o; loadGLB(p.model).then(g => { if (!g || props.get(p.key) !== holder) return; holder.clear(); const c = g.clone(true); c.scale.setScalar(GLB[p.model][1]); holder.add(c); }); } } o.position.set(wx(p.y), 0, wz(p.x)); if (p.scale) o.scale.setScalar(p.scale); scene.add(o); props.set(p.key, o); } o.userData.use = p.use; }
       for (const [k, o] of props) if (!pseen.has(k)) { scene.remove(o); props.delete(k); }
       void extras;
     },
@@ -198,10 +216,12 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3();
   function tileAt(e) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); if (!ray.ray.intersectPlane(plane, hitP)) return null; const y = Math.round(hitP.x / S + (GH - 1) / 2), x = Math.round((GW - 1) / 2 - hitP.z / S); return x >= 0 && y >= 0 && x < GW && y < GH ? [x, y] : null; }
   let down = null; renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
-  renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) onTile(t[0], t[1]); });
+  function decorAt(e) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); const h = ray.intersectObjects(decor.children, true)[0]; if (!h) return null; let o = h.object; while (o.parent && o.parent !== decor) o = o.parent; return o; }
+  renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) return onTile(t[0], t[1]); const d = decorAt(e); if (d) { d.userData.poke = performance.now(); if (d.userData.light) d.userData.light.intensity = d.userData.light.intensity ? 0 : 16; else spark(d.position, pal.glow[d.userData.i % 3], 14); onDecor && onDecor(d.userData.decor, !!(d.userData.light && d.userData.light.intensity)); } });
   const hover = new THREE.Mesh(new THREE.RingGeometry(.5, .56, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; scene.add(hover);
   renderer.domElement.addEventListener('pointermove', e => { const bb = renderer.domElement.getBoundingClientRect(); ptr.x = (e.clientX - bb.left) / bb.width - .5; ptr.y = (e.clientY - bb.top) / bb.height - .5; const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
   renderer.domElement.addEventListener('pointerleave', () => { hover.visible = false; });
+  renderer.domElement.addEventListener('pointermove', e => { renderer.domElement.style.cursor = tileAt(e) || decorAt(e) ? 'pointer' : 'default'; });
 
   // Frame the whole board between the top bar and the bottom controls, whatever the window shape.
   const base = new THREE.Vector3(), pv = new THREE.Vector3(), ptr = { x: 0, y: 0 };
@@ -233,6 +253,7 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
     const pa = flies.geometry.attributes.position; for (let i = 0; i < fn; i++) { pa.array[i * 3 + 1] += Math.sin(t * .8 + fs[i]) * .003; pa.array[i * 3] += Math.cos(t * .5 + fs[i]) * .002; } pa.needsUpdate = true;
     for (const k in mk) if (k.endsWith('mv')) mk[k].scale.setScalar(1 + Math.sin(t * 4) * .12);
     gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25;
+    for (const d of decor.children) { const p = d.userData.poke; if (p) { const k = (now - p) / 420; if (k >= 1) { d.userData.poke = 0; d.rotation.z = 0; } else d.rotation.z = Math.sin(k * Math.PI * 3) * .05 * (1 - k); } if (d.userData.light && d.userData.light.intensity) d.userData.light.intensity = 15 + Math.sin(t * 9 + d.userData.i) * 1.2; }
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
     cam.position.set(base.x + Math.sin(t * .17) * .22 + ptr.x * .7, base.y + Math.sin(t * .23) * .1 - ptr.y * .3, base.z + Math.cos(t * .13) * .12); cam.lookAt(0, .3, 0);
     composer.render();
