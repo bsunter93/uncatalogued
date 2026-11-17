@@ -91,7 +91,7 @@ function prepRig(g, kind) {
   gl.loadAsync(new URL(`assets/models/${RIG[kind][0].replace('_anim', '_cls')}.glb`, import.meta.url).href).then(c => { for (const a of c.animations) { tether(a); clips['c:' + a.name] = a; } }).catch(() => {});
   g.scene = wrap;
 }
-for (const k in GLB) loadGLB(k);
+// Models load when something that uses them appears. Loading all of them up front made every visit fetch both regions.
 const S = 1.1, GW = 14, GH = 10; const TR = 17, GZ = GW * S / 2 + 1.9, DK = 1.5; // terrace radius, gate distance, how far scenery sits out
 const wx = y => (y - (GH - 1) / 2) * S, wz = x => ((GW - 1) / 2 - x) * S;
 const PAL = {
@@ -321,6 +321,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     };
     const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; c.userData.sock = m.userData.sock; return c; };
     const ready = glbCache[u.kind]; const body = dress(ready ? copy(ready) : MODELS[MODELS[u.kind] ? u.kind : 'thornling'](), !!ready);
+    if (!ready && GLB[u.kind]) body.visible = false; // no stand-in shape while the model is on its way
     if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(copy(m), true); cur.body.rotation.y = rot; cur.real = true; animate(cur); wear(cur, u.gear); cur.h = sc + .3; });
     const rg = new THREE.Mesh(ringGeo, RM.calm); rg.rotation.x = -Math.PI / 2; rg.position.y = .03; rg.scale.setScalar(sc > 2 ? 1.9 : 1.15); g.add(rg);
     g.position.set(wx(u.y), 0, wz(u.x)); here.add(g);
@@ -364,7 +365,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     setRoom(st) {
       for (const o of units.values()) { o.g.removeFromParent(); o.lab.remove(); } units.clear(); for (const o of props.values()) o.removeFromParent(); props.clear(); rocks.removeFromParent(); rocks = new THREE.Group(); here.add(rocks);
       const r = rng(seed * 31 + st.roomIdx * 7 + 3); st.room.rock.forEach((v, i) => { if (!v) return; const X = wx(Math.floor(i / GW)), Z = wz(i % GW), turn = r() * 6, k = .85 + r() * .3; const group = rocks; const m = real && glbCache[al('rock')]; const add = (o, sc) => { o.position.set(X, 0, Z); if (sc) { o.scale.setScalar(sc); o.rotation.y = turn; } group.add(o); return o; };
-        if (m) add(m.clone(true), gsz('rock') * k); else { const ph = add(MODELS.rock(r, pal)); if (real) loadGLB('rock').then(g => { if (!g || group !== rocks) return; group.remove(ph); add(g.clone(true), gsz('rock') * k); }); } });
+        if (m) add(m.clone(true), gsz('rock') * k); else { const ph = add(MODELS.rock(r, pal)); ph.visible = !real; if (real) loadGLB('rock').then(g => { if (!g || group !== rocks) return; group.remove(ph); add(g.clone(true), gsz('rock') * k); }); } });
     },
     // list: [{id,x,y,kind,side,variant,ring,label,gone}]
     sync(list, propList, extras) {
@@ -372,7 +373,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
       for (const u of list) { const o = unitObj(u); seen.add(u.id); o.g.visible = !u.gone; o.lab.hidden = !!u.gone; if (u.gone) continue; if (!o.walking) { o.g.position.x = o.tx = wx(u.y); o.g.position.z = o.tz = wz(u.x); } o.rg.material = RM[u.ring] || RM.calm; o.rg.visible = !!u.ring; if (o.lab.innerHTML !== u.label) o.lab.innerHTML = u.label; }
       for (const [id, o] of units) if (!seen.has(id)) { o.g.removeFromParent(); o.lab.remove(); units.delete(id); }
       const pseen = new Set();
-      for (const p of propList) { pseen.add(p.key); let o = props.get(p.key); if (o && p.lit !== undefined) { if (p.lit && !o.userData.lamp) { const l = new THREE.PointLight(0xffc878, 22, 9); l.position.y = 1.9; o.add(l); o.userData.lamp = l; } else if (!p.lit && o.userData.lamp) { o.remove(o.userData.lamp); o.userData.lamp = null; } o.scale.y = p.spent ? .7 : 1; } if (!o) { const rm = GLB[al(p.model)] && glbCache[al(p.model)]; if (rm) { o = new THREE.Group(); const c = rm.clone(true); c.scale.setScalar(gsz(p.model)); o.add(c); } else { const f = MODELS[p.model] || MODELS.cache; o = f(rng(1), pal); if (GLB[al(p.model)]) { const holder = o; loadGLB(p.model).then(g => { if (!g || props.get(p.key) !== holder) return; holder.clear(); const c = g.clone(true); c.scale.setScalar(gsz(p.model)); holder.add(c); }); } } o.position.set(wx(p.y), 0, wz(p.x)); if (p.scale) o.scale.setScalar(p.scale); here.add(o); props.set(p.key, o); } o.userData.use = p.use; }
+      for (const p of propList) { pseen.add(p.key); let o = props.get(p.key); if (o && p.lit !== undefined) { if (p.lit && !o.userData.lamp) { const l = new THREE.PointLight(0xffc878, 22, 9); l.position.y = 1.9; o.add(l); o.userData.lamp = l; } else if (!p.lit && o.userData.lamp) { o.remove(o.userData.lamp); o.userData.lamp = null; } o.scale.y = p.spent ? .7 : 1; } if (!o) { const rm = GLB[al(p.model)] && glbCache[al(p.model)]; if (rm) { o = new THREE.Group(); const c = rm.clone(true); c.scale.setScalar(gsz(p.model)); o.add(c); } else { const f = MODELS[p.model] || MODELS.cache; o = f(rng(1), pal); if (GLB[al(p.model)]) { const holder = o; for (const c of holder.children) c.visible = false; loadGLB(p.model).then(g => { if (!g || props.get(p.key) !== holder) return; holder.clear(); const c = g.clone(true); c.scale.setScalar(gsz(p.model)); holder.add(c); }); } } o.position.set(wx(p.y), 0, wz(p.x)); if (p.scale) o.scale.setScalar(p.scale); here.add(o); props.set(p.key, o); } o.userData.use = p.use; }
       for (const [k, o] of props) if (!pseen.has(k)) { o.removeFromParent(); props.delete(k); }
       void extras;
     },
