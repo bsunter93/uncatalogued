@@ -383,3 +383,21 @@ export const LOCKS = {
   light: { verdant: 'Cut in the lid: "I open only where it is bright."', clockwork: 'Stamped in the lid: "I open only where it is bright."' },
   breath: { verdant: 'Cut in the lid: "I open when the hall has breathed."', clockwork: 'Stamped in the lid: "I open when the pipes have sung."' },
 };
+
+// Item sets. Wearing pieces of the same set at once adds bonuses at 2, 3 and 4 pieces. A set never has two pieces for one slot.
+// Bonuses stack with Resonances and are plain numbers the rest of the rules already understand.
+export const SETS = {
+  thornwarden: { name: "Thornwarden's Kit", lore: 'Issued to the first keepers of the Verdant Galleries. Most of it grew back.', pieces: ['thorncaster', 'barkweave', 'hunter_mask', 'leechroot'],
+    bonus: { 2: { regen: 1 }, 3: { bleedHit: 15 }, 4: { vsWounded: 20, thorns: 2 } } },
+  surveyor: { name: "Surveyor's Issue", lore: 'Standard issue for a survey nobody finished.', pieces: ['pulse_rifle', 'relay_harness', 'targeting_visor', 'capacitor_band', 'drone_core'],
+    bonus: { 2: { study: 1 }, 3: { crit: 6 }, 4: { range: 1, abil: 10 } } },
+  folded: { name: 'The Folded Wardrobe', lore: 'Each piece is slightly somewhere else. Worn together they agree.', pieces: ['echo_blade', 'phase_shroud', 'oracle_shard', 'lucky_knot', 'fold_gland', 'blink_anchor'],
+    bonus: { 2: { move: 1 }, 3: { critDmg: 25 }, 4: { echo: 15, crit: 5 } } },
+  gardener: { name: "Gardener's Rounds", lore: 'What the Galleries were tended with, before they tended themselves.', pieces: ['spore_sling', 'resin_charm', 'symbiote_graft', 'lure_pod'],
+    bonus: { 2: { healPow: 15 }, 3: { regen: 1, yield: 20 }, 4: { poisonHit: 1, hp: 10 } } },
+  butcher: { name: 'Field Dresser', lore: 'For taking a specimen apart where it fell.', pieces: ['marrow_cleaver', 'chitin_plate', 'compound_lens', 'neural_shunt', 'barrier_seed'],
+    bonus: { 2: { armor: 1 }, 3: { killHeal: 4 }, 4: { dmgPct: 10, study: 1 } } },
+  stormglass: { name: 'Stormglass', lore: 'Three pieces of one machine that was never assembled.', pieces: ['arc_lance', 'mirror_carapace', 'pulse_emitter'],
+    bonus: { 2: { thorns: 2 }, 3: { abil: 15, shieldStart: 6 } } },
+};
+export const SET_OF = {}; for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;

@@ -88,6 +88,7 @@ export function itemLines(it) {
   (it.aff || []).forEach((a, i) => { const A = D.AFFIXES[a.id]; L.push(`<li class="aff"><span class="q q${C.affixQuality(it, i)}" title="Roll quality"></span><span>${esc(modLine(A.key, a.v))}</span><em>${esc(i === 1 ? A.suf.replace(/^of (the )?/, '') : A.pre)}</em></li>`); });
   if (it.fx) L.push(`<li class="fx"><b>${esc(D.SPECIALS[it.fx].name)}.</b> ${esc(D.SPECIALS[it.fx].text)}</li>`);
   if (it.sing) L.push(`<li class="fx">${esc(def.text)}</li>`, `<li class="lore">${esc(def.lore)}</li>`);
+  if (!it.sing && D.SET_OF[it.base]) { const S0 = D.SETS[D.SET_OF[it.base]]; const w = wornBy(it.id); const n = w ? (C.sheet(G.state, w.id).sets.find(x => x.id === D.SET_OF[it.base]) || {}).n || 0 : 0; L.push(`<li class="set"><b>${esc(S0.name)}</b> <span class="num">${n ? n + ' of ' + S0.pieces.length + ' worn' : S0.pieces.length + ' pieces'}</span>${Object.entries(S0.bonus).map(([need, b]) => `<span class="sb ${n >= +need ? 'on' : ''}"><i>${need}</i>${esc(Object.entries(b).map(([k, v]) => modLine(k, v)).join(', '))}</span>`).join('')}</li>`); }
   if (it.prov) L.push(`<li class="prov">${esc(provText(it.prov))}</li>`);
   return L.join('');
 }

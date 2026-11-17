@@ -66,6 +66,7 @@ var UncEngine = (() => {
     rollItem: () => rollItem,
     score: () => score,
     seekerItems: () => seekerItems,
+    setsFor: () => setsFor,
     sheet: () => sheet,
     stageOf: () => stageOf,
     studyValue: () => studyValue,
@@ -106,6 +107,8 @@ var UncEngine = (() => {
     RARITY_TABLE: () => RARITY_TABLE,
     REGIONS: () => REGIONS,
     RESONANCES: () => RESONANCES,
+    SETS: () => SETS,
+    SET_OF: () => SET_OF,
     SINGULARS: () => SINGULARS,
     SLOTS: () => SLOTS,
     SLOT_NAME: () => SLOT_NAME,
@@ -746,9 +749,49 @@ var UncEngine = (() => {
     light: { verdant: 'Cut in the lid: "I open only where it is bright."', clockwork: 'Stamped in the lid: "I open only where it is bright."' },
     breath: { verdant: 'Cut in the lid: "I open when the hall has breathed."', clockwork: 'Stamped in the lid: "I open when the pipes have sung."' }
   };
+  var SETS = {
+    thornwarden: {
+      name: "Thornwarden's Kit",
+      lore: "Issued to the first keepers of the Verdant Galleries. Most of it grew back.",
+      pieces: ["thorncaster", "barkweave", "hunter_mask", "leechroot"],
+      bonus: { 2: { regen: 1 }, 3: { bleedHit: 15 }, 4: { vsWounded: 20, thorns: 2 } }
+    },
+    surveyor: {
+      name: "Surveyor's Issue",
+      lore: "Standard issue for a survey nobody finished.",
+      pieces: ["pulse_rifle", "relay_harness", "targeting_visor", "capacitor_band", "drone_core"],
+      bonus: { 2: { study: 1 }, 3: { crit: 6 }, 4: { range: 1, abil: 10 } }
+    },
+    folded: {
+      name: "The Folded Wardrobe",
+      lore: "Each piece is slightly somewhere else. Worn together they agree.",
+      pieces: ["echo_blade", "phase_shroud", "oracle_shard", "lucky_knot", "fold_gland", "blink_anchor"],
+      bonus: { 2: { move: 1 }, 3: { critDmg: 25 }, 4: { echo: 15, crit: 5 } }
+    },
+    gardener: {
+      name: "Gardener's Rounds",
+      lore: "What the Galleries were tended with, before they tended themselves.",
+      pieces: ["spore_sling", "resin_charm", "symbiote_graft", "lure_pod"],
+      bonus: { 2: { healPow: 15 }, 3: { regen: 1, yield: 20 }, 4: { poisonHit: 1, hp: 10 } }
+    },
+    butcher: {
+      name: "Field Dresser",
+      lore: "For taking a specimen apart where it fell.",
+      pieces: ["marrow_cleaver", "chitin_plate", "compound_lens", "neural_shunt", "barrier_seed"],
+      bonus: { 2: { armor: 1 }, 3: { killHeal: 4 }, 4: { dmgPct: 10, study: 1 } }
+    },
+    stormglass: {
+      name: "Stormglass",
+      lore: "Three pieces of one machine that was never assembled.",
+      pieces: ["arc_lance", "mirror_carapace", "pulse_emitter"],
+      bonus: { 2: { thorns: 2 }, 3: { abil: 15, shieldStart: 6 } }
+    }
+  };
+  var SET_OF = {};
+  for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 12;
+  var VERSION = 13;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -935,6 +978,19 @@ var UncEngine = (() => {
   function xpNext(lvl) {
     return 150 + 110 * lvl;
   }
+  function setsFor(items) {
+    const n = {};
+    for (const it of items) {
+      if (it.sing) continue;
+      const id = SET_OF[it.base];
+      if (id) n[id] = (n[id] || 0) + 1;
+    }
+    return Object.keys(n).sort().map((id) => {
+      const m = {};
+      for (const need in SETS[id].bonus) if (n[id] >= +need) for (const k in SETS[id].bonus[need]) m[k] = (m[k] || 0) + SETS[id].bonus[need][k];
+      return { id, n: n[id], m };
+    });
+  }
   function resonancesFor(items) {
     const tags = items.map(itemTags);
     const act2 = [];
@@ -970,6 +1026,8 @@ var UncEngine = (() => {
         devItem = it;
       }
     }
+    const sets = setsFor(items);
+    for (const st0 of sets) for (const k in st0.m) m[k] = (m[k] || 0) + st0.m[k];
     const res = resonancesFor(items);
     for (const id of res.active) fx["res_" + id] = 1;
     for (const t of s.traits) fx["t_" + t] = 1;
@@ -990,6 +1048,7 @@ var UncEngine = (() => {
       m,
       fx,
       res,
+      sets,
       w: { ...w, range },
       maxHp,
       armor: (m.armor || 0) + (fx.s_bulwark ? 2 : 0),

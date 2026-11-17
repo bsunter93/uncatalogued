@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 12;
+export const VERSION = 13;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -85,6 +85,9 @@ export function rollItem(r, o) {
 
 // ---------------------------------------------------------------- seeker sheet
 export function xpNext(lvl) { return 150 + 110 * lvl; }
+// Sets worn: how many pieces of each, and the bonuses that count reaches. Singular items belong to no set.
+export function setsFor(items) { const n = {}; for (const it of items) { if (it.sing) continue; const id = D.SET_OF[it.base]; if (id) n[id] = (n[id] || 0) + 1; }
+  return Object.keys(n).sort().map(id => { const m = {}; for (const need in D.SETS[id].bonus) if (n[id] >= +need) for (const k in D.SETS[id].bonus[need]) m[k] = (m[k] || 0) + D.SETS[id].bonus[need][k]; return { id, n: n[id], m }; }); }
 export function resonancesFor(items) {
   const tags = items.map(itemTags); const act = [];
   for (const id in D.RESONANCES) {
@@ -104,13 +107,14 @@ export function sheet(state, sid, gearOverride) {
     if (it.fx) fx[it.fx] = 1; if (it.sing) fx[it.sing] = 1;
     const def = itemDef(it); if (def.w) w = itemWeapon(it); if (def.dev) { dev = def.dev; devItem = it; }
   }
+  const sets = setsFor(items); for (const st0 of sets) for (const k in st0.m) m[k] = (m[k] || 0) + st0.m[k];
   const res = resonancesFor(items); for (const id of res.active) fx['res_' + id] = 1;
   for (const t of s.traits) fx['t_' + t] = 1; if (s.spec) fx['s_' + s.spec] = 1; fx['a_' + s.arch] = 1;
   const A = s.attr; if (!w) w = { min: 2, max: 4, range: 1, scale: 'force' };
   let maxHp = 28 + 3 * A.vitality + 2 * s.lvl + (m.hp || 0); if (fx.glass) maxHp = fl(maxHp * 75 / 100);
   let range = w.range + (w.range > 1 || m.range ? (m.range || 0) : 0); if (fx.s_marksman && w.range > 1) range += 1;
   return {
-    sid, name: s.name, arch: s.arch, lvl: s.lvl, attr: { ...A }, m, fx, res, w: { ...w, range }, maxHp,
+    sid, name: s.name, arch: s.arch, lvl: s.lvl, attr: { ...A }, m, fx, res, sets, w: { ...w, range }, maxHp,
     armor: (m.armor || 0) + (fx.s_bulwark ? 2 : 0), move: 3 + (m.move || 0) + (fx.t_light ? 1 : 0), crit: 5 + A.precision + (m.crit || 0),
     dev, devCharges: dev ? 1 + (fx.twin ? 1 : 0) + (fx.a_tinkerer ? 1 : 0) + (dev === 'unfinished' ? 1 : 0) : 0,
     abilities: arch.abilities.slice(), tier: devItem ? devItem.tier : 1,
