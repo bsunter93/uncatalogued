@@ -791,7 +791,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 13;
+  var VERSION = 14;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2245,17 +2245,18 @@ var UncEngine = (() => {
   function trail(st, leadId, ev) {
     const L = st.units.find((u) => u.id === leadId);
     if (!L) return;
+    const fld = field(st, L.x, L.y);
     for (const u of seekers(st)) {
       if (u === L || !alive(u) || u.root > 0 || u.stun > 0 || md(u, L) <= 2) continue;
       const { dist, par } = reach(st, u, moveRange(st, u));
       let best = null;
       for (const [k, d] of dist) {
         if (!d) continue;
-        const x = k % W, y = fl(k / W), f = Math.abs(x - L.x) + Math.abs(y - L.y);
+        const f = fld[k], x = k % W, y = fl(k / W);
         if (f < 1) continue;
         if (!best || f < best.f || f === best.f && d < best.d) best = { x, y, f, d };
       }
-      if (best && best.f < md(u, L)) {
+      if (best && best.f < fld[K(u.x, u.y)]) {
         const n = ev.length;
         walk(st, u, pathFrom(par, best.x, best.y), ev);
         for (let i = n; i < ev.length; i++) if (ev[i].e === "move") ev[i].trail = true;

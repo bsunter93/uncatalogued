@@ -88,7 +88,7 @@ export function mountBattle(root, onFinish) {
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
-  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!LORE[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
+  const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onMiss: () => { if (!busy && !st.outcome) say('Nothing to walk to there'); }, onDecor: (k, lit) => { if (!LORE[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
     onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed, places: { P0: st.places[0], P1: st.places[1] } });
   // which far place the party is standing in: the start, one of the two doors, or the last room
   const siteNow = () => st.side ? 'P' + st.roomIdx : st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
@@ -101,7 +101,7 @@ export function mountBattle(root, onFinish) {
   const fixInfo = p => p.kind !== 'fixture' ? [] : knownSet()[spec.region + ':' + p.id] ? ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id]) : ((CWF && UNKNOWN_CW[p.id]) || UNKNOWN[p.id]);
   const GL = D.GLYPHS[spec.region] || D.GLYPHS.verdant; const lockedChest = () => st.room.props.find(p => p.kind === 'chest' && !p.done && p.lock === 'plates'); const plateOn = p => { const c = lockedChest(); return !!c && (c.open || c.seq.slice(0, c.prog).includes(p.glyph)); };
   const glyphPic = i => `<i class="glyph" style="background-image:url(assets/tex/${spec.region === 'clockwork' ? 'c' : 'v'}_plates.jpg);background-position:${i % 2 ? 100 : 0}% ${i > 1 ? 100 : 0}%" title="${GL[i]}"></i>`;
-  const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; if (sl === 'weapon' || sl === 'head' || sl === 'body') g[sl] = it.base; } return g; };
+  const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; g[sl] = it.sing || it.base; } return g; };
   const live = u => u && !u.dead && !u.fled;
   const mine = () => st.units.filter(u => u.side === 's');
   const foes = () => st.units.filter(u => u.side === 'c' && live(u));

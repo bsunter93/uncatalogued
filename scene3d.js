@@ -18,6 +18,7 @@ const GLB = { tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker:
   temple_ruin: ['p_temple_ruin_lo', 1], temple_arch: ['p_temple_arch_lo', 1], dream_tree_a: ['p_dream_tree_a_lo', 1], dream_tree_b: ['p_dream_tree_b_lo', 1], // far-world landmarks
   tree_a_lo: ['p_tree_a_lo', 6.4], tree_b_lo: ['p_tree_b_lo', 6], rock_lo: ['p_boulder_lo', 1.45], mushrooms_lo: ['p_mushrooms_lo', 1.9], c_tree_a_lo: ['p_c_tree_a_lo', 6.6], c_tree_b_lo: ['p_c_tree_b_lo', 6], c_rock_lo: ['p_c_rock_lo', 1.5], c_vent_lo: ['p_c_vent_lo', 1.7], // far-world stand-ins, a tenth of the triangles
   chest: ['p_chest', 1.15],
+  drone: ['u_drone', .7], lure: ['u_lure', .55], // what a device becomes once it is out on the floor
   tree_a: ['p_tree_a', 6.4], tree_b: ['p_tree_b', 6], gate: ['p_gate', 6.2], lamp: ['p_lamp', 2.9], case_broken: ['p_case_broken', 2.1], column_fallen: ['p_column_fallen', 2.6], mushrooms: ['p_mushrooms', 1.9], plinth: ['p_plinth', 1.5], survey: ['p_survey', 2.1], crates: ['p_crates', 1.6] };
 // Scenery you can touch: [model, x, z, turn, scale]. The far side and both ends of the hall, clear of the camera.
 const DECORS = {
@@ -51,6 +52,11 @@ const RIG = {
 };
 // Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
 const GEAR = { marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'rifle'],
+  yesterdays_rifle: ['hand', 'rifle'], hunter_mask: ['head', 1.0, .035, .02], collectors_eye: ['head', 1.04, 0],
+  // [where it is worn, size against the shoulders, up, forward]
+  resin_charm: ['neck', .3], lucky_knot: ['neck', .3], hungry_compass: ['neck', .3], borrowed_moment: ['neck', .3], capacitor_band: ['wristL', .3], bait_satchel: ['hipL', .4],
+  leechroot: ['shoulderR', .44], symbiote_graft: ['shoulderL', .4], neural_shunt: ['nape', .4], venom_sac: ['forearmR', .3], fold_gland: ['back', .46],
+  lure_pod: ['hipR', .36], barrier_seed: ['hipR', .36], pulse_emitter: ['hipR', .4], drone_core: ['hipR', .4], blink_anchor: ['hipR', .44], gravity_knot: ['hipR', .34], unfinished_machine: ['hipR', .42],
   compound_lens: ['head', 1.02, .01], targeting_visor: ['head', 1.3, .0], oracle_shard: ['head', 1.02, .05], chitin_plate: ['chest', 1.0, 0], barkweave: ['chest', 1.0, 0], relay_harness: ['chest', 1.0, 0], mirror_carapace: ['chest', .96, 0], phase_shroud: ['chest', 1.05, .03] };
 // Which clip a weapon class strikes with, and the part of it that is the strike: [clip, from s, to s, speed, ms until the blow lands].
 // The library clips are long (a throw is 5.8 s with the release at 3.5), so each plays only its window.
@@ -60,7 +66,7 @@ const CLASS_CLIP = { melee: { a: ['Right_Hand_Sword_Slash', 0, 1.3, 1.3, 420], c
 const gearWait = {};
 const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .24; } } });
 const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
-const FLIES = { glasswing: 1.0, pollinator: .9 }; // how high the ones with wings hold themselves
+const FLIES = { glasswing: 1.0, pollinator: .9, drone: 1.0 }; // how high the ones with wings hold themselves
 let ALIAS = {}; const CW_ALIAS = { tree_a: 'c_tree_a', tree_b: 'c_tree_b', gate: 'c_gate', rock: 'c_rock', lamp: 'c_lamp', fx_lamp: 'c_lamp', mushrooms: 'c_vent', fx_bellcap: 'c_vent', survey: 'c_bench', column_fallen: 'c_gear', plinth: 'c_boiler', case_broken: 'c_orrery' };
 const al = k => ALIAS[k] || k, gsz = k => GLB[al(k)][1];
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
@@ -87,6 +93,19 @@ function prepRig(g, kind) {
     for (const side of ['Right', 'Left']) { const w = P(side + 'Hand'), e = P(side + 'ForeArm'); sock[side + 'Hand'] = { bone: side + 'Hand', at: w.clone().add(w.clone().sub(e).normalize().multiplyScalar(.055)), size: 1, inv: B(side + 'Hand').matrixWorld.clone().invert() }; }
     const hd = P('Head'), he = P('head_end'); sock.head = { bone: 'Head', at: hd.clone().lerp(he, .56), size: hd.distanceTo(he) * .82, inv: B('Head').matrixWorld.clone().invert() };
     const span = Math.abs(P('LeftArm').x - P('RightArm').x); const ch = P('Spine01').lerp(P('Spine'), .35); ch.x = 0; sock.chest = { bone: 'Spine01', at: ch, size: span * 1.62, inv: B('Spine01').matrixWorld.clone().invert() };
+    // jewelry, growths and carried things: neck, nape, back, shoulders, wrist, forearm, hips. Each rides the bone under it.
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z), I = n => B(n).matrixWorld.clone().invert(), SZ = .38, dp = ({ vanguard: .2, tracker: .11, naturalist: .13, tinkerer: .11 })[kind] || .12, // how far the front of the chest is from the spine, per hero // sized against the hero's height, not their shoulders: a narrow hero still needs gear that reads from across the hall
+      sp2 = P('Spine02'), nk = P('neck'), hp = P('Hips'), LA = P('LeftArm'), RA = P('RightArm'), LF = P('LeftForeArm'), LH = P('LeftHand'), RF = P('RightForeArm'), RH = P('RightHand'); const sx = Math.sign(LA.x - RA.x) || 1;
+    const along = (a, b) => new THREE.Quaternion().setFromUnitVectors(V3(0, -1, 0), b.clone().sub(a).normalize());
+    sock.neck = { bone: 'Spine02', at: sp2.clone().lerp(nk, .35).add(V3(0, 0, dp)), size: SZ, inv: I('Spine02') };
+    sock.nape = { bone: 'neck', at: nk.clone().add(V3(0, .01, -dp * .7)), size: SZ, inv: I('neck') };
+    sock.back = { bone: 'Spine02', at: sp2.clone().add(V3(0, 0, -dp * .95)), size: SZ, inv: I('Spine02') };
+    sock.shoulderL = { bone: 'Spine02', at: LA.clone().add(V3(-sx * SZ * .04, SZ * .16, 0)), size: SZ, inv: I('Spine02') };
+    sock.shoulderR = { bone: 'Spine02', at: RA.clone().add(V3(sx * SZ * .04, SZ * .16, 0)), size: SZ, inv: I('Spine02') };
+    sock.wristL = { bone: 'LeftForeArm', at: LF.clone().lerp(LH, .78), size: SZ, inv: I('LeftForeArm'), q: along(LF, LH) };
+    sock.forearmR = { bone: 'RightForeArm', at: RF.clone().lerp(RH, .45).add(V3(0, 0, SZ * .1)), size: SZ, inv: I('RightForeArm'), q: along(RF, RH) };
+    sock.hipL = { bone: 'Hips', at: hp.clone().add(V3(sx * Math.max(span * .5, .13), -SZ * .05, dp * .35)), size: SZ, inv: I('Hips') };
+    sock.hipR = { bone: 'Hips', at: hp.clone().add(V3(-sx * Math.max(span * .5, .13), -SZ * .05, -dp * .45)), size: SZ, inv: I('Hips') };
   } catch { /* a rig without these bones just shows no gear */ }
   wrap.userData.sock = sock;
   gl.loadAsync(new URL(`assets/models/${RIG[kind][0].replace('_anim', '_cls')}.glb`, import.meta.url).href).then(c => { for (const a of c.animations) { tether(a); clips['c:' + a.name] = a; } }).catch(() => {});
@@ -149,7 +168,7 @@ function hero(body, trim, accent, extra, robot) {
   extra(g); g.userData.hero = 1; return g;
 }
 
-export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', seed = 1, places = {} }) {
+export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 'verdant', seed = 1, places = {} }) {
   const decorOf = id => DECORS[places[id] ? 'pl_' + places[id] : id] || (places[id] ? [] : DECORS.S); // a side place is dressed for what it is
   const pal = PAL[region] || PAL.verdant;
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -337,9 +356,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   // Put what the Seeker has equipped on the model: weapon in hand, head piece, body armor.
   function wear(o, gear) {
     const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null;
-    for (const id of [gear.weapon, gear.head, gear.body]) { const G0 = GEAR[id]; if (!G0) continue; const s = sock[G0[0] === 'hand' ? 'RightHand' : G0[0]]; if (!s) continue; if (G0[0] === 'hand') o.wclass = G0[1];
+    for (const id of [gear.weapon, gear.head, gear.body, gear.accessory, gear.implant, gear.device]) { const G0 = GEAR[id]; if (!G0) continue; const s = sock[G0[0] === 'hand' ? 'RightHand' : G0[0]]; if (!s) continue; if (G0[0] === 'hand') o.wclass = G0[1];
       loadGear(id).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(s.bone); if (!bone) return; const piece = m.clone(true); const k = G0[0] === 'hand' ? 1 : s.size * G0[1];
-        const W = new THREE.Matrix4().compose(s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, 0)), new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece);
+        const W = new THREE.Matrix4().compose(s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, G0[0] === 'hand' ? 0 : G0[3] || 0)), s.q || new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece);
         if (G0[0] === 'hand') o.weap = { piece, rest: piece.quaternion.clone(), axis: longAxis(m) }; }); }
   }
   // Point the held weapon's long axis where the body is facing, eased in and out over the strike.
@@ -415,7 +434,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
   function tileAt(e) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); if (!ray.ray.intersectPlane(plane, hitP)) return null; const y = Math.round(hitP.x / S + (GH - 1) / 2), x = Math.round((GW - 1) / 2 - hitP.z / S); return x >= 0 && y >= 0 && x < GW && y < GH ? [x, y] : null; }
   let down = null; renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
   function decorAt(e) { const b = renderer.domElement.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1), cam); const h = ray.intersectObjects(decor.children, true)[0]; if (!h) return null; let o = h.object; while (o.parent && o.parent !== decor) o = o.parent; return o; }
-  renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) return onTile(t[0], t[1]); const d = decorAt(e); if (d) { d.userData.poke = performance.now(); if (d.userData.light) d.userData.light.intensity = d.userData.light.intensity ? 0 : 16; else spark(d.position, pal.glow[d.userData.i % 3], 14); onDecor && onDecor(d.userData.decor, !!(d.userData.light && d.userData.light.intensity)); } });
+  renderer.domElement.addEventListener('pointerup', e => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 12) return; const t = tileAt(e); if (t) return onTile(t[0], t[1]); const d = decorAt(e); if (d) { d.userData.poke = performance.now(); if (d.userData.light) d.userData.light.intensity = d.userData.light.intensity ? 0 : 16; else spark(d.position, pal.glow[d.userData.i % 3], 14); onDecor && onDecor(d.userData.decor, !!(d.userData.light && d.userData.light.intensity)); } else onMiss && onMiss(); });
   const hover = new THREE.Mesh(new THREE.RingGeometry(.5 * S / 1.25, .56 * S / 1.25, 4), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .5, depthWrite: false })); hover.rotation.set(-Math.PI / 2, 0, Math.PI / 4); hover.position.y = .025; hover.visible = false; here.add(hover);
   renderer.domElement.addEventListener('pointermove', e => { const bb = renderer.domElement.getBoundingClientRect(); ptr.x = (e.clientX - bb.left) / bb.width - .5; ptr.y = (e.clientY - bb.top) / bb.height - .5; const t = tileAt(e); hover.visible = !!t; if (t) hover.position.set(wx(t[1]), .025, wz(t[0])); });
   renderer.domElement.addEventListener('pointerleave', () => { hover.visible = false; });
@@ -430,8 +449,9 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
 
   // Frame the whole board between the top bar and the bottom controls, whatever the window shape.
   const base = new THREE.Vector3(), pv = new THREE.Vector3(), ptr = { x: 0, y: 0 }, look = new THREE.Vector3(0, .3, 0);
+  let vw = 0, vh = 0, hudPx = 150, voNow = 0; // when zoomed in, the picture is lifted by half the HUD's height so the Seeker in focus is not under the action bar
   function resize() {
-    const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05;
+    const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05; cam.clearViewOffset(); vw = w; vh = h; hudPx = tall ? 330 : 150; voNow = 0;
     cam.fov = tall ? 44 : vista ? 46 : 30; cam.updateProjectionMatrix(); const far = vista && !tall; look.set(far ? -3 : 0, far ? 1.6 : .3, 0); const dir = (tall ? pv.set(0, 1.5, 1) : pv.set(1, vista ? .36 : .8, .1)).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
     const top = far ? .22 : 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 330 : 150) / h; // phones look down the hall; wide screens look across it, so both sides are seen in profile
     const pts = tall ? [[-hw, 0, hd], [hw, 0, hd], [-hw, 1.7, -hd], [hw, 1.7, -hd], [-hw, 0, -hd], [hw, 0, -hd]] : [[hw, 0, hd], [hw, 0, -hd], [-hw, 2.2, hd], [-hw, 3.4, -hd], [-hw, 0, hd], [-hw, 0, -hd]];
@@ -468,6 +488,7 @@ export function createScene(el, { onTile, onDecor, onHover, region = 'verdant', 
     for (const d of decor.children) { const p = d.userData.poke; if (p) { const k = (now - p) / 420; if (k >= 1) { d.userData.poke = 0; d.rotation.z = 0; } else d.rotation.z = Math.sin(k * Math.PI * 3) * .05 * (1 - k); } if (d.userData.light && d.userData.light.intensity) d.userData.light.intensity = 15 + Math.sin(t * 9 + d.userData.i) * 1.2; }
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
     zoomNow += (zoom - zoomNow) * .14; focNow.lerp(zoom < .98 ? focus : ORIGIN, .12);
+    { const vo = Math.round(hudPx * .5 * Math.min(1, (1 - zoomNow) * 2)); if (vw && vo !== voNow) { voNow = vo; if (vo) cam.setViewOffset(vw, vh, 0, vo, vw, vh); else cam.clearViewOffset(); } }
     cam.position.set(focNow.x + base.x * zoomNow + Math.sin(t * .17) * .22 * zoomNow + ptr.x * .7 * zoomNow, base.y * zoomNow + Math.sin(t * .23) * .1 - ptr.y * .3 * zoomNow + .3 * (1 - zoomNow), focNow.z + base.z * zoomNow + Math.cos(t * .13) * .12); cam.lookAt(focNow.x + look.x * zoomNow, look.y * zoomNow + .3 * (1 - zoomNow) + (1 - zoomNow) * .5, focNow.z);
     if (flight) { const k0 = Math.min(1, (now - flight.t0) / flight.ms); const k = k0 < .5 ? 4 * k0 * k0 * k0 : 1 - Math.pow(-2 * k0 + 2, 3) / 2; const liftY = -Math.sin(k0 * Math.PI) * 22;
       farG.position.copy(flight.from).addScaledVector(flight.delta, k); farG.position.y += liftY; here.position.copy(flight.delta).multiplyScalar(k); here.position.y += liftY; if (k0 >= 1) flight.done(); }
