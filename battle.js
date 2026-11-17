@@ -59,6 +59,10 @@ export function mountBattle(root, onFinish) {
   const board = $('.board', root);
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!DECOR[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
     onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && DECOR[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: spec.region, seed: spec.seed });
+  // which far place the party is standing in: the start, one of the two doors, or the last room
+  const siteNow = () => st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
+  if (location.hostname === 'localhost') window.__sc = sc; // local testing hook
+  sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room' }); sc.place(siteNow());
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
   const gearOf = u => { const sk = Object.values(G.state.seekers).find(s => s.arch === u.kind); const g = {}; if (sk) for (const it of C.seekerItems(G.state, sk)) { const sl = C.itemDef(it).slot; if (sl === 'weapon' || sl === 'head' || sl === 'body') g[sl] = it.base; } return g; };
@@ -252,13 +256,16 @@ export function mountBattle(root, onFinish) {
   async function send(a) {
     if (busy || st.outcome) return;
     const before = st.units.map(u => ({ id: u.id, x: u.x, y: u.y, hp: u.hp, max: u.max })); let ev;
+    const roomWas = st.roomIdx;
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log }));
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
-    await play(ev, before); busy = false;
+    await play(ev, before);
+    if (!st.outcome && st.roomIdx !== roomWas) { sc.sync([], []); sc.beacons([]); await sc.travel(siteNow()); }
+    busy = false;
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();
   }

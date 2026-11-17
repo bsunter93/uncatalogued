@@ -468,3 +468,10 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 /* One line under the pointer: what clicking here would do, or why it cannot. */
 .tiletip { position: absolute; z-index: 12; transform: translate(-50%, 14px); pointer-events: none; font: 600 12px var(--body); padding: 4px 10px; border-radius: 4px; background: rgba(14, 9, 20, .92); border: 1px solid #6b5526; color: #f3ead6; white-space: nowrap; box-shadow: 0 4px 14px rgba(0, 0, 0, .5); max-width: 78vw; overflow: hidden; text-overflow: ellipsis; }
 .tiletip.go { border-color: #5fd6a0; color: #c9f7e2; } .tiletip.atk { border-color: #f0624a; color: #ffd0c6; } .tiletip.no { border-color: #8a8f9a; color: #c7c9d1; } .tiletip.far { border-color: #e8c36a; color: #f7e3b0; }
+
+/* Far places you can travel to, named where they stand. */
+.sitetag { position: absolute; transform: translate(-50%, -50%); font: italic 500 15px var(--display); color: #fff6dc; text-shadow: 0 1px 8px rgba(10, 20, 50, .9), 0 0 2px rgba(10, 20, 50, .9); white-space: nowrap; pointer-events: none; }
+.sitetag::after { content: ""; display: block; width: 1px; height: 26px; margin: 3px auto 0; background: linear-gradient(#fff6dc, transparent); }
+.labels { transition: opacity .3s; }
+.sitetag { background: rgba(14, 9, 20, .62); border: 1px solid rgba(232, 195, 106, .45); padding: 2px 10px 3px; border-radius: 3px; font-size: 14px; }
+.sitetag::after { position: absolute; left: 50%; top: 100%; margin: 0; height: 22px; background: linear-gradient(rgba(232, 195, 106, .8), transparent); }
