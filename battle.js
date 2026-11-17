@@ -89,11 +89,13 @@ export function mountBattle(root, onFinish) {
   const leave = () => { snd.stop(); sc.dispose(); };
   const board = $('.board', root);
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onDecor: (k, lit) => { if (!LORE[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
-    onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed });
+    onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed, places: { P0: st.places[0], P1: st.places[1] } });
   // which far place the party is standing in: the start, one of the two doors, or the last room
-  const siteNow = () => st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
+  const siteNow = () => st.side ? 'P' + st.roomIdx : st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
   if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow(), tile: (x, y) => tileClick(x, y) }; } // local testing hooks
-  sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room' }); sc.place(siteNow());
+  const cap = t => t ? t[0].toUpperCase() + t.slice(1) : ''; const placeTag = i => { const id = st.places[i]; if (!id) return ''; const W0 = D.WONDERS[id]; return Object.values(st.wandered).includes(id) ? W0.name : cap(W0.seen); }; // a far place is only named once the party has been
+  const nameSites = () => sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room', P0: placeTag(0), P1: placeTag(1) });
+  nameSites(); sc.place(siteNow());
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
   const fixInfo = p => p.kind !== 'fixture' ? [] : knownSet()[spec.region + ':' + p.id] ? ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id]) : ((CWF && UNKNOWN_CW[p.id]) || UNKNOWN[p.id]);
@@ -109,12 +111,12 @@ export function mountBattle(root, onFinish) {
     return `${s.length ? `<div class="sts">${s.join('')}</div>` : ''}${u.side === 's' ? `<div class="ap">${'<i></i>'.repeat(Math.max(0, u.ap))}</div>` : ''}<div class="hp ${h ? 'hostile' : ''}"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><b style="width:${Math.min(100, (u.shield || 0) / u.max * 100)}%"></b></div>`;
   }
   function sync() {
-    if (shownRoom !== st.roomIdx) { shownRoom = st.roomIdx; sel = null; mode = null; info = null; sc.setRoom(st); }
+    const rk = st.roomIdx + (st.side ? 's' : ''); if (shownRoom !== rk) { shownRoom = rk; sel = null; mode = null; info = null; sc.setRoom(st); }
     if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
     const m = targets();
     sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, gone: !live(u), label: live(u) ? label(u) : '',
       ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
-      st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'fixture' ? 'fx_' + p.id : p.kind === 'flora' ? p.id : p.kind, lit: !!p.lit, spent: !!p.spent, use: !!m.get(p.x + ',' + p.y) && !mode }))
+      st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'fixture' ? 'fx_' + p.id : p.kind === 'flora' ? p.id : p.kind === 'find' ? D.FINDS[p.id].model : p.kind, lit: !!p.lit, spent: !!p.spent, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
     marks(m); drawLines(); head(); actions(); cards(); panel(); hint();
     const fu = unit(sel); if (live(fu) && focusOn !== sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx) { const first = !focusOn; focusOn = sel + ':' + fu.x + ',' + fu.y + ':' + st.roomIdx; sc.focus(fu.x, fu.y, first); }
@@ -185,7 +187,8 @@ export function mountBattle(root, onFinish) {
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0 && !passed.has(x.id));
     const calm = C.exploring(st);
     if (live(u) && !calm) { const others = mine().some(x => x !== u && live(x) && x.ap > 0 && !passed.has(x.id)); own.push(btn('flow', 'end', 'End turn', others ? `${esc(u.name)} is done` : 'last Seeker: creatures act', `data-act="pass" title="Finish ${esc(u.name)}'s turn and hand over to the next Seeker" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${u.ap <= 0 ? 'ready' : ''} `)); }
-    if (adv) b.push(btn('flow', 'move_on', st.roomIdx >= 2 ? 'Extract' : 'Move on', st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
+    const far = C.exploring(st) ? C.placeFor(st) : null; if (far) b.push(btn('lore', 'study', 'Wander off', 'to ' + D.WONDERS[far].seen, `data-act="wander" title="Leave the hall for a while and go and look. You can come back." ${busy ? 'disabled' : ''}`));
+    if (adv) b.push(btn('flow', 'move_on', st.side ? 'Head back' : st.roomIdx >= 2 ? 'Extract' : 'Move on', st.side ? 'to the hall you left' : st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
     b.push(btn('flow', 'end', calm ? 'Wait' : 'End round', calm ? 'watch the hall move' : 'all Seekers done', `data-act="end" title="${calm ? 'Stay put for a moment and watch' : 'End the turn for the whole party now'}" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
     // two framed groups: what only this Seeker can do, and what anyone can do
     const pips = live(u) && !calm ? `<span class="pips" title="Actions left this turn">${'<i class="on"></i>'.repeat(Math.max(0, u.ap))}${'<i></i>'.repeat(Math.max(0, (u.apMax || 2) - u.ap))}</span>` : '';
@@ -219,8 +222,8 @@ export function mountBattle(root, onFinish) {
     } else if (info2?.d) {
       const info = info2; const [nm, tag, txt] = LORE[info.d]; h = `<p class="label">In the hall · ${esc(tag)}</p><h4>${esc(nm)}</h4><p style="margin-top:8px;font-size:13.5px">${esc(txt)}</p>${info.d === 'lamp' ? `<p class="dim" style="font-size:13px;margin-top:6px">${info.lit ? 'Lit.' : 'Out.'} Tap it again to change it.</p>` : ''}`;
     } else if (p) {
-      const FX = fixInfo(p); const F = p.kind === 'fixture' ? { name: FX[0], blurb: FX[2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
-      h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + FX[1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
+      const FX = fixInfo(p); const F = p.kind === 'fixture' ? { name: FX[0], blurb: FX[2] + (p.id === 'lamp' ? (p.lit ? ' It is lit.' : ' It is dark.') : p.spent ? ' It is spent.' : '') } : p.kind === 'flora' ? D.FLORA[p.id] : p.kind === 'wonder' ? D.WONDERS[p.id] : p.kind === 'find' ? { name: D.FINDS[p.id].name, blurb: D.FINDS[p.id].look + ' Nobody has written down what it does.' } : { name: p.obj ? 'The sealed case' : 'A sealed case', blurb: 'Specimen case, lead seal intact. Opened at extraction.' };
+      h = `<div class="plate">${art(p.id)}</div><p class="label">${p.kind === 'fixture' ? 'In the hall · ' + FX[1] : p.kind === 'wonder' ? 'Wonder' : p.kind === 'flora' ? 'Flora' : p.kind === 'find' ? 'Unrecorded' : 'Cache'}</p><h4>${esc(F.name)}</h4>${F.latin ? `<p class="lat">${esc(F.latin)}</p>` : ''}<p style="margin-top:8px;font-size:13.5px">${esc(F.blurb)}</p>${F.effect ? `<p style="margin-top:6px;font-size:13.5px;color:var(--gilt)">${esc(F.effect)}</p>` : ''}<p class="dim" style="font-size:13px;margin-top:6px">${p.walk ? 'Step on it, or stand beside it and tap it to cut it free.' : 'Stand a Seeker beside it and tap it. 1 action.'}</p>`;
     }
     if (h && pinned) h = '<button class="link x" data-act="closeinfo" aria-label="Close">Close</button>' + h; el.classList.toggle('hovering', !pinned);
     el.innerHTML = h; el.hidden = !h;
@@ -256,7 +259,7 @@ export function mountBattle(root, onFinish) {
       if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
     } else if (o && o.side === 's') { txt = o.id === sel ? `${o.name} · selected` : `Select ${o.name}`; }
     else if (st.room.rock[y * C.W + x]) { txt = 'Blocked: boulders'; cls = 'no'; }
-    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'fixture' && !knownSet()[spec.region + ':' + p.id] ? 'See what it does' : p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'}${C.exploring(st) ? '' : ' · 1 action'}` : near ? 'No actions left this turn' : p.walk ? 'Click to walk to it' : 'Click to walk up to it'; cls = a ? 'go' : 'far'; }
+    else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'find' || (p.kind === 'fixture' && !knownSet()[spec.region + ':' + p.id]) ? 'See what it does' : p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : 'Take'}${C.exploring(st) ? '' : ' · 1 action'}` : near ? 'No actions left this turn' : p.walk ? 'Click to walk to it' : 'Click to walk up to it'; cls = a ? 'go' : 'far'; }
     else if (!live(me)) txt = '';
     else if (mode) { txt = a ? `${mode.k === 'abil' ? D.ABILITIES[mode.id].name : 'Use device'} here` : 'Out of range'; cls = a ? 'go' : 'no'; }
     else if (a && a.t === 'move') { const d = C.moveTiles(st, me).get(y * C.W + x); txt = `Move here · ${d} step${d === 1 ? '' : 's'} · 1 action`; cls = 'go'; }
@@ -276,6 +279,8 @@ export function mountBattle(root, onFinish) {
       if (e.e === 'phase' && e.free) continue;
       if (e.e === 'phase') push(e.who === 'c' ? `Round ${S.turn}: the Cabinet moves` : `Round ${S.turn}: your turn`, 'head');
       else if (e.e === 'room') push(`Room ${e.idx + 1}`, 'head');
+      else if (e.e === 'side') push(e.id ? 'The party wanders off to ' + D.WONDERS[e.id].name : 'The party heads back to the hall', 'head');
+      else if (e.e === 'find') { const F0 = D.FINDS[S.room.props.find(q => q.pid === e.pid)?.id]; push(who(e.by) + ' tries ' + (F0 ? F0.name.toLowerCase() : 'something') + '. ' + (e.what === 'wake' ? 'Something wakes.' : F0 ? F0.after : ''), 'ally did'); }
       else if (e.e === 'move') push(`${who(e.id)} ${e.blink ? 'blinks' : e.shove ? 'is thrown' : 'moves'} ${e.path.length} tile${e.path.length === 1 ? '' : 's'}.`, cls(e.id));
       else if (e.e === 'hit') push(e.from && !e.dot ? `${who(e.from)} hits ${who(e.id)} for ${e.n}${e.crit ? ', a critical hit' : ''}${e.eff === 'weak' ? ' (it is weak to that weapon)' : e.eff === 'resist' ? ' (it resists that weapon)' : ''}.` : `${who(e.id)} takes ${e.n}${e.dot && e.dot !== 'dot' ? ' from ' + e.dot : ' damage'}.`, cls(e.from && !e.dot ? e.from : e.id));
       else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
@@ -309,6 +314,8 @@ export function mountBattle(root, onFinish) {
     for (const e of ev) {
       if (e.e === 'text' && /^(Witnessed|Notices)/.test(e.msg)) { const v0 = at(e.id); sc.focus(v0.x, v0.y); await sleep(350); }
       if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
+      if (e.e === 'side') { banner(e.id ? D.WONDERS[e.id].name : 'Back in the hall'); snd.room(); return; }
+      if (e.e === 'find') { const F0 = D.FINDS[st.room.props.find(q => q.pid === e.pid)?.id] || {}; const res = { notes: 'Field notes on the ' + (D.SPECIES[e.kind]?.name || 'residents') + ': +3.', case: 'A sealed case comes out with you.', mats: 'Two of ' + (D.MATERIALS[e.mat]?.name || 'something useful') + '.', mend: 'The whole party is restored.', lore: 'Worth writing down. Experience for everyone.', wake: 'It was not empty.' }[e.what]; float(e.x, e.y, e.what === 'wake' ? 'Something wakes' : 'Found', e.what === 'wake' ? 'txt why' : 'study'); sc.burst(e.x, e.y, e.what === 'wake' ? 0xff5a4a : 0xffd05a); e.what === 'wake' ? snd.warn() : snd.pick(); toast((F0.name || 'It') + ': ' + (e.what === 'wake' ? '' : (F0.after || '') + ' ') + res, e.what === 'wake' ? '' : 'good'); await sleep(420); continue; }
       if (e.e === 'move' && (drift || e.trail)) { const v = at(e.id); sc.move(e.id, e.path, e.trail ? 115 : 190); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; continue; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
       else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : 260); }
@@ -332,7 +339,7 @@ export function mountBattle(root, onFinish) {
   async function send(a) {
     if (busy || st.outcome) return;
     const before = st.units.map(u => ({ id: u.id, x: u.x, y: u.y, hp: u.hp, max: u.max })); let ev;
-    const roomWas = st.roomIdx;
+    const roomWas = st.roomIdx + (st.side ? 's' : '');
     const wasCalm = C.exploring(st);
     const used = a.t === 'use' ? st.room.props.find(q => q.pid === a.p) : null;
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
@@ -344,7 +351,7 @@ export function mountBattle(root, onFinish) {
     await play(ev, before);
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
-    if (!st.outcome && st.roomIdx !== roomWas) { sc.sync([], []); sc.beacons([]); await sc.travel(siteNow()); }
+    if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); }
     busy = false;
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();
@@ -387,7 +394,8 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; sync(); return; }
     if (b.dataset.act === 'end') return send({ t: 'end' });
     if (b.dataset.act === 'pass') { passed.add(sel); const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (!n) return send({ t: 'end' }); sel = n.id; mode = null; info = null; armed = null; sc.focus(n.x, n.y); return sync(); }
-    if (b.dataset.act === 'next') return st.roomIdx === 0 ? choosePath() : send({ t: 'next' });
+    if (b.dataset.act === 'wander') return send({ t: 'wander' });
+    if (b.dataset.act === 'next') return st.roomIdx === 0 && !st.side ? choosePath() : send({ t: 'next' });
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
   };
   // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.

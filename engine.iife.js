@@ -58,6 +58,7 @@ var UncEngine = (() => {
     mkRng: () => mkRng,
     moveTiles: () => moveTiles,
     newPlayer: () => newPlayer,
+    placeFor: () => placeFor,
     plan: () => plan,
     replay: () => replay,
     resonancesFor: () => resonancesFor,
@@ -90,11 +91,13 @@ var UncEngine = (() => {
     DISMANTLE: () => DISMANTLE,
     FAMILIES: () => FAMILIES,
     FAMILY_NAME: () => FAMILY_NAME,
+    FINDS: () => FINDS,
     FLORA: () => FLORA,
     LEVEL_CAP: () => LEVEL_CAP,
     MATERIALS: () => MATERIALS,
     MILESTONES: () => MILESTONES,
     MOD_TEXT: () => MOD_TEXT,
+    PLACES: () => PLACES,
     RARITIES: () => RARITIES,
     RARITY_NAME: () => RARITY_NAME,
     RARITY_TABLE: () => RARITY_TABLE,
@@ -398,7 +401,14 @@ var UncEngine = (() => {
     growing_fossil: { name: "The Growing Fossil", blurb: "Stone ribs, a hand longer than last season. The plinth has cracked to make room.", effect: "The first creature to die in this room gets back up at half health." },
     counting_clock: { name: "The Clock That Counts Up", blurb: "No hands. A number. The number is very large and it has just changed.", effect: "Time runs quick in here. Cooldowns recover twice as fast." },
     remembering_room: { name: "The Room That Remembers", blurb: "Your footprints are already on the floor, a little ahead of you.", effect: "The floor knows where you are going. Everyone moves one tile farther." },
-    painted_door: { name: "A Door Painted on Nothing", blurb: "There is no wall behind it. It is locked from the other side.", effect: "Recording it shakes a sealed case loose from somewhere." }
+    painted_door: { name: "A Door Painted on Nothing", blurb: "There is no wall behind it. It is locked from the other side.", effect: "Recording it shakes a sealed case loose from somewhere." },
+    // Side places: off the way to the gate. Each can be seen from one hall and walked to. `seen` is how it looks from there.
+    lit_knoll: { place: true, name: "The Lit Knoll", seen: "a light on the hill", blurb: "A lamp burning on a hill nobody has climbed. The oil is fresh.", effect: "Somebody keeps this lamp. They are not here." },
+    hollow_giant: { place: true, name: "The Hollow Giant", seen: "a door in a great tree", blurb: "A tree wide as a gallery, with a door cut in it at Seeker height. The hinges are new.", effect: "Whoever cut the door has been living in the tree." },
+    standing_glass: { place: true, name: "The Standing Glass", seen: "something glinting in the wet ground", blurb: "A ring of empty plinths in standing water, each with a glass dome that was never broken.", effect: "The domes were never filled. The labels were written first." },
+    signal_mast: { place: true, name: "The Signal Mast", seen: "a mast blinking on the ridge", blurb: "A brass mast that blinks a pattern. The pattern is longer every time it repeats.", effect: "It is sending to something. Nothing has answered yet." },
+    cold_foundry: { place: true, name: "The Cold Foundry", seen: "a chimney with no smoke", blurb: "A foundry the size of a chapel, cold for a long time. The moulds are still set out.", effect: "The moulds are for parts of something much larger than anything in the Wilds." },
+    wound_orchard: { place: true, name: "The Wound Orchard", seen: "rows of something planted", blurb: "Brass saplings in straight rows, each with a key in its trunk. Some of the keys are still turning.", effect: "Somebody winds them. The earliest rows have run down." }
   };
   var MATERIALS = {
     thorn_resin: { name: "Thorn Resin", fam: "organic", blurb: "Sets harder than the thorn it came from." },
@@ -704,9 +714,30 @@ var UncEngine = (() => {
     { id: "eye", name: "The complete Galleries", need: "Observe every Verdant species and record its flora", reward: "Singular: The Collector's Eye", test: (c) => [c.verdantDone, c.verdantAll] }
   ];
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var PLACES = { verdant: ["lit_knoll", "hollow_giant", "standing_glass"], clockwork: ["signal_mast", "cold_foundry", "wound_orchard"] };
+  var FINDS = {
+    keepers_log: { place: "lit_knoll", name: "A keeper's ledger", look: "Under an oilcloth by the lamp post. The last page is still damp.", model: "survey", does: "notes", after: "Tallies of what passed the hill each night, in a careful hand." },
+    buried_tin: { place: "lit_knoll", name: "A buried tin", look: "Sunk to the lid beside the path. It rattles when the ground is stamped.", model: "cache", does: "case", after: "A sealed case, packed in straw." },
+    warm_stone: { place: "lit_knoll", name: "A warm stone", look: "The moss is worn off the top, as if something sleeps on it.", model: "lantern_moss", does: "mend", after: "The warmth goes right through. Everyone sits a while." },
+    woven_nest: { place: "hollow_giant", name: "A woven nest", look: "Wider than Hobb is tall, and lined with something that catches the light.", model: "heartfruit", does: "mats", after: "The lining comes away in sheets." },
+    carved_shelf: { place: "hollow_giant", name: "A carved shelf", look: "Cut into the heartwood. Rows of small things under dust sheets.", model: "crates", does: "case", after: "One of the things under the sheets is a sealed case." },
+    bark_ledger: { place: "hollow_giant", name: "Marks in the bark", look: "Hundreds of tallies cut at different heights. The lowest are the oldest.", model: "plinth", does: "notes", after: "A count of something, kept for years." },
+    empty_dome: { place: "standing_glass", name: "An unbroken dome", look: "Nothing inside. The label on the plinth is already written.", model: "case_broken", does: "lore", after: "The label names something that has not been found yet." },
+    drowned_case: { place: "standing_glass", name: "A drowned crate", look: "Just under the surface, lashed shut. The rope is recent.", model: "cache", does: "case", after: "A sealed case, bone dry inside." },
+    still_reed: { place: "standing_glass", name: "A reed that does not move", look: "The others bend in the wind. This one is listening.", model: "mirror_reed", does: "notes", after: "It turns to follow whatever comes near. You learn what it has been following." },
+    mast_log: { place: "signal_mast", name: "A punched tape", look: "Spooling out of the mast foot into a heap. Still coming.", model: "survey", does: "notes", after: "A record of everything that has walked under the mast." },
+    relay_box: { place: "signal_mast", name: "A sealed relay box", look: "Bolted to the base. Something inside is ticking evenly.", model: "cache", does: "case", after: "A sealed case with a clock packed round it." },
+    earth_rod: { place: "signal_mast", name: "A humming rod", look: "Driven into the ground. The air round it tastes of metal.", model: "lantern_moss", does: "mend", after: "Every joint and ache settles at once." },
+    set_mould: { place: "cold_foundry", name: "A mould left set", look: "The casting was never broken out. It is the size of a door.", model: "plinth", does: "mats", after: "The casting splits cleanly into usable stock." },
+    foremans_desk: { place: "cold_foundry", name: "A foreman's desk", look: "Drawers locked, one key left in the wrong lock.", model: "crates", does: "case", after: "The bottom drawer holds a sealed case." },
+    pour_book: { place: "cold_foundry", name: "A pour book", look: "Every pour dated and signed. The last entry has no signature.", model: "survey", does: "lore", after: 'The last pour was for something called "the first of the large ones".' },
+    run_down_tree: { place: "wound_orchard", name: "A run-down sapling", look: "Its key has stopped. It would take both hands to turn.", model: "heartfruit", does: "mats", after: "It sheds a handful of small parts as it winds." },
+    winders_bag: { place: "wound_orchard", name: "A winder's satchel", look: "Hung on a branch at head height. Left, not lost.", model: "cache", does: "case", after: "A sealed case and a spare key." },
+    row_marker: { place: "wound_orchard", name: "A row marker", look: "A brass stake with a number and a date. The date is tomorrow.", model: "plinth", does: "notes", after: "The stake lists what the row is meant to become." }
+  };
 
   // core.js
-  var VERSION = 10;
+  var VERSION = 11;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -995,6 +1026,17 @@ var UncEngine = (() => {
       kills3: {},
       res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false }
     };
+    {
+      const pr = mkRng((spec.seed ^ 20958) >>> 0 || 7);
+      const pl = (PLACES[spec.region] || []).slice();
+      for (let i = pl.length - 1; i > 0; i--) {
+        const j = pr.next() % (i + 1);
+        [pl[i], pl[j]] = [pl[j], pl[i]];
+      }
+      st.places = pl;
+      st.side = null;
+      st.wandered = {};
+    }
     for (const sh of spec.squad) {
       st.units.push({ id: st.uid++, side: "s", kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
     }
@@ -1013,6 +1055,66 @@ var UncEngine = (() => {
     return !!(p && !p.walk);
   }
   var free = (st, x, y) => !solid(st, x, y) && !unitAt(st, x, y);
+  function placeFor(st) {
+    return !st.outcome && !st.side && st.roomIdx >= 0 && st.roomIdx < 2 && !st.wandered[st.roomIdx] ? st.places[st.roomIdx] || null : null;
+  }
+  function enterSide(st, id, ev) {
+    const r = R(st);
+    const reg = st.spec.region;
+    const sk = seekers(st);
+    st.side = { id, room: st.room, others: st.units.filter((u) => u.side !== "s"), at: sk.map((u) => [u.id, u.x, u.y]), turn: st.turn };
+    st.wandered[st.roomIdx] = id;
+    st.units = sk.slice();
+    const room = st.room = { type: "side", place: id, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
+    for (let i = 0; i < 6; i++) room.rock[K(r.range(3, W - 1), r.int(H))] = 1;
+    sk.forEach((u, i) => {
+      u.x = 0;
+      u.y = i % 4 + 3;
+      u.ap = 2;
+    });
+    const spot = (minX, maxX = W - 1) => {
+      for (let i = 0; i < 200; i++) {
+        const x = r.range(minX, maxX), y = r.int(H);
+        if (free(st, x, y)) return [x, y];
+      }
+      return null;
+    };
+    const c0 = spot(8, 11);
+    if (c0) room.props.push({ pid: room.pid++, kind: "wonder", id, x: c0[0], y: c0[1], place: true });
+    const finds = Object.keys(FINDS).filter((k) => FINDS[k].place === id);
+    const risk = r.int(finds.length), wake = r.pct(40);
+    finds.forEach((f, i) => {
+      const p = spot(4, 12);
+      if (p) room.props.push({ pid: room.pid++, kind: "find", id: f, x: p[0], y: p[1], wake: wake && i === risk });
+    });
+    for (let i = 0; i < 2; i++) {
+      const p = spot(3);
+      if (p) room.props.push({ pid: room.pid++, kind: "flora", id: r.pick(REGIONS[reg].flora.filter((f) => f !== "snare_vine")), x: p[0], y: p[1] });
+    }
+    for (const k of AMBIENT[reg] || []) if (r.pct(60)) {
+      const p = spot(6);
+      if (p) spawn(st, k, p[0], p[1], r, ev, true);
+    }
+    st.turn = 1;
+    ev.push({ e: "side", id });
+  }
+  function leaveSide(st, ev) {
+    const b = st.side;
+    for (const c of st.room.corpses) addMat(st, c.mat, c.n);
+    st.room = b.room;
+    st.units = seekers(st).concat(b.others);
+    for (const [id, x, y] of b.at) {
+      const u = st.units.find((q) => q.id === id);
+      if (u) {
+        u.x = x;
+        u.y = y;
+        u.ap = 2;
+      }
+    }
+    st.turn = b.turn;
+    st.side = null;
+    ev.push({ e: "side", id: null });
+  }
   function enterRoom(st, type, ev) {
     const r = R(st);
     const sp = st.spec;
@@ -2042,7 +2144,7 @@ var UncEngine = (() => {
     }
   }
   function apply(st, a) {
-    const calm = exploring(st) && a.t !== "end" && a.t !== "next" && a.t !== "abandon";
+    const calm = exploring(st) && a.t !== "end" && a.t !== "next" && a.t !== "abandon" && a.t !== "wander";
     const ev = applyAction(st, a);
     if (!st.outcome) notice(st, ev);
     if (calm && exploring(st)) {
@@ -2063,8 +2165,19 @@ var UncEngine = (() => {
       endTurn(st, ev);
       return ev;
     }
+    if (a.t === "wander") {
+      const id = placeFor(st);
+      if (!id) bad("There is nowhere to wander to from here.");
+      if (!exploring(st)) bad("Not while something is hunting you.");
+      enterSide(st, id, ev);
+      return ev;
+    }
     if (a.t === "next") {
       if (!canAdvance(st)) bad("Something here is still hunting you.");
+      if (st.side) {
+        leaveSide(st, ev);
+        return ev;
+      }
       for (const c of st.room.corpses) addMat(st, c.mat, c.n);
       st.res.rooms++;
       st.res.xp += 15;
@@ -2179,6 +2292,49 @@ var UncEngine = (() => {
                 c.noLoot = true;
                 put = true;
               }
+            }
+          }
+        }
+        return ev;
+      }
+      if (p.kind === "find") {
+        need(1);
+        u.ap--;
+        p.done = true;
+        const F = FINDS[p.id];
+        const reg = st.spec.region;
+        const r = R(st);
+        let what = p.wake ? "wake" : F.does;
+        if (what === "notes") {
+          const k = r.pick(REGIONS[reg].fauna.filter((f) => !SPECIES[f].boss));
+          st.res.seen[k] = 1;
+          st.res.study[k] = (st.res.study[k] || 0) + 3;
+          st.res.xp += 10;
+          ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, kind: k, by: u.id });
+        } else if (what === "case") {
+          st.res.cases.push("cache");
+          st.res.xp += 10;
+          ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, by: u.id });
+        } else if (what === "mats") {
+          const m = SPECIES[REGIONS[reg].observe].mat;
+          addMat(st, m, 2);
+          st.res.xp += 6;
+          ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, mat: m, by: u.id });
+        } else if (what === "mend") {
+          ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, by: u.id });
+          for (const s of seekers(st)) if (alive(s)) heal(st, s, s.max, ev);
+        } else if (what === "lore") {
+          st.res.xp += 25;
+          ev.push({ e: "find", pid: p.pid, what, x: p.x, y: p.y, by: u.id });
+        } else {
+          ev.push({ e: "find", pid: p.pid, what: "wake", x: p.x, y: p.y, by: u.id });
+          const k = reg === "clockwork" ? "mite" : "thornling";
+          let n = 0;
+          for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1]]) {
+            const x = p.x + dx, y = p.y + dy;
+            if (n < 2 && free(st, x, y)) {
+              spawn(st, k, x, y, r, ev, false);
+              n++;
             }
           }
         }

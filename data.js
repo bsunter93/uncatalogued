@@ -101,6 +101,13 @@ export const WONDERS = {
   counting_clock: { name: 'The Clock That Counts Up', blurb: 'No hands. A number. The number is very large and it has just changed.', effect: 'Time runs quick in here. Cooldowns recover twice as fast.' },
   remembering_room: { name: 'The Room That Remembers', blurb: 'Your footprints are already on the floor, a little ahead of you.', effect: 'The floor knows where you are going. Everyone moves one tile farther.' },
   painted_door: { name: 'A Door Painted on Nothing', blurb: 'There is no wall behind it. It is locked from the other side.', effect: 'Recording it shakes a sealed case loose from somewhere.' },
+  // Side places: off the way to the gate. Each can be seen from one hall and walked to. `seen` is how it looks from there.
+  lit_knoll: { place: true, name: 'The Lit Knoll', seen: 'a light on the hill', blurb: 'A lamp burning on a hill nobody has climbed. The oil is fresh.', effect: 'Somebody keeps this lamp. They are not here.' },
+  hollow_giant: { place: true, name: 'The Hollow Giant', seen: 'a door in a great tree', blurb: 'A tree wide as a gallery, with a door cut in it at Seeker height. The hinges are new.', effect: 'Whoever cut the door has been living in the tree.' },
+  standing_glass: { place: true, name: 'The Standing Glass', seen: 'something glinting in the wet ground', blurb: 'A ring of empty plinths in standing water, each with a glass dome that was never broken.', effect: 'The domes were never filled. The labels were written first.' },
+  signal_mast: { place: true, name: 'The Signal Mast', seen: 'a mast blinking on the ridge', blurb: 'A brass mast that blinks a pattern. The pattern is longer every time it repeats.', effect: 'It is sending to something. Nothing has answered yet.' },
+  cold_foundry: { place: true, name: 'The Cold Foundry', seen: 'a chimney with no smoke', blurb: 'A foundry the size of a chapel, cold for a long time. The moulds are still set out.', effect: 'The moulds are for parts of something much larger than anything in the Wilds.' },
+  wound_orchard: { place: true, name: 'The Wound Orchard', seen: 'rows of something planted', blurb: 'Brass saplings in straight rows, each with a key in its trunk. Some of the keys are still turning.', effect: 'Somebody winds them. The earliest rows have run down.' },
 };
 
 export const MATERIALS = {
@@ -342,3 +349,27 @@ export const MILESTONES = [
 ];
 
 export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// Which side places a region has, and what stands in each. Nobody knows what a find does until it is tried.
+// does: notes (field notes on something that lives here), case (a sealed case), mats, mend (the party is restored), lore (experience).
+export const PLACES = { verdant: ['lit_knoll', 'hollow_giant', 'standing_glass'], clockwork: ['signal_mast', 'cold_foundry', 'wound_orchard'] };
+export const FINDS = {
+  keepers_log: { place: 'lit_knoll', name: "A keeper's ledger", look: 'Under an oilcloth by the lamp post. The last page is still damp.', model: 'survey', does: 'notes', after: 'Tallies of what passed the hill each night, in a careful hand.' },
+  buried_tin: { place: 'lit_knoll', name: 'A buried tin', look: 'Sunk to the lid beside the path. It rattles when the ground is stamped.', model: 'cache', does: 'case', after: 'A sealed case, packed in straw.' },
+  warm_stone: { place: 'lit_knoll', name: 'A warm stone', look: 'The moss is worn off the top, as if something sleeps on it.', model: 'lantern_moss', does: 'mend', after: 'The warmth goes right through. Everyone sits a while.' },
+  woven_nest: { place: 'hollow_giant', name: 'A woven nest', look: 'Wider than Hobb is tall, and lined with something that catches the light.', model: 'heartfruit', does: 'mats', after: 'The lining comes away in sheets.' },
+  carved_shelf: { place: 'hollow_giant', name: 'A carved shelf', look: 'Cut into the heartwood. Rows of small things under dust sheets.', model: 'crates', does: 'case', after: 'One of the things under the sheets is a sealed case.' },
+  bark_ledger: { place: 'hollow_giant', name: 'Marks in the bark', look: 'Hundreds of tallies cut at different heights. The lowest are the oldest.', model: 'plinth', does: 'notes', after: 'A count of something, kept for years.' },
+  empty_dome: { place: 'standing_glass', name: 'An unbroken dome', look: 'Nothing inside. The label on the plinth is already written.', model: 'case_broken', does: 'lore', after: 'The label names something that has not been found yet.' },
+  drowned_case: { place: 'standing_glass', name: 'A drowned crate', look: 'Just under the surface, lashed shut. The rope is recent.', model: 'cache', does: 'case', after: 'A sealed case, bone dry inside.' },
+  still_reed: { place: 'standing_glass', name: 'A reed that does not move', look: 'The others bend in the wind. This one is listening.', model: 'mirror_reed', does: 'notes', after: 'It turns to follow whatever comes near. You learn what it has been following.' },
+  mast_log: { place: 'signal_mast', name: 'A punched tape', look: 'Spooling out of the mast foot into a heap. Still coming.', model: 'survey', does: 'notes', after: 'A record of everything that has walked under the mast.' },
+  relay_box: { place: 'signal_mast', name: 'A sealed relay box', look: 'Bolted to the base. Something inside is ticking evenly.', model: 'cache', does: 'case', after: 'A sealed case with a clock packed round it.' },
+  earth_rod: { place: 'signal_mast', name: 'A humming rod', look: 'Driven into the ground. The air round it tastes of metal.', model: 'lantern_moss', does: 'mend', after: 'Every joint and ache settles at once.' },
+  set_mould: { place: 'cold_foundry', name: 'A mould left set', look: 'The casting was never broken out. It is the size of a door.', model: 'plinth', does: 'mats', after: 'The casting splits cleanly into usable stock.' },
+  foremans_desk: { place: 'cold_foundry', name: "A foreman's desk", look: 'Drawers locked, one key left in the wrong lock.', model: 'crates', does: 'case', after: 'The bottom drawer holds a sealed case.' },
+  pour_book: { place: 'cold_foundry', name: 'A pour book', look: 'Every pour dated and signed. The last entry has no signature.', model: 'survey', does: 'lore', after: 'The last pour was for something called "the first of the large ones".' },
+  run_down_tree: { place: 'wound_orchard', name: 'A run-down sapling', look: 'Its key has stopped. It would take both hands to turn.', model: 'heartfruit', does: 'mats', after: 'It sheds a handful of small parts as it winds.' },
+  winders_bag: { place: 'wound_orchard', name: "A winder's satchel", look: 'Hung on a branch at head height. Left, not lost.', model: 'cache', does: 'case', after: 'A sealed case and a spare key.' },
+  row_marker: { place: 'wound_orchard', name: 'A row marker', look: 'A brass stake with a number and a date. The date is tomorrow.', model: 'plinth', does: 'notes', after: 'The stake lists what the row is meant to become.' },
+};

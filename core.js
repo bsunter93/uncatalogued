@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 10;
+export const VERSION = 11;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -143,6 +143,7 @@ const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export function createRun(spec) {
   const st = { spec, rs: spec.seed, tier: spec.tier, roomIdx: -1, uid: 1, units: [], outcome: null, turn: 0, turns: 0, heartUsed: false, kills3: {},
     res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false } };
+  { const pr = mkRng((spec.seed ^ 0x51de) >>> 0 || 7); const pl = (D.PLACES[spec.region] || []).slice(); for (let i = pl.length - 1; i > 0; i--) { const j = pr.next() % (i + 1); [pl[i], pl[j]] = [pl[j], pl[i]]; } st.places = pl; st.side = null; st.wandered = {}; } // which side place each hall can see
   for (const sh of spec.squad) {
     st.units.push({ id: st.uid++, side: 's', kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
   }
@@ -158,6 +159,27 @@ const propAt = (st, x, y) => st.room.props.find(p => !p.done && p.x === x && p.y
 function solid(st, x, y) { if (!inb(x, y) || st.room.rock[K(x, y)]) return true; const p = propAt(st, x, y); return !!(p && !p.walk); }
 const free = (st, x, y) => !solid(st, x, y) && !unitAt(st, x, y);
 
+// The side place this hall can see, if the party has not been yet. One per hall, none from the last room.
+export function placeFor(st) { return !st.outcome && !st.side && st.roomIdx >= 0 && st.roomIdx < 2 && !st.wandered[st.roomIdx] ? st.places[st.roomIdx] || null : null; }
+function enterSide(st, id, ev) {
+  const r = R(st); const reg = st.spec.region; const sk = seekers(st);
+  st.side = { id, room: st.room, others: st.units.filter(u => u.side !== 's'), at: sk.map(u => [u.id, u.x, u.y]), turn: st.turn }; st.wandered[st.roomIdx] = id;
+  st.units = sk.slice(); const room = st.room = { type: 'side', place: id, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
+  for (let i = 0; i < 6; i++) room.rock[K(r.range(3, W - 1), r.int(H))] = 1;
+  sk.forEach((u, i) => { u.x = 0; u.y = (i % 4) + 3; u.ap = 2; });
+  const spot = (minX, maxX = W - 1) => { for (let i = 0; i < 200; i++) { const x = r.range(minX, maxX), y = r.int(H); if (free(st, x, y)) return [x, y]; } return null; };
+  const c0 = spot(8, 11); if (c0) room.props.push({ pid: room.pid++, kind: 'wonder', id, x: c0[0], y: c0[1], place: true }); // the thing itself, to be recorded
+  const finds = Object.keys(D.FINDS).filter(k => D.FINDS[k].place === id); const risk = r.int(finds.length), wake = r.pct(40);
+  finds.forEach((f, i) => { const p = spot(4, 12); if (p) room.props.push({ pid: room.pid++, kind: 'find', id: f, x: p[0], y: p[1], wake: wake && i === risk }); });
+  for (let i = 0; i < 2; i++) { const p = spot(3); if (p) room.props.push({ pid: room.pid++, kind: 'flora', id: r.pick(D.REGIONS[reg].flora.filter(f => f !== 'snare_vine')), x: p[0], y: p[1] }); }
+  for (const k of AMBIENT[reg] || []) if (r.pct(60)) { const p = spot(6); if (p) spawn(st, k, p[0], p[1], r, ev, true); }
+  st.turn = 1; ev.push({ e: 'side', id });
+}
+function leaveSide(st, ev) {
+  const b = st.side; for (const c of st.room.corpses) addMat(st, c.mat, c.n);
+  st.room = b.room; st.units = seekers(st).concat(b.others); for (const [id, x, y] of b.at) { const u = st.units.find(q => q.id === id); if (u) { u.x = x; u.y = y; u.ap = 2; } }
+  st.turn = b.turn; st.side = null; ev.push({ e: 'side', id: null });
+}
 function enterRoom(st, type, ev) {
   const r = R(st); const sp = st.spec; const reg = sp.region; const last = st.roomIdx + 1 === 2;
   st.roomIdx++; st.turn = 1;
@@ -579,7 +601,7 @@ function trail(st, leadId, ev) { const L = st.units.find(u => u.id === leadId); 
     for (const [k, d] of dist) { if (!d) continue; const x = k % W, y = fl(k / W), f = Math.abs(x - L.x) + Math.abs(y - L.y); if (f < 1) continue; if (!best || f < best.f || (f === best.f && d < best.d)) best = { x, y, f, d }; }
     if (best && best.f < md(u, L)) { const n = ev.length; walk(st, u, pathFrom(par, best.x, best.y), ev); for (let i = n; i < ev.length; i++) if (ev[i].e === 'move') ev[i].trail = true; } } }
 export function apply(st, a) {
-  const calm = exploring(st) && a.t !== 'end' && a.t !== 'next' && a.t !== 'abandon';
+  const calm = exploring(st) && a.t !== 'end' && a.t !== 'next' && a.t !== 'abandon' && a.t !== 'wander';
   const ev = applyAction(st, a); if (!st.outcome) notice(st, ev);
   if (calm && exploring(st)) { if (a.t === 'move' && !a.solo) trail(st, a.u, ev); endTurn(st, ev, true); if (!st.outcome) notice(st, ev); }
   return ev; }
@@ -588,8 +610,10 @@ function applyAction(st, a) {
   const ev = [];
   if (a.t === 'abandon') { finish(st, 'retreat', ev); return ev; }
   if (a.t === 'end') { endTurn(st, ev); return ev; }
+  if (a.t === 'wander') { const id = placeFor(st); if (!id) bad('There is nowhere to wander to from here.'); if (!exploring(st)) bad('Not while something is hunting you.'); enterSide(st, id, ev); return ev; }
   if (a.t === 'next') {
     if (!canAdvance(st)) bad('Something here is still hunting you.');
+    if (st.side) { leaveSide(st, ev); return ev; }
     for (const c of st.room.corpses) addMat(st, c.mat, c.n);
     st.res.rooms++; st.res.xp += 15; if (st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0)) st.res.cases.push('standard');
     if (st.roomIdx >= 2) { finish(st, 'win', ev); return ev; }
@@ -623,6 +647,14 @@ function applyAction(st, a) {
       else if (p.id === 'case') { p.done = true; const r = R(st); const reg = st.spec.region;
         if (r.pct(55)) { const k = D.REGIONS[reg].observe; st.res.samples[k] = (st.res.samples[k] || 0) + 1; st.res.xp += 8; ev.push({ e: 'fx', pid: p.pid, what: 'specimen', x: p.x, y: p.y, kind: k }); }
         else { ev.push({ e: 'fx', pid: p.pid, what: 'alive', x: p.x, y: p.y }); const k = reg === 'clockwork' ? 'mite' : 'thornling'; let put = false; for (const [dx, dy] of DIRS) { const x = p.x + dx, y = p.y + dy; if (!put && free(st, x, y)) { const c = spawn(st, k, x, y, r, ev, false); c.noLoot = true; put = true; } } } }
+      return ev; }
+    if (p.kind === 'find') { need(1); u.ap--; p.done = true; const F = D.FINDS[p.id]; const reg = st.spec.region; const r = R(st); let what = p.wake ? 'wake' : F.does;
+      if (what === 'notes') { const k = r.pick(D.REGIONS[reg].fauna.filter(f => !D.SPECIES[f].boss)); st.res.seen[k] = 1; st.res.study[k] = (st.res.study[k] || 0) + 3; st.res.xp += 10; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, kind: k, by: u.id }); }
+      else if (what === 'case') { st.res.cases.push('cache'); st.res.xp += 10; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); }
+      else if (what === 'mats') { const m = D.SPECIES[D.REGIONS[reg].observe].mat; addMat(st, m, 2); st.res.xp += 6; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, mat: m, by: u.id }); }
+      else if (what === 'mend') { ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); for (const s of seekers(st)) if (alive(s)) heal(st, s, s.max, ev); }
+      else if (what === 'lore') { st.res.xp += 25; ev.push({ e: 'find', pid: p.pid, what, x: p.x, y: p.y, by: u.id }); }
+      else { ev.push({ e: 'find', pid: p.pid, what: 'wake', x: p.x, y: p.y, by: u.id }); const k = reg === 'clockwork' ? 'mite' : 'thornling'; let n = 0; for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1], [1, 1], [-1, -1]]) { const x = p.x + dx, y = p.y + dy; if (n < 2 && free(st, x, y)) { spawn(st, k, x, y, r, ev, false); n++; } } }
       return ev; }
     const cost = p.kind === 'flora' && u.fx.t_forager ? 0 : 1; need(cost); u.ap -= cost; p.done = true; ev.push({ e: 'prop', pid: p.pid, by: u.id });
     if (p.kind === 'flora') { st.res.flora[p.id] = (st.res.flora[p.id] || 0) + 1; st.res.floraN++; addMat(st, D.FLORA[p.id].mat, 1); st.res.xp += 4;
