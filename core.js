@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 9;
+export const VERSION = 10;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -527,7 +527,7 @@ function tickUnit(st, u, ev) {
   if (u.bleed > 0) { hurt(st, null, u, u.bleedD || 2, ev, { dot: true, kind: 'bleed' }); u.bleed = Math.max(0, u.bleed - (u.fx && u.fx.t_tissue ? 2 : 1)); }
 }
 function endPhase(units, keys = ['mark', 'root', 'stun', 'calm', 'regenT']) { for (const u of units) { for (const k of keys) if (u[k] > 0) u[k]--; } }
-function endTurn(st, ev) {
+function endTurn(st, ev, free) {
   // allies
   for (const a of st.units.filter(u => u.side === 'a' && alive(u))) {
     const p = plan(st, a); if (p.mv && p.mv.path.length) walk(st, a, p.mv.path, ev);
@@ -537,15 +537,15 @@ function endTurn(st, ev) {
     if (--a.turns <= 0) { a.dead = true; ev.push({ e: 'die', id: a.id, quiet: true }); }
   }
   endPhase(seekers(st));
-  ev.push({ e: 'phase', who: 'c' });
+  ev.push({ e: 'phase', who: 'c', free: !!free });
   for (const c of creatures(st)) tickUnit(st, c, ev);
   for (const c of st.units.filter(u => u.side === 'c')) { if (alive(c)) act(st, c, ev); if (!seekers(st).some(alive)) break; }
   endPhase(st.units.filter(u => u.side === 'c'));
   for (const c of st.units) if (c.side === 'c') c.hitBy = 0;
   endPhase(seekers(st), ['rip', 'taunt']);
   if (!seekers(st).some(alive)) { finish(st, 'defeat', ev); return; }
-  st.turn++; st.turns++;
-  ev.push({ e: 'phase', who: 's' });
+  st.turn++; if (!free) st.turns++; // beats spent exploring are not counted against the expedition
+  ev.push({ e: 'phase', who: 's', free: !!free });
   const r = R(st);
   for (const u of seekers(st)) {
     if (!alive(u)) continue; tickUnit(st, u, ev); if (!alive(u)) continue;
@@ -571,7 +571,18 @@ export function abilRange(st, u, id) { const a = D.ABILITIES[id]; return a.range
 
 const bad = msg => { const e = new Error(msg); e.illegal = true; throw e; };
 // Apply one player action. Throws on anything illegal. Returns the list of events for animation.
-export function apply(st, a) { const ev = applyAction(st, a); if (!st.outcome) notice(st, ev); return ev; }
+// While nothing is hunting the party there are no rounds: the hall moves one beat each time they do, and the others trail whoever leads.
+// Rounds and action points only begin to matter when something turns on them.
+export function exploring(st) { return !st.outcome && !creatures(st).some(c => isHostile(st, c)); }
+function trail(st, leadId, ev) { const L = st.units.find(u => u.id === leadId); if (!L) return;
+  for (const u of seekers(st)) { if (u === L || !alive(u) || u.root > 0 || u.stun > 0 || md(u, L) <= 2) continue; const { dist, par } = reach(st, u, moveRange(st, u)); let best = null;
+    for (const [k, d] of dist) { if (!d) continue; const x = k % W, y = fl(k / W), f = Math.abs(x - L.x) + Math.abs(y - L.y); if (f < 1) continue; if (!best || f < best.f || (f === best.f && d < best.d)) best = { x, y, f, d }; }
+    if (best && best.f < md(u, L)) { const n = ev.length; walk(st, u, pathFrom(par, best.x, best.y), ev); for (let i = n; i < ev.length; i++) if (ev[i].e === 'move') ev[i].trail = true; } } }
+export function apply(st, a) {
+  const calm = exploring(st) && a.t !== 'end' && a.t !== 'next' && a.t !== 'abandon';
+  const ev = applyAction(st, a); if (!st.outcome) notice(st, ev);
+  if (calm && exploring(st)) { if (a.t === 'move' && !a.solo) trail(st, a.u, ev); endTurn(st, ev, true); if (!st.outcome) notice(st, ev); }
+  return ev; }
 function applyAction(st, a) {
   if (st.outcome) bad('The expedition is over.');
   const ev = [];

@@ -40,6 +40,7 @@ var UncEngine = (() => {
     costOf: () => costOf,
     createRun: () => createRun,
     devKind: () => devKind,
+    exploring: () => exploring,
     hashStr: () => hashStr,
     indexCtx: () => indexCtx,
     isHostile: () => isHostile,
@@ -705,7 +706,7 @@ var UncEngine = (() => {
   var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // core.js
-  var VERSION = 9;
+  var VERSION = 10;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1939,7 +1940,7 @@ var UncEngine = (() => {
       for (const k of keys) if (u[k] > 0) u[k]--;
     }
   }
-  function endTurn(st, ev) {
+  function endTurn(st, ev, free2) {
     for (const a of st.units.filter((u) => u.side === "a" && alive(u))) {
       const p = plan(st, a);
       if (p.mv && p.mv.path.length) walk(st, a, p.mv.path, ev);
@@ -1959,7 +1960,7 @@ var UncEngine = (() => {
       }
     }
     endPhase(seekers(st));
-    ev.push({ e: "phase", who: "c" });
+    ev.push({ e: "phase", who: "c", free: !!free2 });
     for (const c of creatures(st)) tickUnit(st, c, ev);
     for (const c of st.units.filter((u) => u.side === "c")) {
       if (alive(c)) act(st, c, ev);
@@ -1973,8 +1974,8 @@ var UncEngine = (() => {
       return;
     }
     st.turn++;
-    st.turns++;
-    ev.push({ e: "phase", who: "s" });
+    if (!free2) st.turns++;
+    ev.push({ e: "phase", who: "s", free: !!free2 });
     const r = R(st);
     for (const u of seekers(st)) {
       if (!alive(u)) continue;
@@ -2017,9 +2018,38 @@ var UncEngine = (() => {
     e.illegal = true;
     throw e;
   };
+  function exploring(st) {
+    return !st.outcome && !creatures(st).some((c) => isHostile(st, c));
+  }
+  function trail(st, leadId, ev) {
+    const L = st.units.find((u) => u.id === leadId);
+    if (!L) return;
+    for (const u of seekers(st)) {
+      if (u === L || !alive(u) || u.root > 0 || u.stun > 0 || md(u, L) <= 2) continue;
+      const { dist, par } = reach(st, u, moveRange(st, u));
+      let best = null;
+      for (const [k, d] of dist) {
+        if (!d) continue;
+        const x = k % W, y = fl(k / W), f = Math.abs(x - L.x) + Math.abs(y - L.y);
+        if (f < 1) continue;
+        if (!best || f < best.f || f === best.f && d < best.d) best = { x, y, f, d };
+      }
+      if (best && best.f < md(u, L)) {
+        const n = ev.length;
+        walk(st, u, pathFrom(par, best.x, best.y), ev);
+        for (let i = n; i < ev.length; i++) if (ev[i].e === "move") ev[i].trail = true;
+      }
+    }
+  }
   function apply(st, a) {
+    const calm = exploring(st) && a.t !== "end" && a.t !== "next" && a.t !== "abandon";
     const ev = applyAction(st, a);
     if (!st.outcome) notice(st, ev);
+    if (calm && exploring(st)) {
+      if (a.t === "move" && !a.solo) trail(st, a.u, ev);
+      endTurn(st, ev, true);
+      if (!st.outcome) notice(st, ev);
+    }
     return ev;
   }
   function applyAction(st, a) {
