@@ -4,7 +4,16 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+// Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
+const GLB = { vanguard: ['hobb', 1.5], tracker: ['sile', 1.42], naturalist: ['oyelaran', 1.6], thornling: ['thornling', 1.05], mossback: ['mossback', 1.7], orchardmother: ['orchardmother', 3.6] };
+const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
+function loadGLB(kind) {
+  if (!GLB[kind]) return null; if (glbCache[kind]) return Promise.resolve(glbCache[kind]);
+  return glbWait[kind] ||= gl.loadAsync(new URL(`assets/models/${GLB[kind][0]}.glb`, import.meta.url).href).then(g => { g.scene.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .55; } } }); return glbCache[kind] = g.scene; }).catch(() => null);
+}
+for (const k in GLB) loadGLB(k);
 const S = 1.25, GW = 8, GH = 6;
 const wx = y => (y - (GH - 1) / 2) * S, wz = x => ((GW - 1) / 2 - x) * S;
 const PAL = {
@@ -68,9 +77,9 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   el.prepend(renderer.domElement); renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
   const scene = new THREE.Scene(); scene.background = new THREE.Color(pal.sky); scene.fog = new THREE.FogExp2(pal.fog, .03);
   const cam = new THREE.PerspectiveCamera(34, 1, .1, 80);
-  scene.add(new THREE.HemisphereLight(pal.fill, 0x1a2a14, .7));
-  const key = new THREE.DirectionalLight(pal.key, 3.1); key.position.set(-5, 11, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 }); key.shadow.bias = -.0006; scene.add(key);
-  const rim = new THREE.DirectionalLight(pal.rim, .9); rim.position.set(6, 4, -8); scene.add(rim);
+  scene.add(new THREE.HemisphereLight(pal.fill, 0x1a2a14, 1.15)); const lift = new THREE.PointLight(0xfff0d8, 30, 16); lift.position.set(4, 5, 4.5); scene.add(lift);
+  const key = new THREE.DirectionalLight(pal.key, 3.1); key.position.set(6, 11, 5); key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9, near: 1, far: 30 }); key.shadow.bias = -.0006; scene.add(key);
+  const rim = new THREE.DirectionalLight(pal.rim, .9); rim.position.set(-7, 4, -6); scene.add(rim);
   const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, cam)); const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .38, .55, .9); composer.addPass(bloom); composer.addPass(new OutputPass());
 
   // ground: painted in a canvas, then lit
@@ -86,7 +95,7 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const env = new THREE.Group(); scene.add(env);
   const tree = (x, z, h) => { const g = G(P(cyl(.16 * h, .3 * h, 2.6 * h, 6), mat(pal.trunk, { emissive: 0x1a0f2a, emissiveIntensity: .6 }), 0, 1.3 * h, 0)); for (let i = 0; i < 4; i++) g.add(P(sph(.9 * h * (1 - i * .12), 0), mat(pal.leaf[Math.floor(r0() * pal.leaf.length)]), (r0() - .5) * h, 2.5 * h + i * .45 * h, (r0() - .5) * h, { s: [1, .7, 1] })); g.position.set(x, 0, z); return g; };
   const pillar = (x, z, h) => { const g = G(P(cyl(.3, .36, h, 8), mat(pal.stone), 0, h / 2, 0), P(box(.9, .2, .9), mat(pal.stone), 0, h + .1, 0), region === 'clockwork' ? P(tor(.7, .08, 16), mat(0xc9a24a, { metalness: .8, roughness: .3 }), 0, h * .7, 0, { r: [Math.PI / 2, 0, 0] }) : P(sph(.22, 0), glow(pal.glow[2], 1.5), 0, h + .45, 0)); g.position.set(x, 0, z); return g; };
-  for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if (z > 5.5 && Math.abs(x) < 6) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
+  for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
   env.add(pillar(-2.6, -7.4, 3.4), pillar(2.6, -7.4, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -7.4));
   const gate = P(new THREE.PlaneGeometry(4.2, 3.4), glow(pal.glow[2], .9), 0, 1.8, -7.6); env.add(gate);
   for (let i = 0; i < 70; i++) { const a = r0() * Math.PI * 2, d = 1 + r0() * 11; const f = P(sph(.03 + r0() * .035, 0), glow(pal.glow[Math.floor(r0() * 3)], 1.1 + r0() * .8), Math.cos(a) * d, .06 + r0() * .1, Math.sin(a) * d - .5); f.castShadow = false; env.add(f); }
@@ -106,15 +115,21 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const units = new Map(), props = new Map(); let rocks = new THREE.Group(); scene.add(rocks); const labels = document.createElement('div'); labels.className = 'labels'; el.append(labels);
   function unitObj(u) {
     let o = units.get(u.id); if (o) return o;
-    const key = MODELS[u.kind] ? u.kind : 'thornling'; const body = MODELS[key](); const g = new THREE.Group(); g.add(body);
-    if (u.side === 'c') body.rotation.y = 0; else body.rotation.y = Math.PI; // seekers face up the hall, creatures face the player
-    let sc = ({ orchardmother: 1.9, regulator: 1.7, warden: 1.15, mossback: 1.1 }[u.kind] || 1) * 1.3; if (u.variant === 'overgrown') sc *= 1.35; body.scale.setScalar(sc);
-    if (u.variant === 'gilded') body.traverse(m => { if (m.isMesh && !m.material.emissiveIntensity) { m.material = m.material.clone(); m.material.color.set(0xe0b040); m.material.metalness = .7; m.material.roughness = .3; } });
-    if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
+    const g = new THREE.Group(); let sc = 1;
+    const dress = (body, real) => {
+      body.rotation.y = u.side === 'c' ? (real ? .5 : 0) : real ? Math.PI - .5 : Math.PI; // seekers face up the hall, turned enough to show a profile
+      sc = (real ? GLB[u.kind][1] : ({ orchardmother: 1.9, regulator: 1.7, warden: 1.15, mossback: 1.1 }[u.kind] || 1) * 1.3); if (u.variant === 'overgrown') sc *= 1.35; body.scale.setScalar(sc);
+      if (u.variant) body.traverse(m => { if (m.isMesh) m.material = m.material.clone(); });
+      if (u.variant === 'gilded') body.traverse(m => { if (m.isMesh) { m.material.map = null; m.material.emissiveMap = null; m.material.emissive.set(0x5a3a00); m.material.color.set(0xe0b040); m.material.metalness = .7; m.material.roughness = .3; m.material.needsUpdate = true; } });
+      if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
+      g.add(body); return body;
+    };
+    const ready = glbCache[u.kind]; const body = dress(ready ? ready.clone(true) : MODELS[MODELS[u.kind] ? u.kind : 'thornling'](), !!ready);
+    if (!ready && GLB[u.kind]) loadGLB(u.kind).then(m => { const cur = units.get(u.id); if (!m || !cur || cur !== o) return; const rot = cur.body.rotation.y; g.remove(cur.body); cur.body = dress(m.clone(true), true); cur.body.rotation.y = rot; cur.real = true; cur.h = sc + .3; });
     const rg = new THREE.Mesh(ringGeo, RM.calm); rg.rotation.x = -Math.PI / 2; rg.position.y = .03; rg.scale.setScalar(sc > 2 ? 1.9 : 1.15); g.add(rg);
     g.position.set(wx(u.y), 0, wz(u.x)); scene.add(g);
     const lab = document.createElement('div'); lab.className = 'ulab ' + u.side; labels.append(lab);
-    o = { g, body, rg, lab, h: sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); return o;
+    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); return o;
   }
   const api = {
     setRoom(st) {
@@ -165,8 +180,9 @@ export function createScene(el, { onTile, region = 'verdant', seed = 1 }) {
   const base = new THREE.Vector3(), pv = new THREE.Vector3(), ptr = { x: 0, y: 0 };
   function resize() {
     const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05;
-    cam.fov = tall ? 44 : 30; cam.updateProjectionMatrix(); const dir = pv.set(0, tall ? 1.5 : .86, 1).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
-    const top = 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 330 : 150) / h; const pts = [[-hw, 0, hd], [hw, 0, hd], [-hw, 1.7, -hd], [hw, 1.7, -hd], [-hw, 0, -hd], [hw, 0, -hd]];
+    cam.fov = tall ? 44 : 30; cam.updateProjectionMatrix(); const dir = (tall ? pv.set(0, 1.5, 1) : pv.set(1, .8, .12)).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
+    const top = 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 330 : 150) / h; // phones look down the hall; wide screens look across it, so both sides are seen in profile
+    const pts = tall ? [[-hw, 0, hd], [hw, 0, hd], [-hw, 1.7, -hd], [hw, 1.7, -hd], [-hw, 0, -hd], [hw, 0, -hd]] : [[hw, 0, hd], [hw, 0, -hd], [-hw, 2.2, hd], [-hw, 3.4, -hd], [-hw, 0, hd], [-hw, 0, -hd]];
     for (let d = 7; d < 46; d += .35) { cam.position.copy(dir).multiplyScalar(d); cam.lookAt(0, .3, 0); cam.updateMatrixWorld(); let ok = true; for (const p of pts) { pv.set(p[0], p[1], p[2]).project(cam); if (pv.z > 1 || pv.z < -1 || Math.abs(pv.x) > .93 || pv.y > top || pv.y < bot) { ok = false; break; } } if (ok) break; }
     // slide the view so the board sits in the open band, not dead centre behind the controls
     base.copy(cam.position); cam.userData.shift = (top + bot) / 2;
