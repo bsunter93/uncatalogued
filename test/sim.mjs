@@ -5,7 +5,7 @@ const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 function botAction(st, r) {
   if (C.canAdvance(st) && !st.units.some(u => u.side === 'c' && !u.dead && !u.fled && u.hunter && !(u.calm > 0))) {
     // grab props nearby first sometimes
-    return { t: 'next', c: r.int(2) };
+    return { t: 'next', c: r.int(2), b: r.int(3) };
   }
   const sk = st.units.filter(u => u.side === 's' && !u.dead);
   const foes = st.units.filter(u => u.side === 'c' && !u.dead && !u.fled && (C.isHostile(st, u) || (u.hunter && !(u.calm > 0))));
@@ -42,7 +42,7 @@ const now = 1.8e12; const r = C.mkRng(7);
 for (const region of ['verdant', 'clockwork']) for (const tier of [1, 2, 3, 4, 5]) for (const type of ['pursue', 'observe']) {
   let wins = 0, turns = 0, N = 150, done = 0, hurtF = 0, downs = 0;
   for (let i = 0; i < N; i++) {
-    const state = C.newPlayer('bot', i + 1, now); const lvl = Math.min(10, 1 + (tier - 1) * 2);
+    const state = C.newPlayer('bot', i + 1, now); state.stats.runs = 3; /* not a first expedition: those are short and scripted */ const lvl = Math.min(10, 1 + (tier - 1) * 2);
     for (const id of state.roster) { const s = state.seekers[id]; s.lvl = lvl; const main = Object.keys(s.attr).sort((a, b) => s.attr[b] - s.attr[a])[0]; s.attr[main] += Math.floor((lvl - 1) / 2); s.attr.vitality += Math.ceil((lvl - 1) / 2); for (const sl in s.gear) state.items[s.gear[sl]].tier = tier; }
     const { st } = playRun(state, { region, type, mods: {}, target: { fam: 'organic', slot: 'weapon' } }, tier, 1000 + i, r);
     if (st.outcome === 'win') { wins++; if (st.res.contractDone) done++; } turns += st.turns; hurtF += st.res.dmgTaken / st.units.filter(u=>u.side==='s').reduce((a,u)=>a+u.max,0); downs += st.units.filter(u=>u.side==='s'&&u.dead).length;

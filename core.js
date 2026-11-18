@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 19;
+export const VERSION = 20;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -151,6 +151,7 @@ export function createRun(spec) {
   // The way through: a first hall, then a run of forks, then the great one. Each fork offers two different kinds of hall, and every second fork has a quiet one to rest in.
   { const rr = mkRng((spec.seed ^ 0x2f6b) >>> 0 || 11); const LEN = spec.len || 3; st.route = [null]; st.path = [];
     for (let i = 1; i < LEN - 1; i++) { const pairs = i % 2 ? [['standard', 'elite'], ['elite', 'quiet'], ['standard', 'quiet']] : [['standard', 'quiet'], ['elite', 'quiet']]; const p = pairs[rr.next() % pairs.length].slice(); if (rr.next() % 2) p.reverse(); st.route.push(p); } }
+  st.boons = []; st.offer = null; st.bf = {}; // boons taken, the three on offer in this hall, and the party-wide ones that are not plain numbers
   for (const sh of spec.squad) {
     st.units.push({ id: st.uid++, side: 's', kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
   }
@@ -199,6 +200,14 @@ function leaveSide(st, ev) {
   st.room = b.room; st.units = seekers(st).concat(b.others); for (const [id, x, y] of b.at) { const u = st.units.find(q => q.id === id); if (u) { u.x = x; u.y = y; u.ap = 2; } }
   st.turn = b.turn; st.side = null; ev.push({ e: 'side', id: null });
 }
+// Each hall but the last has three boons to choose from when the party moves on. One is taken; the others stay behind.
+function offerBoons(st) { const LEN = st.spec.len || 3; if (st.roomIdx >= LEN - 1) { st.offer = null; return; } const br = mkRng(((st.spec.seed ^ 0xb005) + st.roomIdx * 7919) >>> 0 || 13); const pool = Object.keys(D.BOONS).filter(k => !st.boons.includes(k)); const o = []; while (o.length < 3 && pool.length) o.push(pool.splice(br.next() % pool.length, 1)[0]); st.offer = o.length ? o : null; }
+// A boon is earned, not found: the hall's hunters must be dead, gone or calmed. A quiet hall has none to deal with and gives rest instead.
+export function boonEarned(st) { return !!st.offer && !st.side && st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0); }
+function takeBoon(st, id, ev) { const B = D.BOONS[id]; st.boons.push(id); if (B.flag) st.bf[B.flag] = 1;
+  for (const u of seekers(st)) { if (B.m) { u.m = { ...u.m }; for (const k in B.m) u.m[k] = (u.m[k] || 0) + B.m[k]; } // a copy: the sheet in the expedition's spec is never touched
+    if (B.stat) for (const k in B.stat) { u[k] += B.stat[k]; if (k === 'max' && alive(u)) u.hp += B.stat[k]; } if (B.mend && alive(u)) u.hp = u.max; }
+  ev.push({ e: 'boon', id }); }
 function enterRoom(st, type, ev) {
   const r = R(st); const sp = st.spec; const reg = sp.region; const last = st.roomIdx + 1 === (sp.len || 3) - 1;
   st.roomIdx++; st.turn = 1;
@@ -214,7 +223,7 @@ function enterRoom(st, type, ev) {
   }
   const sk = seekers(st); sk.forEach((u, i) => {
     u.x = i < 4 ? 0 : 1; u.y = (i % 4) + 3;
-    if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * 30 / 100)); }
+    if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * (st.bf.fieldKit ? 55 : 30) / 100)); }
     u.shield = u.m.shieldStart || 0; u.shieldPeak = u.shield; u.cds = {}; u.charges = u.sh.devCharges; u.phase = u.m.phase ? 1 : 0; u.ap = 2;
     u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = u.burn = u.lit = 0; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false; u.last = null; u.streak = 0; u.wrath = 0; u.usedStub = false;
   });
@@ -224,6 +233,7 @@ function enterRoom(st, type, ev) {
   const tpl = r.pick(ENC[reg][etype]).map(a => a.slice());
   if (sp.intro && st.roomIdx === 0) { tpl.length = 0; tpl.push(['thornling', 2], ['mossback', 1]); }
   if (st.tier >= 3 && etype !== 'boss') tpl[0][1]++;
+  if (st.roomIdx >= 3 && etype !== 'boss' && etype !== 'quiet') tpl[0][1]++; // the halls fill up the deeper you go, which is what the boons are for
   if (st.tier >= 4 && etype === 'boss') tpl[1][1]++;
   if (sp.mods.hunt && etype !== 'elite' && etype !== 'boss') tpl.push([D.REGIONS[reg].elite, 1]);
   if (sp.type === 'observe' && etype !== 'boss') tpl.push([D.REGIONS[reg].observe, etype === 'quiet' ? 2 : 1]);
@@ -248,6 +258,7 @@ function enterRoom(st, type, ev) {
   for (let guard = 0; guard < 12; guard++) { const seen = new Set([K(0, 3)]), q = [[0, 3]]; while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy, k = K(nx, ny); if (inb(nx, ny) && !seen.has(k) && !solid(st, nx, ny)) { seen.add(k); q.push([nx, ny]); } } }
     let open = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!solid(st, x, y)) open++;
     if (seen.size >= open) break; const fxs = room.props.filter(p => (p.kind === 'fixture' || p.kind === 'chest') && !p.done); if (!fxs.length) break; fxs[fxs.length - 1].done = true; }
+  offerBoons(st);
   ev.push({ e: 'room', idx: st.roomIdx, type });
 }
 function spawn(st, kind, x, y, r, ev, natural, force) {
@@ -390,7 +401,7 @@ function strike(st, u, t, ev, o = {}) {
   if (u.wrath) { pct += u.wrath; u.wrath = 0; }
   let dmg = fl(roll * pct / 100 * (o.mult || 100) / 100);
   if (fx.res_galvanic_rot && t.poison) dmg += 2 * t.poison;
-  let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0);
+  let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0) + (m.critB || 0);
   const crit = o.crit || (fx.bloodscent && t.bleed > 0) || r.int(100) < cc;
   if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
   if (t.mark > 0) dmg = fl(dmg * 125 / 100);
@@ -403,7 +414,7 @@ function strike(st, u, t, ev, o = {}) {
     if (m.bleedHit && r.int(100) < m.bleedHit) { t.bleed = 3 + (m.bleedDur || 0); t.bleedD = Math.max(t.bleedD || 0, 2 * st.tier + fl(u.sh.attr.adaptation / 3)); ev.push({ e: 'status', id: t.id, s: 'bleed' }); }
     if (m.poisonHit) { t.poison += m.poisonHit; t.poisonPot = Math.max(t.poisonPot || 0, poisonPot(u)); ev.push({ e: 'status', id: t.id, s: 'poison' }); }
     if (m.echo && dealt > 0) t.echo = (t.echo || 0) + fl(dealt * m.echo / 100);
-    if (u.lit > 0) ignite(st, u, t, ev);
+    if (u.lit > 0 || (st.bf.emberOil && u.side === 's')) ignite(st, u, t, ev);
     if (crit && fx.res_displaced_fate) { const dx = Math.sign(t.x - u.x), dy = Math.sign(t.y - u.y); push(st, t, Math.abs(dx) >= Math.abs(dy) && dx ? dx : 0, Math.abs(dx) >= Math.abs(dy) && dx ? 0 : dy || 1, 1, ev, u, 0); }
     if (fx.res_field_notes && wasMarked) gainStudy(st, u, t, 1, ev);
   }
@@ -542,7 +553,7 @@ function witness(st, c, what, ev) {
 // Anything still living its own life notices the party when they come close, and its kin take the alarm.
 function notice(st, ev) {
   const sk = seekers(st).filter(alive); const woke = [];
-  for (const c of creatures(st)) if (c.mood === 'roam' && c.calm <= 0 && sk.some(s => md(s, c) <= (st.room.props.some(p => !p.done && p.lit && md(p, c) <= 1) ? 1 : NOTICE[c.ai] || 2))) woke.push(c);
+  for (const c of creatures(st)) if (c.mood === 'roam' && c.calm <= 0 && sk.some(s => md(s, c) <= (st.room.props.some(p => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0))))) woke.push(c);
   for (let i = 0; i < woke.length; i++) { const c = woke[i]; if (c.mood !== 'roam') continue; c.mood = 'hostile'; ev.push({ e: 'text', id: c.id, msg: 'Notices you' });
     for (const o of creatures(st)) if (o.mood === 'roam' && o.kind === c.kind && md(o, c) <= 4) woke.push(o); }
 }
@@ -651,6 +662,7 @@ function applyAction(st, a) {
     for (const c of st.room.corpses) addMat(st, c.mat, c.n);
     st.res.rooms++; st.res.xp += 15; if (st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0)) st.res.cases.push('standard');
     const LEN = st.spec.len || 3; if (st.roomIdx >= LEN - 1) { finish(st, 'win', ev); return ev; }
+    if (boonEarned(st)) { if (a.b !== 0 && a.b !== 1 && a.b !== 2 || !st.offer[a.b]) bad('Choose a boon.'); takeBoon(st, st.offer[a.b], ev); } st.offer = null;
     let type = 'standard'; if (st.roomIdx + 1 < LEN - 1) { if (a.c !== 0 && a.c !== 1) bad('Choose a path.'); type = st.route[st.roomIdx + 1][a.c]; }
     st.turns++; enterRoom(st, type, ev); return ev;
   }

@@ -35,6 +35,7 @@ var UncEngine = (() => {
     apply: () => apply,
     applyOp: () => applyOp,
     assembleCost: () => assembleCost,
+    boonEarned: () => boonEarned,
     buildSpec: () => buildSpec,
     canAdvance: () => canAdvance,
     chestOpen: () => chestOpen,
@@ -90,6 +91,7 @@ var UncEngine = (() => {
     ATTRS: () => ATTRS,
     ATTR_INFO: () => ATTR_INFO,
     BASES: () => BASES,
+    BOONS: () => BOONS,
     CAL_MAX: () => CAL_MAX,
     CAT_NAME: () => CAT_NAME,
     CONTRACT_TYPES: () => CONTRACT_TYPES,
@@ -914,9 +916,28 @@ var UncEngine = (() => {
   };
   var SET_OF = {};
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
+  var BOONS = {
+    whetstone: { name: "Whetted Edges", desc: "Every weapon hits 15% harder.", m: { dmgPct: 15 } },
+    gallery_eye: { name: "Collector's Eye", desc: "+12 critical chance for everyone.", m: { critB: 12 } },
+    wound_reader: { name: "Wound Reader", desc: "+30% damage to anything below half health.", m: { vsWounded: 30 } },
+    first_blood: { name: "First Blood", desc: "+35% damage to anything at full health.", m: { vsFull: 35 } },
+    serrated: { name: "Serrated Fittings", desc: "Weapon hits have a 40% chance to open a bleeding wound.", m: { bleedHit: 40 } },
+    venom_gland: { name: "Borrowed Venom", desc: "Every weapon hit applies 1 Poison.", m: { poisonHit: 1 } },
+    capacitor: { name: "Spare Capacitor", desc: "Abilities and devices are 30% stronger.", m: { abil: 30 } },
+    quick_fingers: { name: "Quick Fingers", desc: "Every ability is ready one turn sooner.", m: { cdr: 1 } },
+    bark_wrap: { name: "Bark Wrap", desc: "Everyone enters each hall with a 6-point shield.", m: { shieldStart: 6 } },
+    piercer: { name: "Needle Points", desc: "Weapons ignore 2 armor.", m: { pierce: 2 } },
+    moss_poultice: { name: "Moss Poultice", desc: "Everyone recovers 2 health at the start of each turn.", m: { regen: 2 } },
+    plate_rivets: { name: "Plate Rivets", desc: "+1 armor for everyone.", stat: { armor: 1 } },
+    long_stride: { name: "Long Stride", desc: "Everyone moves one tile farther.", stat: { move: 1 } },
+    heartfruit: { name: "Heartfruit Preserve", desc: "+8 health for everyone, and the whole party is mended now.", stat: { max: 8 }, mend: true },
+    field_kit: { name: "Field Kit", desc: "The rest between halls restores 55% health, not 30%.", flag: "fieldKit" },
+    soft_step: { name: "Soft Step", desc: "Residents notice the party from one tile closer than they would.", flag: "softStep" },
+    ember_oil: { name: "Ember Oil", desc: "Every weapon hit sets its target Burning.", flag: "emberOil" }
+  };
 
   // core.js
-  var VERSION = 19;
+  var VERSION = 20;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1244,6 +1265,9 @@ var UncEngine = (() => {
         st.route.push(p);
       }
     }
+    st.boons = [];
+    st.offer = null;
+    st.bf = {};
     for (const sh of spec.squad) {
       st.units.push({ id: st.uid++, side: "s", kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
     }
@@ -1370,6 +1394,38 @@ var UncEngine = (() => {
     st.side = null;
     ev.push({ e: "side", id: null });
   }
+  function offerBoons(st) {
+    const LEN = st.spec.len || 3;
+    if (st.roomIdx >= LEN - 1) {
+      st.offer = null;
+      return;
+    }
+    const br = mkRng((st.spec.seed ^ 45061) + st.roomIdx * 7919 >>> 0 || 13);
+    const pool = Object.keys(BOONS).filter((k) => !st.boons.includes(k));
+    const o = [];
+    while (o.length < 3 && pool.length) o.push(pool.splice(br.next() % pool.length, 1)[0]);
+    st.offer = o.length ? o : null;
+  }
+  function boonEarned(st) {
+    return !!st.offer && !st.side && st.room.type !== "quiet" && !creatures(st).some((c) => c.hunter && c.calm <= 0);
+  }
+  function takeBoon(st, id, ev) {
+    const B = BOONS[id];
+    st.boons.push(id);
+    if (B.flag) st.bf[B.flag] = 1;
+    for (const u of seekers(st)) {
+      if (B.m) {
+        u.m = { ...u.m };
+        for (const k in B.m) u.m[k] = (u.m[k] || 0) + B.m[k];
+      }
+      if (B.stat) for (const k in B.stat) {
+        u[k] += B.stat[k];
+        if (k === "max" && alive(u)) u.hp += B.stat[k];
+      }
+      if (B.mend && alive(u)) u.hp = u.max;
+    }
+    ev.push({ e: "boon", id });
+  }
   function enterRoom(st, type, ev) {
     const r = R(st);
     const sp = st.spec;
@@ -1407,7 +1463,7 @@ var UncEngine = (() => {
           u.dead = false;
           u.hp = 0;
         }
-        u.hp = Math.min(u.max, u.hp + fl(u.max * 30 / 100));
+        u.hp = Math.min(u.max, u.hp + fl(u.max * (st.bf.fieldKit ? 55 : 30) / 100));
       }
       u.shield = u.m.shieldStart || 0;
       u.shieldPeak = u.shield;
@@ -1442,6 +1498,7 @@ var UncEngine = (() => {
       tpl.push(["thornling", 2], ["mossback", 1]);
     }
     if (st.tier >= 3 && etype !== "boss") tpl[0][1]++;
+    if (st.roomIdx >= 3 && etype !== "boss" && etype !== "quiet") tpl[0][1]++;
     if (st.tier >= 4 && etype === "boss") tpl[1][1]++;
     if (sp.mods.hunt && etype !== "elite" && etype !== "boss") tpl.push([REGIONS[reg].elite, 1]);
     if (sp.type === "observe" && etype !== "boss") tpl.push([REGIONS[reg].observe, etype === "quiet" ? 2 : 1]);
@@ -1513,6 +1570,7 @@ var UncEngine = (() => {
       if (!fxs.length) break;
       fxs[fxs.length - 1].done = true;
     }
+    offerBoons(st);
     ev.push({ e: "room", idx: st.roomIdx, type });
   }
   function spawn(st, kind, x, y, r, ev, natural, force) {
@@ -1892,7 +1950,7 @@ var UncEngine = (() => {
     }
     let dmg = fl(roll * pct / 100 * (o.mult || 100) / 100);
     if (fx.res_galvanic_rot && t.poison) dmg += 2 * t.poison;
-    let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0);
+    let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0) + (m.critB || 0);
     const crit = o.crit || fx.bloodscent && t.bleed > 0 || r.int(100) < cc;
     if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
     if (t.mark > 0) dmg = fl(dmg * 125 / 100);
@@ -1929,7 +1987,7 @@ var UncEngine = (() => {
         ev.push({ e: "status", id: t.id, s: "poison" });
       }
       if (m.echo && dealt > 0) t.echo = (t.echo || 0) + fl(dealt * m.echo / 100);
-      if (u.lit > 0) ignite(st, u, t, ev);
+      if (u.lit > 0 || st.bf.emberOil && u.side === "s") ignite(st, u, t, ev);
       if (crit && fx.res_displaced_fate) {
         const dx = Math.sign(t.x - u.x), dy = Math.sign(t.y - u.y);
         push(st, t, Math.abs(dx) >= Math.abs(dy) && dx ? dx : 0, Math.abs(dx) >= Math.abs(dy) && dx ? 0 : dy || 1, 1, ev, u, 0);
@@ -2175,7 +2233,7 @@ var UncEngine = (() => {
   function notice(st, ev) {
     const sk = seekers(st).filter(alive);
     const woke = [];
-    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (st.room.props.some((p) => !p.done && p.lit && md(p, c) <= 1) ? 1 : NOTICE[c.ai] || 2))) woke.push(c);
+    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (st.room.props.some((p) => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0))))) woke.push(c);
     for (let i = 0; i < woke.length; i++) {
       const c = woke[i];
       if (c.mood !== "roam") continue;
@@ -2483,6 +2541,11 @@ var UncEngine = (() => {
         finish(st, "win", ev);
         return ev;
       }
+      if (boonEarned(st)) {
+        if (a.b !== 0 && a.b !== 1 && a.b !== 2 || !st.offer[a.b]) bad("Choose a boon.");
+        takeBoon(st, st.offer[a.b], ev);
+      }
+      st.offer = null;
       let type = "standard";
       if (st.roomIdx + 1 < LEN - 1) {
         if (a.c !== 0 && a.c !== 1) bad("Choose a path.");

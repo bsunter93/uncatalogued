@@ -602,3 +602,17 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 .game .info.hovering { width: 250px; max-height: min(52%, calc(100% - 200px)); }
 .game .info.hovering .hc-art { aspect-ratio: 16 / 6; }
 @media (max-width: 860px) { .game .info.hovering { left: auto; right: 8px; top: 70px; width: min(230px, 58vw); max-height: 32%; font-size: 12.5px; } .game .info.hovering .hc-art { display: none; } }
+
+/* Boons: three to choose from when a hall is cleared, and the ones carried shown beside the mission */
+.boonpick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 620px) { .boonpick { grid-template-columns: 1fr; } }
+.boonpick button { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 12px; border: 1px solid rgba(184, 150, 74, .5); border-radius: 6px; background: linear-gradient(180deg, rgba(40, 29, 24, .9), rgba(18, 12, 20, .94)); transition: transform .15s, border-color .15s, box-shadow .15s; }
+.boonpick button:hover, .boonpick button:focus-visible { transform: translateY(-4px); border-color: var(--gilt); box-shadow: 0 10px 26px rgba(0, 0, 0, .55), 0 0 22px rgba(232, 195, 106, .3); }
+.boonpick img { width: 96px; height: 96px; border-radius: 6px; box-shadow: 0 0 0 1px var(--brass2, #6b5526), 0 0 0 3px #0a0710; }
+.boonpick h3 { margin: 2px 0 0; color: #f3ead6; } .boonpick p { font-size: 13.5px; color: var(--ink2); margin: 0; }
+@media (max-width: 620px) { .boonpick button { flex-direction: row; text-align: left; flex-wrap: wrap; } .boonpick img { width: 56px; height: 56px; } .boonpick p { flex-basis: 100%; } }
+.game .held { display: flex; gap: 4px; flex-wrap: wrap; align-self: center; max-width: 240px; }
+.game .held .hb { position: relative; width: 28px; height: 28px; border-radius: 4px; box-shadow: 0 0 0 1px rgba(184, 150, 74, .7); background: #120c18; }
+.game .held .hb img { width: 100%; height: 100%; border-radius: 4px; display: block; }
+.game .held .hb::after { content: attr(data-tip) "\A" attr(data-desc); white-space: pre-wrap; position: absolute; top: calc(100% + 8px); left: 0; width: max-content; max-width: 230px; padding: 7px 10px; font-size: 12.5px; line-height: 1.35; color: #f1e8d8; background: rgba(14, 9, 18, .97); border: 1px solid rgba(184, 150, 74, .7); border-radius: 5px; box-shadow: 0 8px 22px rgba(0, 0, 0, .6); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 40; }
+.game .held .hb:hover::after { opacity: 1; }

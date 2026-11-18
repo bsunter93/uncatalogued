@@ -431,3 +431,24 @@ export const SETS = {
     bonus: { 2: { thorns: 2 }, 3: { abil: 15, shieldStart: 6 } } },
 };
 export const SET_OF = {}; for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
+
+// Boons: found along the way, carried by the whole party until the expedition ends. m = added to every Seeker's modifiers.
+export const BOONS = {
+  whetstone: { name: 'Whetted Edges', desc: 'Every weapon hits 15% harder.', m: { dmgPct: 15 } },
+  gallery_eye: { name: "Collector's Eye", desc: '+12 critical chance for everyone.', m: { critB: 12 } },
+  wound_reader: { name: 'Wound Reader', desc: '+30% damage to anything below half health.', m: { vsWounded: 30 } },
+  first_blood: { name: 'First Blood', desc: '+35% damage to anything at full health.', m: { vsFull: 35 } },
+  serrated: { name: 'Serrated Fittings', desc: 'Weapon hits have a 40% chance to open a bleeding wound.', m: { bleedHit: 40 } },
+  venom_gland: { name: 'Borrowed Venom', desc: 'Every weapon hit applies 1 Poison.', m: { poisonHit: 1 } },
+  capacitor: { name: 'Spare Capacitor', desc: 'Abilities and devices are 30% stronger.', m: { abil: 30 } },
+  quick_fingers: { name: 'Quick Fingers', desc: 'Every ability is ready one turn sooner.', m: { cdr: 1 } },
+  bark_wrap: { name: 'Bark Wrap', desc: 'Everyone enters each hall with a 6-point shield.', m: { shieldStart: 6 } },
+  piercer: { name: 'Needle Points', desc: 'Weapons ignore 2 armor.', m: { pierce: 2 } },
+  moss_poultice: { name: 'Moss Poultice', desc: 'Everyone recovers 2 health at the start of each turn.', m: { regen: 2 } },
+  plate_rivets: { name: 'Plate Rivets', desc: '+1 armor for everyone.', stat: { armor: 1 } },
+  long_stride: { name: 'Long Stride', desc: 'Everyone moves one tile farther.', stat: { move: 1 } },
+  heartfruit: { name: 'Heartfruit Preserve', desc: '+8 health for everyone, and the whole party is mended now.', stat: { max: 8 }, mend: true },
+  field_kit: { name: 'Field Kit', desc: 'The rest between halls restores 55% health, not 30%.', flag: 'fieldKit' },
+  soft_step: { name: 'Soft Step', desc: 'Residents notice the party from one tile closer than they would.', flag: 'softStep' },
+  ember_oil: { name: 'Ember Oil', desc: 'Every weapon hit sets its target Burning.', flag: 'emberOil' },
+};

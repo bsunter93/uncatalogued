@@ -18,6 +18,7 @@ const GLB = { firebrand: ['garrow_anim', 2.15], tinkerer: ['tamsin_anim', 1.9], 
   temple_ruin: ['p_temple_ruin_lo', 1], temple_arch: ['p_temple_arch_lo', 1], dream_tree_a: ['p_dream_tree_a_lo', 1], dream_tree_b: ['p_dream_tree_b_lo', 1], // far-world landmarks
   tree_a_lo: ['p_tree_a_lo', 6.4], tree_b_lo: ['p_tree_b_lo', 6], rock_lo: ['p_boulder_lo', 1.45], mushrooms_lo: ['p_mushrooms_lo', 1.9], c_tree_a_lo: ['p_c_tree_a_lo', 6.6], c_tree_b_lo: ['p_c_tree_b_lo', 6], c_rock_lo: ['p_c_rock_lo', 1.5], c_vent_lo: ['p_c_vent_lo', 1.7], // far-world stand-ins, a tenth of the triangles
   chest: ['p_chest', 1.15],
+  statue: ['p_statue', 3.3], glasshouse: ['p_glasshouse', 6.2], ribcage: ['p_ribcage', 7], crystal: ['p_crystal', 2.8], bell: ['p_bell', 2.6], nest: ['p_nest', .75], // the landmarks of the further places
   drone: ['u_drone', .7], lure: ['u_lure', .55], // what a device becomes once it is out on the floor
   tree_a: ['p_tree_a', 6.4], tree_b: ['p_tree_b', 6], gate: ['p_gate', 6.2], lamp: ['p_lamp', 2.9], case_broken: ['p_case_broken', 2.1], column_fallen: ['p_column_fallen', 2.6], mushrooms: ['p_mushrooms', 1.9], plinth: ['p_plinth', 1.5], survey: ['p_survey', 2.1], crates: ['p_crates', 1.6] };
 // Scenery you can touch: [model, x, z, turn, scale]. The far side and both ends of the hall, clear of the camera.
@@ -32,6 +33,12 @@ const DECORS = {
   // B, The Still Pond: the water, reeds round its near bank, willows at both ends, and a lit plinth at the water's edge
   B: [['pond', -7.4, 0, 0], ['reeds', -5.4, 2.3, 0], ['reeds', -5.5, -2, 1], ['reeds', -6.1, 4.7, 2], ['reeds', -6.3, -4.5, 3], ['tree_b', -8.2, 6.4, 1, 1.2], ['tree_b', -8.4, -6.4, 2, 1.2],
     ['lamp', -4.8, 1.4, 0], ['plinth', -4.9, .1, .8], ['lamp', -4.8, -1.2, 2], ['tree_b', -5, 8.6, 3, .9], ['mushrooms', 4.8, -6.6, 1, .9]],
+  // C, The Fallen Colonnade: a toppled colossus along the far wall, its columns down either side, a bell where the tower was
+  C: [['statue', -8.6, 0, 1.2, 1], ['column_fallen', -5.4, 4.2, .4], ['column_fallen', -5.6, -4.4, 2.1], ['plinth', -5, 1.9, .3], ['plinth', -5, -1.9, 1.7], ['bell', -6.2, 7.2, .8], ['lamp', -4.7, 6, 0], ['lamp', -4.7, -6, 2], ['tree_b', -9.4, -7.6, 1, 1.1], ['mushrooms', 4.8, 6.6, 1, 1]],
+  // D, The Glasshouse: the iron dome behind, crystal grown up through its floor, reeds at both ends
+  D: [['glasshouse', -9, 0, 0, 1], ['crystal', -5.2, 3.4, 0], ['crystal', -5.4, -3.8, 2, .8], ['reeds', -5.6, 6.2, 1], ['reeds', -5.8, -6.4, 2], ['lamp', -4.7, 1.2, 0], ['lamp', -4.7, -1.2, 2], ['tree_b', -8.6, 8, 3, 1], ['crystal', 4.9, -6.4, 1, .7]],
+  // E, The Rib Hall: the ribs of something enormous for a roof, a nest under them, thorn closing in
+  E: [['ribcage', -8.4, 0, 0, 1], ['nest', -5.4, 4.6, .6], ['spires', -6.4, -4.4, 1, .9], ['spires', -7.2, 6.8, 2, .8], ['case_broken', -5.1, -1.6, 1.1], ['mushrooms', -5, 1.6, 0, 1.2], ['mushrooms', -6.2, -7, 2, 1], ['tree_a', -10, -8, 1, 1], ['nest', 4.9, 6.2, 2, .7]],
   // Side places, keyed by what they are (the hilltop a given one stands on changes from expedition to expedition).
   pl_lit_knoll: [['lamp', -4.6, 0, 0, 1.3], ['lamp', -5.2, 3, 1], ['lamp', -5.2, -3, 2], ['survey', -6.2, 1.4, .8], ['crates', -6.4, -1.6, .4], ['crates', -5, 5.6, 2, .8], ['tree_b', -8, 6, 1, .9], ['column_fallen', -6, -5.6, 1]],
   pl_hollow_giant: [['lamp', -4.6, -1, 0], ['tree_a', -9.2, 0, 1, 3], ['mushrooms', -5, 3.4, 0, 1.3], ['mushrooms', -5.2, -3.6, 2, 1.1], ['crates', -4.8, 1.2, .6, .8], ['tree_b', -7, 8, 2, 1], ['tree_b', -7, -8, 3, 1]],
@@ -224,7 +231,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, -GZ - .1); gate.castShadow = false; env.add(gate);
   const lamps = []; let dressSite = () => {};
   // ---- The far world. The hall is a terrace; beyond its edge the Galleries fall away for miles.
-  const farG = new THREE.Group(); scene.add(farG); const skyG = new THREE.Group(); scene.add(skyG); const drift = []; /* P0, P1: hilltops off the way, one seen from the first hall and one from the second */ const SITES = { S: [0, 0, 0], A: [-92, 5, -52], B: [-92, -5, 58], F: [-205, 12, 0], P0: [-46, 7, 42], P1: [-150, 14, 0] }; const marksFar = {}; let site = 'S', flight = null;
+  const farG = new THREE.Group(); scene.add(farG); const skyG = new THREE.Group(); scene.add(skyG); const drift = []; /* P0, P1: hilltops off the way, one seen from the first hall and one from the second */ const SITES = { S: [0, 0, 0], A: [-92, 5, -52], B: [-92, -5, 58], C: [-140, 8, -70], D: [-150, 2, 66], E: [-46, 6, -46], F: [-205, 12, 0], P0: [-46, 7, 42], P1: [-150, 14, 0] }; const marksFar = {}; let site = 'S', flight = null;
   if (vista) {
     const fm = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true, ...o });
     // painted rock and turf for the big bare shapes, so the far world is made of the same stuff as the hall
@@ -242,7 +249,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     // the terrace: rock falling away under the hall
     // ---- One continuous land. Every place is a clearing on it; hills, woods and paths lie between, and a ridge can hide a place.
     const sst = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
-    const ROUTES = [['S', 'A'], ['S', 'B'], ['A', 'F'], ['B', 'F'], ['S', 'P0'], ['A', 'P1'], ['B', 'P1']]; const segD = (x, z, a, b) => { const ax = SITES[a][0], az = SITES[a][2], bx = SITES[b][0], bz = SITES[b][2]; const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2))); const w = Math.sin(t * Math.PI) * Math.sin(t * 9 + ax) * 5; return [Math.hypot(x - (ax + (bx - ax) * t) - w * .4, z - (az + (bz - az) * t) - w), t, SITES[a][1] + (SITES[b][1] - SITES[a][1]) * t]; };
+    const ROUTES = [['S', 'A'], ['S', 'B'], ['A', 'F'], ['B', 'F'], ['S', 'E'], ['E', 'A'], ['A', 'C'], ['C', 'F'], ['B', 'D'], ['D', 'F'], ['S', 'P0'], ['A', 'P1'], ['B', 'P1']]; const segD = (x, z, a, b) => { const ax = SITES[a][0], az = SITES[a][2], bx = SITES[b][0], bz = SITES[b][2]; const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / ((bx - ax) ** 2 + (bz - az) ** 2))); const w = Math.sin(t * Math.PI) * Math.sin(t * 9 + ax) * 5; return [Math.hypot(x - (ax + (bx - ax) * t) - w * .4, z - (az + (bz - az) * t) - w), t, SITES[a][1] + (SITES[b][1] - SITES[a][1]) * t]; };
     const pathAt = (x, z) => { let best = [1e9, 0, 0]; for (const [a, b] of ROUTES) { const d = segD(x, z, a, b); if (d[0] < best[0]) best = d; } return best; };
     const MESAS = [[-118, -18, 13, 24], [-110, 24, 12, 19], [-170, -62, 24, 34], [-175, 66, 26, 40], [-290, -72, 40, 62], [-300, 82, 44, 70], [-252, 0, 24, 46], [-60, -122, 20, 22], [-72, 126, 22, 26]]; // placed inside what the hall's camera can see down the valley, plus two for the flights
     const land = (x, z) => { let h = 7 * Math.sin(x * .031 + 1.3) * Math.cos(z * .027) + 4 * Math.sin(x * .07 + z * .05) + 2.5 * Math.sin(z * .11 - x * .04) - 5;
