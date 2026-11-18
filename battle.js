@@ -206,6 +206,7 @@ export function mountBattle(root, onFinish) {
   }
   function panel() {
     const el = $('.info', root); let h = '';
+    if (mode) { el.hidden = true; el.innerHTML = ''; return; } // while aiming an ability, a study or a device, nothing covers the hall: the one-line tip by the pointer says what a click will do
     const pinned = info; const info2 = info || hov; const u = info2?.u != null ? unit(info2.u) : null; const p = info2?.p != null ? st.room.props.find(q => q.pid === info2.p && !q.done) : null;
     if (u && live(u) && u.side === 'c') {
       const S = D.SPECIES[u.kind]; const sg = stage(u.kind); const tot = (G.state.cat['f:' + u.kind]?.study || 0) + (st.res.study[u.kind] || 0); const cap = u.variant ? 5 : 3; const pl = C.plan(st, u); const t = pl.tgt && unit(pl.tgt); const [nat, tip] = NATURE[S.ai] || ['Creature', '']; const host = C.isHostile(st, u);
@@ -420,8 +421,8 @@ export function mountBattle(root, onFinish) {
     if (b.getAttribute('aria-disabled') === 'true') { say(b.dataset.why); return; }
     if (busy) return; snd.click();
     if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (u && u.id === sel) { openSheet(u.id); return; } if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
-    if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; sync(); return; }
-    if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; sync(); return; }
+    if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; info = null; sync(); return; }
+    if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; info = null; sync(); return; }
     if (b.dataset.act === 'end') return send({ t: 'end' });
     if (b.dataset.act === 'pass') { passed.add(sel); const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (!n) return send({ t: 'end' }); sel = n.id; mode = null; info = null; armed = null; sc.focus(n.x, n.y); return sync(); }
     if (b.dataset.act === 'wander') return send({ t: 'wander' });
