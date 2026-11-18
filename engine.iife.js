@@ -62,6 +62,7 @@ var UncEngine = (() => {
     mkRng: () => mkRng,
     moveTiles: () => moveTiles,
     newPlayer: () => newPlayer,
+    noticeRadius: () => noticeRadius,
     placeFor: () => placeFor,
     plan: () => plan,
     replay: () => replay,
@@ -177,9 +178,9 @@ var UncEngine = (() => {
       latin: "Spinifex gregarius",
       region: "verdant",
       weak: "relic",
-      resist: "organic",
+      resist: "anomalous",
       hp: 12,
-      dmg: [4, 6],
+      dmg: [6, 8],
       armor: 0,
       move: 3,
       range: 1,
@@ -193,7 +194,7 @@ var UncEngine = (() => {
       latin: "Testudo hortensis",
       region: "verdant",
       weak: "anomalous",
-      resist: "organic",
+      resist: "relic",
       hp: 38,
       dmg: [7, 10],
       armor: 2,
@@ -226,7 +227,7 @@ var UncEngine = (() => {
       latin: "Faux radicans",
       region: "verdant",
       weak: "relic",
-      resist: "organic",
+      resist: "anomalous",
       hp: 22,
       dmg: [7, 9],
       armor: 1,
@@ -242,7 +243,7 @@ var UncEngine = (() => {
       latin: "Necroflora ambulans",
       region: "verdant",
       weak: "relic",
-      resist: "organic",
+      resist: "anomalous",
       hp: 19,
       dmg: [4, 6],
       armor: 0,
@@ -275,7 +276,7 @@ var UncEngine = (() => {
       latin: "Rubus insidians",
       region: "verdant",
       weak: "relic",
-      resist: "organic",
+      resist: "anomalous",
       hp: 22,
       dmg: [5, 7],
       armor: 0,
@@ -326,17 +327,17 @@ var UncEngine = (() => {
       latin: "Mater pomorum",
       region: "verdant",
       weak: "relic",
-      resist: "organic",
-      hp: 92,
-      dmg: [9, 13],
+      resist: "anomalous",
+      hp: 104,
+      dmg: [13, 18],
       armor: 1,
-      move: 1,
+      move: 2,
       range: 1,
       ai: "boss_orchard",
       mat: "living_sap",
       boss: true,
       blurb: "Every Thornling in the Galleries fell from her. She remembers each one.",
-      behavior: "Drops two Thornlings every third turn. Roots the farthest Seeker in place. Slow. Kill the brood or kill the mother, but choose."
+      behavior: "Drops two Thornlings every third turn. Roots the farthest Seeker in place. Kill the brood or kill the mother, but choose."
     },
     mite: {
       name: "Brass Mite",
@@ -345,7 +346,7 @@ var UncEngine = (() => {
       weak: "organic",
       resist: "relic",
       hp: 10,
-      dmg: [3, 4],
+      dmg: [5, 6],
       armor: 1,
       move: 4,
       range: 1,
@@ -485,7 +486,7 @@ var UncEngine = (() => {
       weak: "anomalous",
       resist: "relic",
       hp: 96,
-      dmg: [9, 12],
+      dmg: [11, 15],
       armor: 2,
       move: 1,
       range: 1,
@@ -931,13 +932,13 @@ var UncEngine = (() => {
     plate_rivets: { name: "Plate Rivets", desc: "+1 armor for everyone.", stat: { armor: 1 } },
     long_stride: { name: "Long Stride", desc: "Everyone moves one tile farther.", stat: { move: 1 } },
     heartfruit: { name: "Heartfruit Preserve", desc: "+8 health for everyone, and the whole party is mended now.", stat: { max: 8 }, mend: true },
-    field_kit: { name: "Field Kit", desc: "The rest between halls restores 55% health, not 30%.", flag: "fieldKit" },
+    field_kit: { name: "Field Kit", desc: "The walk between halls restores 40% health, not 15%.", flag: "fieldKit" },
     soft_step: { name: "Soft Step", desc: "Residents notice the party from one tile closer than they would.", flag: "softStep" },
     ember_oil: { name: "Ember Oil", desc: "Every weapon hit sets its target Burning.", flag: "emberOil" }
   };
 
   // core.js
-  var VERSION = 20;
+  var VERSION = 21;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1406,6 +1407,9 @@ var UncEngine = (() => {
     while (o.length < 3 && pool.length) o.push(pool.splice(br.next() % pool.length, 1)[0]);
     st.offer = o.length ? o : null;
   }
+  function noticeRadius(st, c) {
+    return st.room.props.some((p) => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0));
+  }
   function boonEarned(st) {
     return !!st.offer && !st.side && st.room.type !== "quiet" && !creatures(st).some((c) => c.hunter && c.calm <= 0);
   }
@@ -1437,7 +1441,7 @@ var UncEngine = (() => {
     const room = st.room = { type, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
     for (let tries = 0; tries < 30; tries++) {
       room.rock.fill(0);
-      const n = r.range(10, 17);
+      const n = r.range(6, 11);
       for (let i = 0; i < n; i++) room.rock[K(r.range(2, W - 1), r.int(H))] = 1;
       const seen = /* @__PURE__ */ new Set([0]), q = [[0, 0]];
       let open = 0;
@@ -1456,14 +1460,14 @@ var UncEngine = (() => {
     }
     const sk = seekers(st);
     sk.forEach((u, i) => {
-      u.x = i < 4 ? 0 : 1;
-      u.y = i % 4 + 3;
+      u.x = i % 2;
+      u.y = Math.min(H - 1, 2 + i * 2);
       if (st.roomIdx > 0) {
         if (u.dead) {
           u.dead = false;
           u.hp = 0;
         }
-        u.hp = Math.min(u.max, u.hp + fl(u.max * (st.bf.fieldKit ? 55 : 30) / 100));
+        u.hp = Math.min(u.max, u.hp + fl(u.max * ((st.bf.fieldKit ? 40 : 15) + (type === "quiet" ? 35 : 0)) / 100));
       }
       u.shield = u.m.shieldStart || 0;
       u.shieldPeak = u.shield;
@@ -1509,6 +1513,15 @@ var UncEngine = (() => {
       const p = spot(SPECIES[kind].boss ? 9 : 5);
       if (p) spawn(st, kind, p[0], p[1], r, ev, true);
     }
+    if (etype === "boss" && sp.type === "observe") {
+      for (const u of st.units) if (u.side === "c") {
+        if (SPECIES[u.kind].boss) {
+          u.mood = "asleep";
+          u.hunter = false;
+        }
+      }
+    }
+    if (etype === "boss" && sp.type === "observe") st.units = st.units.filter((u) => u.side !== "c" || SPECIES[u.kind].boss || !u.hunter);
     if (sp.sight && st.roomIdx === 0 && !sp.intro) {
       const p = spot(6);
       if (p) {
@@ -1741,6 +1754,10 @@ var UncEngine = (() => {
     if (t.side !== "c") return;
     t.calm = 0;
     const beast = src && src.side === "c";
+    if (t.mood === "asleep") {
+      t.mood = "hostile";
+      t.hunter = true;
+    }
     if (t.mood === "roam" && !beast) t.mood = "hostile";
     if (t.ai === "grazer") {
       t.mood = "hostile";
@@ -1884,7 +1901,7 @@ var UncEngine = (() => {
     }
   }
   function stepOn(st, u, ev) {
-    const p = st.room.props.find((p2) => !p2.done && p2.walk && p2.x === u.x && p2.y === u.y);
+    const p = st.room.props.find((p2) => !p2.done && p2.walk && p2.kind === "flora" && p2.x === u.x && p2.y === u.y);
     if (p) {
       p.done = true;
       if (!(u.fx && u.fx.anchor)) u.root = Math.max(u.root, 1);
@@ -2087,6 +2104,7 @@ var UncEngine = (() => {
     return best ? { to: best, path: pathFrom(par, best[0], best[1]) } : null;
   }
   function plan(st, c) {
+    if (c.mood === "asleep") return { k: "idle", label: "Sleeping" };
     if (c.stun > 0) return { label: "Stunned", k: "idle" };
     if (c.calm > 0) return { label: "Calmed", k: "idle" };
     const S = SPECIES[c.kind];
@@ -2233,7 +2251,7 @@ var UncEngine = (() => {
   function notice(st, ev) {
     const sk = seekers(st).filter(alive);
     const woke = [];
-    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => md(s, c) <= (st.room.props.some((p) => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0))))) woke.push(c);
+    for (const c of creatures(st)) if (c.mood === "roam" && c.calm <= 0 && sk.some((s) => s.moved && md(s, c) <= noticeRadius(st, c))) woke.push(c);
     for (let i = 0; i < woke.length; i++) {
       const c = woke[i];
       if (c.mood !== "roam") continue;
@@ -2956,7 +2974,7 @@ var UncEngine = (() => {
     const [t, a, b] = key.split(":");
     if (t === "f") return { kind: "Fauna", name: SPECIES[a].name, art: a, region: SPECIES[a].region };
     if (t === "v") return { kind: "Variant", name: VARIANTS[b].name + " " + SPECIES[a].name, art: a, variant: b, region: SPECIES[a].region };
-    if (t === "p") return { kind: "Flora", name: FLORA[a].name, art: a };
+    if (t === "p") return FLORA[a] ? { kind: "Flora", name: FLORA[a].name, art: a } : { kind: "Flora", name: "Unrecorded", art: null };
     if (t === "w") return { kind: "Wonder", name: WONDERS[a].name, art: a };
     if (t === "m") return { kind: "Material", name: MATERIALS[a].name, art: a };
     if (t === "b") return { kind: "Relic", name: BASES[a].name, art: a };
@@ -3334,6 +3352,7 @@ var UncEngine = (() => {
     }
     for (const v in rs.variants) if (met(v.split(":")[0])) touch("v:" + v);
     for (const f in rs.flora) {
+      if (!FLORA[f]) continue;
       const e = touch("p:" + f);
       e.n = (e.n || 0) + rs.flora[f];
     }

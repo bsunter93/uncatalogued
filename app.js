@@ -1,5 +1,5 @@
 // Camp: everything between expeditions.
-import { C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
+import { MOCK, C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
 import { mountBattle, NATURE } from './battle.js';
 // What a Mastered entry adds: who each resident lives beside, eats, or avoids.
 // What one more expedition would finish: the nearest milestones and the animals closest to their next stage.
@@ -7,9 +7,9 @@ function closeTo(st) { const ctx = C.indexCtx(st); const rows = [];
   for (const m of D.MILESTONES.filter(m => !st.unlocks[m.id])) { const [h, n] = m.test(ctx); if (h < n) rows.push({ k: (n - h) / n, t: esc(m.reward), s: esc(m.need), h, n }); }
   rows.sort((a, b) => a.k - b.k); const out = rows.slice(0, 2);
   const sp = []; for (const key in st.cat) { if (key[0] !== 'f') continue; const e = st.cat[key], s = C.stageOf(e); if (s >= 3) continue; const [ns, nm] = C.STAGE_REQ[s + 1]; const ds = Math.max(0, ns - (e.study || 0)), dm = Math.max(0, nm - (e.samples || 0)); if (ds + dm === 0) continue; sp.push({ k: ds + 2 * dm, id: key.slice(2), s, ds, dm, ns, nm, e }); }
-  sp.sort((a, b) => a.k - b.k); for (const x of sp.slice(0, 2)) out.push({ t: `${esc(D.SPECIES[x.id].name)} becomes ${C.STAGE_NAME[x.s + 1]}`, s: [x.ds ? `${x.ds} more field note${x.ds === 1 ? '' : 's'}` : '', x.dm ? `${x.dm} more sample${x.dm === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and '), h: Math.min(x.e.study || 0, x.ns) + Math.min(x.e.samples || 0, x.nm), n: x.ns + x.nm });
+  sp.sort((a, b) => a.k - b.k); for (const x of sp.slice(0, 2)) out.push({ art: x.id, where: D.REGIONS[D.SPECIES[x.id].region].short, t: `${esc(D.SPECIES[x.id].name)} becomes ${C.STAGE_NAME[x.s + 1]}`, s: [x.ds ? `${x.ds} more field note${x.ds === 1 ? '' : 's'}` : '', x.dm ? `${x.dm} more sample${x.dm === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and '), h: Math.min(x.e.study || 0, x.ns) + Math.min(x.e.samples || 0, x.nm), n: x.ns + x.nm });
   if (!out.length) return '';
-  return `<div><div class="sec-head"><h3>Within reach</h3><span class="label">one more expedition</span></div><div class="reach">${out.map(m => `<div class="mile"><div class="t"><span>${m.t}</span><span class="num dim">${m.h}/${m.n}</span></div><div class="bar gilt"><i style="width:${Math.min(100, m.h / m.n * 100)}%"></i></div><span class="label">${m.s}</span></div>`).join('')}</div></div>`; }
+  return `<div><div class="sec-head"><h3>Within reach</h3><span class="label">one more expedition</span></div><div class="reach">${out.map(m => `<div class="mile ${m.art ? 'withplate' : ''}">${m.art ? plateBox(m.art) : ''}<div class="t"><span>${m.t}</span><span class="num dim">${m.h}/${m.n}</span></div><div class="bar gilt"><i style="width:${Math.min(100, m.h / m.n * 100)}%"></i></div><span class="label">${m.s}${m.where ? ' · ' + esc(m.where) : ''}</span></div>`).join('')}</div></div>`; }
 const COAT = { pale: 'Pale', gilded: 'Gilded', overgrown: 'Overgrown' };
 const ECO = {
   thornling: 'Packs trail Mossbacks for the seed that falls from their gardens. They will not touch a Gulper Vine and give it a wide berth.',
@@ -45,7 +45,7 @@ const cost = c => { const ok = S().comps >= c.comps && C.matCount(S(), c.fam) >=
 
 // ---------------------------------------------------------------- boot
 async function boot() {
-  G.key = store.get('unc.key');
+  G.key = MOCK ? 'preview' : store.get('unc.key');
   if (G.key) { try { if (!(await load())) G.key = null; } catch (e) { app.innerHTML = `<p class="boot">${esc(e.message)}</p><p style="text-align:center"><button class="btn" onclick="location.reload()">Try again</button></p>`; return; } }
   if (!G.key) await loadWorld();
   render();
@@ -274,7 +274,7 @@ function report() {
   return `<main class="wrap report stack" style="gap:24px;max-width:900px">
     <div><p class="label">${D.REGIONS[rep.region].short} · Tier ${ROMAN[rep.tier]} · ${rep.turns} turns${rep.weeklyScore ? ' · trial score ' + rep.weeklyScore : ''}</p><h2>${head}</h2><p class="dim">${sub}</p></div>
     ${disc.length ? `<div><div class="sec-head"><h3>New in your Catalogue</h3><span class="label">${disc.length} entr${disc.length === 1 ? 'y' : 'ies'}</span></div><div class="finds">${disc.map((k, i) => { const inf = C.keyInfo(k); const hidden = (k[0] === 'b' || k[0] === 's') && rep.items.some(x => !V.opened[x.id] && (st.items[x.id]?.base === k.slice(2) || st.items[x.id]?.sing === k.slice(2))); return hidden ? '' : `<div class="find" style="animation-delay:${i * 90}ms">${inf.art ? plateBox(inf.art, { variant: inf.variant }) : '<div class="plate"></div>'}<span class="label">${inf.kind}</span><br>${esc(inf.name)}${firsts.includes(k) ? '<br><span class="stamp">First in the Cabinet</span>' : ''}</div>`; }).join('')}</div></div>` : ''}
-    ${rep.stageUps.length ? `<div class="stack" style="gap:6px">${rep.stageUps.map(s => `<p><b>${esc(D.SPECIES[s.sp].name)}</b> is now <b style="color:var(--gilt)">${C.STAGE_NAME[s.stage]}</b>. <span class="dim">${s.stage === 1 ? 'Its behaviour is written up in your Catalogue.' : s.stage === 2 ? 'Your Seekers hit it 10% harder.' : 'There is nothing more it can teach you.'}</span></p>`).join('')}</div>` : ''}
+    ${rep.stageUps.length ? `<div class="stack" style="gap:6px">${rep.stageUps.map(s => `<div class="stageup">${plateBox(s.sp)}<span class="stamp">${C.STAGE_NAME[s.stage]}</span> <b>${esc(D.SPECIES[s.sp].name)}</b> is now <b style="color:var(--gilt)">${C.STAGE_NAME[s.stage]}</b>. <span class="dim">${s.stage === 1 ? 'Its behaviour is written up in your Catalogue.' : s.stage === 2 ? 'Your Seekers hit it 10% harder.' : 'There is nothing more it can teach you.'}</span></div>`).join('')}</div>` : ''}
     ${unlocked.length ? `<div class="stack" style="gap:6px">${unlocked.map(id => `<p style="color:var(--gilt)"><span class="stamp">Index</span> ${esc(D.MILESTONES.find(m => m.id === id).reward)}</p>`).join('')}</div>` : ''}
     <div><div class="sec-head"><h3>Sealed cases</h3>${rep.items.length > 1 && !allOpen ? '<button class="link" data-act="openall">Break every seal</button>' : `<span class="label">${rep.items.length || 'none'}</span>`}</div>
       ${rep.items.length ? `<div class="cases">${rep.items.map(x => { const it = st.items[x.id]; if (!it) return ''; return V.opened[x.id] ? itemCard(it, { cls: 'reveal', acts: st.roster.map(sid => { const s = st.seekers[sid]; const on = s.gear[C.itemDef(it).slot] === it.id; return `<button class="btn sm" data-give="${sid}" data-id="${it.id}" ${on ? 'disabled' : ''}>${on ? 'On ' + esc(s.name) : 'Equip: ' + esc(s.name)}</button>`; }).join('') + (x.isNew ? '<span class="stamp" style="align-self:center">New type</span>' : '') }) : `<button class="case" data-open="${x.id}"><span>${art('cache')}<b>${{ boss: 'From the great one', elite: 'From the elite', cache: 'Found sealed', contract: 'Contract payment', weekly: 'Trial payment', standard: 'Room cleared' }[x.src]}</b><small>tap to break the seal</small></span></button>`; }).join('')}</div>` : '<p class="dim">No cases came out with you.</p>'}</div>

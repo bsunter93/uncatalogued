@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 20;
+export const VERSION = 21;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -203,6 +203,8 @@ function leaveSide(st, ev) {
 // Each hall but the last has three boons to choose from when the party moves on. One is taken; the others stay behind.
 function offerBoons(st) { const LEN = st.spec.len || 3; if (st.roomIdx >= LEN - 1) { st.offer = null; return; } const br = mkRng(((st.spec.seed ^ 0xb005) + st.roomIdx * 7919) >>> 0 || 13); const pool = Object.keys(D.BOONS).filter(k => !st.boons.includes(k)); const o = []; while (o.length < 3 && pool.length) o.push(pool.splice(br.next() % pool.length, 1)[0]); st.offer = o.length ? o : null; }
 // A boon is earned, not found: the hall's hunters must be dead, gone or calmed. A quiet hall has none to deal with and gives rest instead.
+// How close a Seeker can stand before this roaming hunter turns on the party.
+export function noticeRadius(st, c) { return st.room.props.some(p => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0)); }
 export function boonEarned(st) { return !!st.offer && !st.side && st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0); }
 function takeBoon(st, id, ev) { const B = D.BOONS[id]; st.boons.push(id); if (B.flag) st.bf[B.flag] = 1;
   for (const u of seekers(st)) { if (B.m) { u.m = { ...u.m }; for (const k in B.m) u.m[k] = (u.m[k] || 0) + B.m[k]; } // a copy: the sheet in the expedition's spec is never touched
@@ -215,15 +217,15 @@ function enterRoom(st, type, ev) {
   const room = st.room = { type, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
   // rocks: keep the two left columns open, keep the floor connected
   for (let tries = 0; tries < 30; tries++) {
-    room.rock.fill(0); const n = r.range(10, 17);
+    room.rock.fill(0); const n = r.range(6, 11);
     for (let i = 0; i < n; i++) room.rock[K(r.range(2, W - 1), r.int(H))] = 1;
     const seen = new Set([0]), q = [[0, 0]]; let open = 0; for (let i = 0; i < W * H; i++) if (!room.rock[i]) open++;
     while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy; if (inb(nx, ny) && !room.rock[K(nx, ny)] && !seen.has(K(nx, ny))) { seen.add(K(nx, ny)); q.push([nx, ny]); } } }
     if (seen.size === open) break;
   }
   const sk = seekers(st); sk.forEach((u, i) => {
-    u.x = i < 4 ? 0 : 1; u.y = (i % 4) + 3;
-    if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * (st.bf.fieldKit ? 55 : 30) / 100)); }
+    u.x = i % 2; u.y = Math.min(H - 1, 2 + i * 2); /* spread out on arrival, so each of them can be seen */
+    if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * ((st.bf.fieldKit ? 40 : 15) + (type === 'quiet' ? 35 : 0)) / 100)); } /* the walk between halls mends a little; a quiet hall is where the party actually rests */
     u.shield = u.m.shieldStart || 0; u.shieldPeak = u.shield; u.cds = {}; u.charges = u.sh.devCharges; u.phase = u.m.phase ? 1 : 0; u.ap = 2;
     u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = u.burn = u.lit = 0; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false; u.last = null; u.streak = 0; u.wrath = 0; u.usedStub = false;
   });
@@ -240,6 +242,8 @@ function enterRoom(st, type, ev) {
   // the hall has residents that have nothing to do with you
   if (etype !== 'boss' && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
   for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 9 : 5); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
+  if (etype === 'boss' && sp.type === 'observe') for (const u of st.units) if (u.side === 'c') { if (D.SPECIES[u.kind].boss) { u.mood = 'asleep'; u.hunter = false; } } /* watchers find it asleep */
+  if (etype === 'boss' && sp.type === 'observe') st.units = st.units.filter(u => u.side !== 'c' || D.SPECIES[u.kind].boss || !u.hunter); /* and alone */
   if (sp.sight && st.roomIdx === 0 && !sp.intro) { const p = spot(6); if (p) { const u = spawn(st, sp.sight.kind, p[0], p[1], r, ev, true, sp.sight.variant); u.sight = true; } } // today's sighting: one marked animal in the first hall
   // props
   const addProp = (kind, id, o = {}) => { const p = spot(2); if (p) room.props.push({ pid: room.pid++, kind, id, x: p[0], y: p[1], ...o }); };
@@ -328,7 +332,7 @@ function hurt(st, src, t, amt, ev, o = {}) {
   return amt;
 }
 function provoke(st, src, t) {
-  if (t.side !== 'c') return; t.calm = 0; const beast = src && src.side === 'c';
+  if (t.side !== 'c') return; t.calm = 0; const beast = src && src.side === 'c'; if (t.mood === 'asleep') { t.mood = 'hostile'; t.hunter = true; }
   if (t.mood === 'roam' && !beast) t.mood = 'hostile';
   if (t.ai === 'grazer') { t.mood = 'hostile'; t.grudge = beast ? src.id : 0; }
   if (t.ai === 'mender' || t.ai === 'lighter') t.mood = 'flee';
@@ -373,7 +377,7 @@ function push(st, t, dx, dy, n, ev, src, bonus) {
     else { if (bonus) { const o = unitAt(st, nx, ny); hurt(st, src, t, bonus, ev, { dot: true, kind: 'slam' }); if (o && o.side === 'c') hurt(st, src, o, bonus, ev, { dot: true, kind: 'slam' }); } return; } }
 }
 function stepOn(st, u, ev) {
-  const p = st.room.props.find(p => !p.done && p.walk && p.x === u.x && p.y === u.y);
+  const p = st.room.props.find(p => !p.done && p.walk && p.kind === 'flora' && p.x === u.x && p.y === u.y); /* only a Snare Vine snares: a pressure plate is also walked onto, and it used to be eaten here and filed as a plant */
   if (p) { p.done = true; if (!(u.fx && u.fx.anchor)) u.root = Math.max(u.root, 1); st.res.flora[p.id] = (st.res.flora[p.id] || 0) + 1; ev.push({ e: 'text', id: u.id, msg: 'Snared' }, { e: 'prop', pid: p.pid }); return true; }
   if (u.side === 'c') { const i = st.room.traps.findIndex(t => t.x === u.x && t.y === u.y); if (i >= 0) { const t = st.room.traps[i]; st.room.traps.splice(i, 1); ev.push({ e: 'trap', x: u.x, y: u.y }); u.root = 2; if (t.bleed) { u.bleed = 3; u.bleedD = 2 * st.tier; } hurt(st, st.units.find(o => o.id === t.owner), u, t.dmg, ev, { dot: true, kind: 'trap' }); return true; } }
   return false;
@@ -464,6 +468,7 @@ function approach(st, c, t) { // returns tile to move to (or null) so that t is 
 }
 // plan: what this creature will do if the turn ended now. Used for both the intent display and execution.
 export function plan(st, c) {
+  if (c.mood === 'asleep') return { k: 'idle', label: 'Sleeping' }; /* on an Observe expedition the great one is at rest: it can be studied and left, or woken by striking it */
   if (c.stun > 0) return { label: 'Stunned', k: 'idle' };
   if (c.calm > 0) return { label: 'Calmed', k: 'idle' };
   const S = D.SPECIES[c.kind]; const sk = seekers(st).filter(alive);
@@ -553,7 +558,7 @@ function witness(st, c, what, ev) {
 // Anything still living its own life notices the party when they come close, and its kin take the alarm.
 function notice(st, ev) {
   const sk = seekers(st).filter(alive); const woke = [];
-  for (const c of creatures(st)) if (c.mood === 'roam' && c.calm <= 0 && sk.some(s => md(s, c) <= (st.room.props.some(p => !p.done && p.lit && md(p, c) <= 1) ? 1 : Math.max(1, (NOTICE[c.ai] || 2) - (st.bf.softStep ? 1 : 0))))) woke.push(c);
+  for (const c of creatures(st)) if (c.mood === 'roam' && c.calm <= 0 && sk.some(s => s.moved && md(s, c) <= noticeRadius(st, c))) woke.push(c); /* it is movement that gives the party away: a Seeker who has not moved this beat is part of the scenery */
   for (let i = 0; i < woke.length; i++) { const c = woke[i]; if (c.mood !== 'roam') continue; c.mood = 'hostile'; ev.push({ e: 'text', id: c.id, msg: 'Notices you' });
     for (const o of creatures(st)) if (o.mood === 'roam' && o.kind === c.kind && md(o, c) <= 4) woke.push(o); }
 }
@@ -771,7 +776,7 @@ export function keyInfo(key) {
   const [t, a, b] = key.split(':');
   if (t === 'f') return { kind: 'Fauna', name: D.SPECIES[a].name, art: a, region: D.SPECIES[a].region };
   if (t === 'v') return { kind: 'Variant', name: D.VARIANTS[b].name + ' ' + D.SPECIES[a].name, art: a, variant: b, region: D.SPECIES[a].region };
-  if (t === 'p') return { kind: 'Flora', name: D.FLORA[a].name, art: a };
+  if (t === 'p') return D.FLORA[a] ? { kind: 'Flora', name: D.FLORA[a].name, art: a } : { kind: 'Flora', name: 'Unrecorded', art: null }; /* an account may still hold a bad key from before the fix */
   if (t === 'w') return { kind: 'Wonder', name: D.WONDERS[a].name, art: a };
   if (t === 'm') return { kind: 'Material', name: D.MATERIALS[a].name, art: a };
   if (t === 'b') return { kind: 'Relic', name: D.BASES[a].name, art: a };
@@ -907,7 +912,7 @@ function settle(state, log, ctx, fresh, out) {
     state.daily = { id: spec.sight.day, streak, best: Math.max(prev.best || 0, streak) }; state.research += bonus; rep.sight = { kind: spec.sight.kind, variant: spec.sight.variant, streak, bonus }; }
   for (const sp in rs.seen) { if (!met(sp)) continue; const e = touch('f:' + sp); const before = stageOf(e); e.study = (e.study || 0) + (rs.study[sp] || 0); e.samples = (e.samples || 0) + (rs.samples[sp] || 0); e.n = (e.n || 0) + 1; const after = stageOf(e); if (after > before) { rep.stageUps.push({ sp, stage: after }); rep.research += 5 * (after - before); } }
   for (const v in rs.variants) if (met(v.split(':')[0])) touch('v:' + v);
-  for (const f in rs.flora) { const e = touch('p:' + f); e.n = (e.n || 0) + rs.flora[f]; }
+  for (const f in rs.flora) { if (!D.FLORA[f]) continue; const e = touch('p:' + f); e.n = (e.n || 0) + rs.flora[f]; }
   for (const w in rs.wonders) touch('w:' + w);
   let studyPts = 0; for (const sp in rs.study) studyPts += rs.study[sp];
   // materials

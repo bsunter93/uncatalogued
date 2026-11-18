@@ -20,7 +20,23 @@ export { store };
 
 export function toast(msg, cls = '') { const t = document.createElement('div'); t.className = 'toast ' + cls; t.textContent = msg; $('#toasts').append(t); setTimeout(() => t.remove(), 3500); }
 
+// Local preview only (localhost with ?mock): a pretend Cabinet kept in this browser, so camp can be looked at without a real account.
+export const MOCK = location.hostname === 'localhost' && new URLSearchParams(location.search).has('mock');
+let mockState = null;
+function mockCall(op, body) { const now = Date.now(); const world = { feed: [], leaders: [], firstsTop: [], firsts: [], weekly: [], week: C.weekId(now), seekers: 1, rank: 1, now }; const copy = () => JSON.parse(JSON.stringify(mockState));
+  if (!mockState) { try { mockState = JSON.parse(store.get('unc.mock') || 'null'); } catch { mockState = null; } if (mockState && mockState.mockV !== C.VERSION) mockState = null; }
+  if (!mockState) { const s = C.newPlayer('Preview', 7, now); const r = C.mkRng(4242); s.mockV = C.VERSION; s.stats.runs = 6; s.stats.wins = 5; s.research = 40;
+    for (const a of ['tinkerer', 'firebrand']) { const A = D.ARCHETYPES[a]; const k = { id: a, arch: a, name: A.seeker, lvl: 1, xp: 0, attr: { ...A.attr }, pts: 0, spec: null, traits: [], gear: {} }; s.seekers[a] = k; s.roster.push(a); for (const sl in A.start) { const it = C.makeItem(r, A.start[sl], 0, 1); it.id = 'i' + (s.nextId++); s.items[it.id] = it; k.gear[sl] = it.id; } }
+    for (const id of s.roster) { s.seekers[id].lvl = 4; s.seekers[id].pts = 1; }
+    const sp = Object.keys(D.SPECIES); sp.slice(0, 11).forEach((k, i) => { s.cat['f:' + k] = { n: 1 + i % 3, study: [3, 9, 14, 22][i % 4], samples: [0, 1, 3, 6][i % 4], at: now - i * 864e5 }; });
+    for (const k of Object.keys(D.FLORA).slice(0, 3)) s.cat['p:' + k] = { n: 2, at: now };
+    for (const [b, rar] of [['echo_blade', 3], ['arc_lance', 2], ['mirror_carapace', 4], ['hunter_mask', 1], ['lucky_knot', 2], ['pulse_emitter', 3], ['kindled_pair', 4]]) { if (!D.BASES[b]) continue; const it = C.makeItem(r, b, rar, 2); it.id = 'i' + (s.nextId++); s.items[it.id] = it; s.cat['b:' + b] = { n: 1, at: now }; }
+    for (const m of D.MILESTONES) if (['bench', 'clockwork', 'tamsin', 'garrow', 'variants', 'mutate'].includes(m.id)) s.unlocks[m.id] = 1;
+    mockState = s; }
+  if (op === 'ops') { const rng = C.mkRng((now & 0x7fffffff) || 1); const results = []; let error; for (const o of body.ops) { try { const out = C.applyOp(mockState, o, { now, rng }); results.push({ unlocked: out.unlocked, item: out.item, report: out.report, fresh: out.fresh }); } catch (e) { if (!e.illegal) throw e; error = e.message; break; } } store.set('unc.mock', JSON.stringify(mockState)); return { state: copy(), results, firsts: [], error, world }; }
+  return op === 'world' ? { world } : { state: copy(), world }; }
 async function call(op, body = {}) {
+  if (MOCK) { const j = mockCall(op, body); if (j.world) setWorld(j.world); return j; }
   let res;
   try { res = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ v: C.VERSION, key: G.key, op, ...body }) }); }
   catch { throw new Error('No connection to the Cabinet. Check your network and try again.'); }
@@ -112,4 +128,4 @@ export function itemMini(it, o = {}) {
     ${hints.map(h => `<p class="pair"><span>Wakes <b>${esc(D.RESONANCES[h.res].name)}</b></span></p>`).join('')}</button>`;
 }
 export function ago(t, now = Date.now()) { const s = Math.max(0, (now - new Date(t).getTime()) / 1000); if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; }
-export function accession(key) { const all = C.allKeys(); const [t, a] = key.split(':'); const reg = t === 'f' || t === 'v' ? D.REGIONS[D.SPECIES[a].region].code : 'CAB'; return `UNC.${reg}.${String(all.indexOf(key) + 1).padStart(3, '0')}`; }
+export function accession(key) { const all = C.allKeys(); const [t, a] = key.split(':'); const reg = t === 'f' || t === 'v' ? D.REGIONS[D.SPECIES[a].region].code : 'CAB'; return `WH.${reg}.${String(all.indexOf(key) + 1).padStart(3, '0')}`; }

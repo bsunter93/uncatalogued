@@ -616,3 +616,32 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 .game .held .hb img { width: 100%; height: 100%; border-radius: 4px; display: block; }
 .game .held .hb::after { content: attr(data-tip) "\A" attr(data-desc); white-space: pre-wrap; position: absolute; top: calc(100% + 8px); left: 0; width: max-content; max-width: 230px; padding: 7px 10px; font-size: 12.5px; line-height: 1.35; color: #f1e8d8; background: rgba(14, 9, 18, .97); border: 1px solid rgba(184, 150, 74, .7); border-radius: 5px; box-shadow: 0 8px 22px rgba(0, 0, 0, .6); opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 40; }
 .game .held .hb:hover::after { opacity: 1; }
+
+.game .labels { transition: opacity .25s; } .game.cine .labels { opacity: 0; }
+
+/* The cut into and out of a close-up: one blink of black, so the lens never has to travel through the hall */
+.cutblack { position: absolute; inset: 0; background: #05030c; opacity: 0; pointer-events: none; z-index: 6; }
+.cutblack.on { animation: cutblink .22s ease-in-out; }
+@keyframes cutblink { 0% { opacity: 0; } 42% { opacity: 1; } 58% { opacity: 1; } 100% { opacity: 0; } }
+
+/* The page a field note goes on */
+.studycard { position: absolute; left: 50%; bottom: 150px; margin-left: calc(min(520px, 100% - 36px) / -2); z-index: 16; display: grid; grid-template-columns: 148px 1fr; gap: 16px; width: min(520px, calc(100% - 36px)); padding: 10px; text-align: left; border: 1px solid var(--gilt); border-radius: 6px; background: linear-gradient(180deg, rgba(44, 32, 26, .97), rgba(18, 12, 20, .97)); box-shadow: 0 14px 40px rgba(0, 0, 0, .6); animation: notein .45s cubic-bezier(.2, .9, .3, 1) both, noteout .5s ease 4.1s both; }
+.studycard img { width: 148px; height: 148px; object-fit: cover; border-radius: 4px; box-shadow: 0 0 0 1px var(--brass2, #6b5526); }
+.studycard span { display: flex; flex-direction: column; gap: 1px; min-width: 0; } .studycard i { font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--gilt); font-style: normal; }
+.studycard b { font-size: 24px; color: #f3ead6; line-height: 1.15; } .studycard em { font-size: 12.5px; color: var(--ink2); } .studycard small { margin-top: 6px; font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #6fd6ff; } .studycard p { margin: 2px 0 0; font-size: 15px; line-height: 1.35; color: #e6dcc8; }
+@keyframes notein { from { opacity: 0; transform: translateY(26px) rotate(-1deg); } to { opacity: 1; transform: none; } } @keyframes noteout { to { opacity: 0; transform: translateY(-10px); } }
+.game.cine .studycard { opacity: 0; }
+/* Arriving in a hall */
+.entrance { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); z-index: 15; text-align: center; pointer-events: none; padding: 10px 22px; max-width: min(620px, 90%); background: linear-gradient(90deg, transparent, rgba(8, 5, 14, .82) 18%, rgba(8, 5, 14, .82) 82%, transparent); animation: arrivein .6s ease both; }
+.entrance p { margin: 0; font-size: 17px; color: #f1e8d8; text-shadow: 0 1px 6px #000; } .entrance i { display: block; margin-top: 3px; font: 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gilt); font-style: normal; }
+.entrance.big { bottom: 9%; } .entrance.big b { display: block; font: 700 clamp(34px, 6vw, 64px)/1.05 var(--serif, Georgia, serif); color: #fff3d6; text-shadow: 0 0 30px rgba(255, 150, 80, .55), 0 3px 0 #1a0c06; letter-spacing: .01em; } .entrance.big i { margin: 0 0 4px; font-size: 13px; font-style: italic; text-transform: none; letter-spacing: .04em; font-family: var(--serif, Georgia, serif); } .entrance.big p { margin-top: 8px; font-size: 15.5px; color: #e0d4bc; }
+@keyframes arrivein { from { opacity: 0; transform: translateX(-50%) translateY(14px); } to { opacity: 1; transform: translateX(-50%); } }
+.game.arriving .hud.hbot { opacity: .25; pointer-events: none; }
+
+.sts .want { background: #e8c36a; color: #1a1206; font-weight: 700; }
+
+/* The report shows the plates themselves: what moved this time, and what one more expedition would finish */
+.mile.withplate { display: grid; grid-template-columns: 64px 1fr; gap: 3px 12px; align-items: center; }
+.mile.withplate .plate { grid-row: span 3; width: 64px !important; height: 64px !important; min-width: 0; aspect-ratio: 1; padding: 0; }
+.stageup { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .stageup .plate { width: 76px !important; height: 76px !important; flex: 0 0 76px; aspect-ratio: 1; padding: 0; }
+.mile.withplate .plate .art, .stageup .plate .art, .mile.withplate .plate img, .stageup .plate img { width: 100% !important; height: 100% !important; object-fit: cover; display: block; }

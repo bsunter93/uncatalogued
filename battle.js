@@ -3,8 +3,8 @@ import { C, D, G, $, esc, art, face, store, toast, itemCard } from './ui.js';
 import { createScene } from './scene3d.js';
 import { snd } from './sound.js';
 
-const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. A good place to study. Nothing to clear, so no case for clearing it.']],
-  clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. A good place to study. Nothing to clear, so no case for clearing it.']] };
+const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. The party rests here and recovers. Nothing to clear, so no case and no boon.']],
+  clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. The party rests here and recovers. Nothing to clear, so no case and no boon.']] };
 // Things around the hall that are not part of the fight. Tap one to read it.
 const DECOR = {
   survey: ['Survey Station 4', 'Left standing', 'A brass theodolite on a tripod, aimed at the door. The sketchbook beside it is open to a drawing of this room. The trees in the drawing are shorter.'],
@@ -114,6 +114,7 @@ export function mountBattle(root, onFinish) {
   const cap = t => t ? t[0].toUpperCase() + t.slice(1) : ''; const placeTag = i => { const id = st.places[i]; if (!id) return ''; const W0 = D.WONDERS[id]; return Object.values(st.wandered).includes(id) ? W0.name : cap(W0.seen); }; // a far place is only named once the party has been
   const nameSites = () => sc.names({ ...SITE_NAME, F: D.SPECIES[reg.boss].name, P0: placeTag(0), P1: placeTag(1) });
   nameSites(); sc.place(siteNow());
+  setTimeout(async () => { if (busy || st.outcome || log.length) return; busy = true; try { await entrance(); } finally { busy = false; sync(); } }, 1800);
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
   const fixInfo = p => p.kind !== 'fixture' ? [] : knownSet()[spec.region + ':' + p.id] ? ((CWF && FIXTURE_CW[p.id]) || FIXTURE[p.id]) : ((CWF && UNKNOWN_CW[p.id]) || UNKNOWN[p.id]);
@@ -127,7 +128,7 @@ export function mountBattle(root, onFinish) {
   const stage = k => spec.stages[k] ?? -1;
   function label(u) {
     const s = []; if (u.bleed > 0) s.push(`<span class="bleed">BLEED ${u.bleed}</span>`); if (u.poison > 0) s.push(`<span class="poison">POISON ${u.poison}</span>`); if (u.mark > 0) s.push('<span class="mark">MARKED</span>'); if (u.root > 0) s.push('<span>HELD</span>'); if (u.stun > 0) s.push('<span>STUNNED</span>'); if (u.rip > 0) s.push('<span>RIPOSTE</span>'); if (u.taunt > 0) s.push('<span>BRACED</span>'); if (u.calm > 0) s.push('<span class="calm">CALM</span>');
-    const h = u.side === 'c' && C.isHostile(st, u);
+    const h = u.side === 'c' && C.isHostile(st, u); if (u.side === 'c' && spec.type === 'observe' && u.kind === reg.observe) s.unshift('<span class="want">YOUR SUBJECT</span>');
     return `${s.length ? `<div class="sts">${s.join('')}</div>` : ''}${u.side === 's' ? `<div class="ap">${'<i></i>'.repeat(Math.max(0, u.ap))}</div>` : ''}<div class="hp ${h ? 'hostile' : ''}"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><b style="width:${Math.min(100, (u.shield || 0) / u.max * 100)}%"></b></div>`;
   }
   function sync() {
@@ -145,6 +146,7 @@ export function mountBattle(root, onFinish) {
   function targets() { // what a click can do right now: Map "x,y" -> action
     const m = new Map(); const u = unit(sel); if (!live(u) || busy || st.outcome) return m;
     const each = f => { for (let y = 0; y < C.H; y++) for (let x = 0; x < C.W; x++) f(x, y, C.unitAt(st, x, y)); };
+    if (mode && mode.k === 'atk') { each((x, y, o) => { if (o && o.side === 'c' && live(o) && u.ap > 0 && md(u, o) <= C.weaponRange(st, u)) m.set(x + ',' + y, { t: 'atk', u: u.id, id: o.id }); }); return m; }
     if (mode && mode.k === 'abil') {
       const A = D.ABILITIES[mode.id]; const rg = C.abilRange(st, u, mode.id);
       each((x, y, o) => { const d = md(u, { x, y }); if (d > rg) return;
@@ -196,16 +198,16 @@ export function mountBattle(root, onFinish) {
   }
   function actions() {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
-    const b = [], own = []; const dis = busy || !live(u);
+    const b = [], own = []; const dis = busy || !live(u); const calm = C.exploring(st);
     if (live(u)) {
       b.push(btn('lore', 'study', 'Study', u.freeStudy ? 'find weak points · 1 action' : 'free on a calm creature', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Each note adds 10% damage against that creature and reveals what it is weak to" ${dis ? 'disabled' : u.ap < 1 && u.freeStudy ? off('No actions left this turn') : ''}`));
+      own.push(btn('attack', 'attack', 'Attack', calm ? 'weapon' : 'weapon · 1 action', `data-mode="atk" aria-pressed="${mode?.k === 'atk'}" title="Strike with ${esc(u.name)}'s weapon. Something calm is only struck when you choose this first." ${dis ? 'disabled' : u.ap < 1 && !calm ? off('No actions left this turn') : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
         own.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free || C.exploring(st) ? KINDWORD[ABIL_KIND[id]] || 'ability' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
       if (u.sh.dev) { const k = C.devKind(u); const I = C.DEV_INFO[k]; const nm = { lure: 'Lure Pod', barrier: 'Barrier Seed', pulse: 'Pulse Emitter', drone: 'Drone Core', blink: 'Blink Anchor', gravity: 'Gravity Knot' }[k];
         own.push(btn('device', 'device', nm, `${u.charges} left`, `data-mode="dev" aria-pressed="${mode?.k === 'dev'}" ${dis ? 'disabled' : u.charges <= 0 ? off('No charges left on this device') : u.ap < I.ap ? off('Not enough actions for the device') : ''}`)); }
     }
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0 && !passed.has(x.id));
-    const calm = C.exploring(st);
     if (live(u) && !calm) { const others = mine().some(x => x !== u && live(x) && x.ap > 0 && !passed.has(x.id)); own.push(btn('flow', 'end', 'End turn', others ? `${esc(u.name)} is done` : 'last Seeker: creatures act', `data-act="pass" title="Finish ${esc(u.name)}'s turn and hand over to the next Seeker" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${u.ap <= 0 ? 'ready' : ''} `)); }
     const far = C.exploring(st) ? C.placeFor(st) : null; if (far) b.push(btn('lore', 'study', 'Wander off', 'to ' + D.WONDERS[far].seen, `data-act="wander" title="Leave the hall for a while and go and look. You can come back." ${busy ? 'disabled' : ''}`));
     if (adv) b.push(btn('flow', 'move_on', st.side ? 'Head back' : st.roomIdx >= LEN - 1 ? 'Extract' : st.roomIdx === LEN - 2 ? 'Face the great one' : 'Move on', st.side ? 'to the hall you left' : st.roomIdx >= LEN - 1 ? 'end the expedition' : (st.offer && !C.boonEarned(st) ? (st.room.type === 'quiet' ? 'a quiet hall gives rest, not a boon · ' : 'leave now and this hall gives no boon · ') : st.offer ? 'take a boon · ' : '') + (st.roomIdx === LEN - 2 ? D.SPECIES[reg.boss].name + ' is next' : 'choose the next hall'), `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
@@ -258,7 +260,7 @@ export function mountBattle(root, onFinish) {
     else if (mode?.k === 'dev') t = '<b>Device.</b> Tap a lit tile to use it.';
     else if (armed) t = '<b>It is calm.</b> Tap it again to attack anyway. It will fight back.';
     else if (C.canAdvance(st) && first && st.roomIdx === 0) t = '<b>The room is quiet.</b> Before you move on: the Mossback is harmless. Study it, pick the moss, then leave when you are ready.';
-    else if (C.canAdvance(st)) t = `<b>Exploring.</b> Click anywhere to walk; the others follow. The hall moves when you do. Nothing is hunting you.`;
+    else if (C.canAdvance(st)) t = `<b>Exploring.</b> Click to walk; click a creature to creep up and look. Stand still and you are scenery: only moving close gets you noticed.`;
     else if (live(u) && u.ap > 0) t = first && st.turn <= 2 && st.roomIdx === 0 ? `<b>${esc(u.name)}</b> has ${u.ap} action${u.ap === 1 ? '' : 's'}. Tap a dotted tile to move. Tap a glowing creature to attack. Red lines show who each creature is coming for.` : `<b>${esc(u.name)}</b>: ${u.ap} action${u.ap === 1 ? '' : 's'} left.`;
     else t = 'No actions left. <b>End turn.</b>';
     el.innerHTML = t;
@@ -279,7 +281,7 @@ export function mountBattle(root, onFinish) {
       else { txt = `Out of reach (${md(me, o)} tiles, weapon reaches ${C.weaponRange(st, me)}). Click to move closer`; cls = 'far'; }
       if (C.isHostile(st, o)) txt += ' · red tiles: where it can strike next turn';
     } else if (o && o.side === 's') { txt = o.id === sel ? `${o.name} · selected` : `Select ${o.name}`; }
-    else if (st.room.rock[y * C.W + x]) { txt = 'Blocked: boulders'; cls = 'no'; }
+    else if (st.room.rock[y * C.W + x]) { txt = CWF ? 'Blocked: machinery' : 'Blocked: boulders'; cls = 'no'; }
     else if (p && p.kind === 'plate') { txt = 'A mark in the floor: ' + GL[p.glyph] + '. Click to step onto it'; cls = 'go'; }
     else if (p && p.kind === 'chest' && !C.chestOpen(st, p)) { txt = 'A locked chest. Click to read the lid'; cls = 'far'; }
     else if (p) { const near = live(me) && md(me, p) <= 1; txt = a && a.t === 'use' ? `${p.kind === 'find' || (p.kind === 'fixture' && !knownSet()[spec.region + ':' + p.id]) ? 'See what it does' : p.kind === 'fixture' ? (p.id === 'lamp' ? (p.lit ? 'Put out the lamp' : 'Light the lamp') : p.id === 'bellcap' ? (p.spent ? 'Spent' : CWF ? 'Open the steam valve' : 'Strike the Bellcap') : 'Open the case') : p.kind === 'flora' ? 'Gather' : p.kind === 'wonder' ? 'Record' : p.kind === 'chest' ? 'Open the chest' : 'Take'}${C.exploring(st) ? '' : ' · 1 action'}` : near ? 'No actions left this turn' : p.walk ? 'Click to walk to it' : 'Click to walk up to it'; cls = a ? 'go' : 'far'; }
@@ -300,7 +302,7 @@ export function mountBattle(root, onFinish) {
     if (a) { if (a.t === 'abil') push(`${who(a.u)} uses ${D.ABILITIES[a.a].name}${a.id != null ? ' on ' + who(a.id) : ''}.`, 'ally did'); else if (a.t === 'study') push(`${who(a.u)} studies ${who(a.id)}.`, 'ally did'); else if (a.t === 'dev') push(`${who(a.u)} uses a device.`, 'ally did'); else if (a.t === 'atk') push(`${who(a.u)} attacks ${who(a.id)}.`, 'ally did'); else if (a.t === 'end') push('You end the turn.', 'sys'); else if (a.t === 'next') push(S.outcome ? 'The party extracts.' : 'The party moves on.', 'sys'); else if (a.t === 'abandon') push('The party retreats.', 'sys'); }
     for (const e of ev) {
       if (e.e === 'phase' && e.free) continue;
-      if (e.e === 'phase') push(e.who === 'c' ? `Round ${S.turn}: the Cabinet moves` : `Round ${S.turn}: your turn`, 'head');
+      if (e.e === 'phase') push(e.who === 'c' ? 'The Cabinet moves' : 'Your turn', 'head');
       else if (e.e === 'room') push(`Room ${e.idx + 1}`, 'head');
       else if (e.e === 'side') push(e.id ? 'The party wanders off to ' + D.WONDERS[e.id].name : 'The party heads back to the hall', 'head');
       else if (e.e === 'find') { const F0 = D.FINDS[S.room.props.find(q => q.pid === e.pid)?.id]; push(who(e.by) + ' tries ' + (F0 ? F0.name.toLowerCase() : 'something') + '. ' + (e.what === 'wake' ? 'Something wakes.' : F0 ? F0.after : ''), 'ally did'); }
@@ -328,7 +330,7 @@ export function mountBattle(root, onFinish) {
   }
   function drawLog() { const el = $('.clog', root); el.hidden = !logOpen; for (const bt of root.querySelectorAll('[data-act="log"]')) bt.setAttribute('aria-expanded', logOpen); if (!logOpen) return; const ol = $('ol', el); ol.innerHTML = clog.length ? clog.map(l => `<li class="${l.c}">${esc(l.t)}</li>`).join('') : '<li class="sys">Nothing has happened yet.</li>'; ol.scrollTop = ol.scrollHeight; }
   // rebuild the log after a reload by replaying what has already happened
-  try { const S0 = C.createRun(spec); clog.push({ t: 'Room 1', c: 'head' }, { t: 'Round 1: your turn', c: 'head' }); for (const a of log) record(a, C.apply(S0, a), S0); } catch { /* the live state is what matters */ }
+  try { const S0 = C.createRun(spec); clog.push({ t: 'Hall 1', c: 'head' }, { t: 'Your turn', c: 'head' }); for (const a of log) record(a, C.apply(S0, a), S0); } catch { /* the live state is what matters */ }
   // A short fading line over the selected Seeker saying why nothing happened.
   function say(txt, at) { const u = at || unit(sel) || mine()[0]; if (!u) return toast(txt); float(u.x, u.y, txt, 'txt why'); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
@@ -338,7 +340,23 @@ export function mountBattle(root, onFinish) {
   const cutLoad = id => { if (!id || cutImg[id]) return; const im = new Image(); im.src = `assets/cut/${id}.jpg`; cutImg[id] = im; };
   const cutReady = id => cutImg[id] && cutImg[id].complete && cutImg[id].naturalWidth > 0;
   for (const u of st.units) cutLoad(u.side === 's' ? CUT_HERO[u.kind] : u.side === 'c' ? u.kind : null);
-  let cutAct = null; // what the Seeker just did, so the cut-away can show the very weapon or spell
+  let cutAct = null, fightShot = false; const castSeen = new Set(), fell = new Set();
+  // What a field note taught you, shown as the page it goes on: the plate, the name, and the one new thing.
+  function studyCard(e) { const c = unit(e.id); if (!c || c.side !== 'c' || !D.SPECIES[c.kind]) return; const S = D.SPECIES[c.kind]; const n = Math.max(1, c.studied || 1), cap = c.variant ? 5 : 3;
+    const seen = { kill: 'a kill', hunt: 'a hunt', feed: 'feeding', graze: 'grazing', light: 'a lamp lit' }[e.seen];
+    const fact = seen ? ['Witnessed: ' + seen, S.blurb] : n === 1 ? ['How it lives', S.behavior] : n === 2 ? ['Weak point', `${D.FAMILY_NAME[S.weak]} weapons hurt it most.`] : ['Hide', `${D.FAMILY_NAME[S.resist]} weapons glance off it.`];
+    root.querySelector('.studycard')?.remove(); const d = document.createElement('button'); d.className = 'studycard';
+    d.innerHTML = `<img src="assets/cat/${c.kind}.jpg" alt=""><span><i>${seen ? 'Field note' : 'Field note ' + Math.min(n, cap) + ' of ' + cap}</i><b>${esc(S.name)}</b><em>${esc(S.latin)}</em><small>${fact[0]}</small><p>${esc(fact[1])}</p></span>`;
+    d.onclick = () => d.remove(); root.querySelector('.game').append(d); setTimeout(() => d.remove(), 4600); }
+  // Arriving: the hall is shown before it is played. The great one gets its name; anywhere else, one resident going about its day.
+  async function entrance() { const res = st.units.filter(u => u.side === 'c' && live(u)); if (!res.length || st.side) return; const nm = u => D.SPECIES[u.kind].name; let who = res.find(u => D.SPECIES[u.kind].boss), big = !!who, line = '';
+    const subj = spec.type === 'observe' && res.find(u => u.kind === reg.observe); if (!who && subj) { who = subj; line = `The ${nm(subj)} you came to record is here.`; }
+    if (!who) { const prey = res.find(u => D.SPECIES[u.kind].prey); const hunter = res.find(u => (D.SPECIES[u.kind].ai === 'predator' || D.SPECIES[u.kind].hunts)); const by = ai => res.find(u => D.SPECIES[u.kind].ai === ai);
+      if (hunter && prey) { who = hunter; line = `A ${nm(hunter)} is stalking the ${nm(prey)}s.`; } else if (by('lighter')) { who = by('lighter'); line = `A ${nm(who)} is walking its round, lamp to lamp.`; } else if (by('sentinel')) { who = by('sentinel'); line = `A ${nm(who)} stands guard. It has not moved for you.`; }
+      else if (by('grazer')) { who = by('grazer'); line = `A ${nm(who)} is grazing.`; } else if (by('pack')) { who = by('pack'); const k = res.filter(u => u.kind === who.kind).length; line = k > 1 ? `${k} ${nm(who)}s are roaming together.` : `A ${nm(who)} is roaming.`; } else return; }
+    const S = D.SPECIES[who.kind]; const d = document.createElement('div'); d.className = 'entrance' + (big ? ' big' : '');
+    d.innerHTML = big ? `<i>${esc(S.latin)}</i><b>${esc(S.name)}</b><p>${esc(S.blurb)}</p>${who.mood === 'asleep' ? '<p style="color:var(--gilt)">It is asleep. Study it and leave, or strike it and wake it.</p>' : ''}` : `<p>${esc(line)}</p><i>Nothing here has noticed you.</i>`;
+    root.querySelector('.game').append(d); root.querySelector('.game').classList.add('arriving'); sc.focus(who.x, who.y); await sleep(big ? 3200 : 2400); d.remove(); root.querySelector('.game').classList.remove('arriving'); const me = unit(sel) || mine()[0]; if (big) { sc.wide(.86); sc.focus(Math.round((who.x + (me ? me.x : 0)) / 2), Math.round((who.y + (me ? me.y : 0)) / 2)); } else if (me) sc.focus(me.x, me.y); await sleep(250); } // what the Seeker just did, so the cut-away can show the very weapon or spell
   async function cutIn(fromKind, toKind, n, word, art) { const h = CUT_HERO[fromKind]; cutLoad(h); cutLoad(toKind); if (!cutReady(h) || !cutReady(toKind)) return false;
     const d = document.createElement('div'); d.className = 'cutin'; d.innerHTML = `<div class="pane hero"><img src="assets/cut/${h}.jpg" alt=""></div><div class="pane foe"><img src="assets/cut/${toKind}.jpg" alt=""></div><i class="slash"></i>${art ? `<img class="tool" src="${art}" alt="" onerror="this.remove()">` : ''}<b class="num">${n}<small>${word}</small></b>`;
     root.querySelector('.game').append(d); await sleep(1250); d.remove(); return true; }
@@ -349,18 +367,18 @@ export function mountBattle(root, onFinish) {
     for (const e of ev) {
       if (e.e === 'phase' && sc.cining()) { sc.cineEnd(); await sleep(220); }
       if (e.e === 'text' && /^(Witnessed|Notices)/.test(e.msg)) { const v0 = at(e.id); sc.focus(v0.x, v0.y); await sleep(350); }
-      if (e.e === 'room') { sc.cineEnd(); banner(e.idx === LEN - 1 ? D.SPECIES[reg.boss].name : `Hall ${e.idx + 1}`); snd.room(); return; }
+      if (e.e === 'room') { sc.cineEnd(); castSeen.clear(); fightShot = false; banner(e.idx === LEN - 1 ? D.SPECIES[reg.boss].name : `Hall ${e.idx + 1}`); snd.room(); return; }
       if (e.e === 'side') { sc.cineEnd(); banner(e.id ? D.WONDERS[e.id].name : 'Back in the hall'); snd.room(); return; }
       if (e.e === 'find') { const F0 = D.FINDS[st.room.props.find(q => q.pid === e.pid)?.id] || {}; const res = { notes: 'Field notes on the ' + (D.SPECIES[e.kind]?.name || 'residents') + ': +3.', case: 'A sealed case comes out with you.', mats: 'Two of ' + (D.MATERIALS[e.mat]?.name || 'something useful') + '.', mend: 'The whole party is restored.', lore: 'Worth writing down. Experience for everyone.', wake: 'It was not empty.' }[e.what]; float(e.x, e.y, e.what === 'wake' ? 'Something wakes' : 'Found', e.what === 'wake' ? 'txt why' : 'study'); sc.burst(e.x, e.y, e.what === 'wake' ? 0xff5a4a : 0xffd05a); e.what === 'wake' ? snd.warn() : snd.pick(); toast((F0.name || 'It') + ': ' + (e.what === 'wake' ? '' : (F0.after || '') + ' ') + res, e.what === 'wake' ? '' : 'good'); await sleep(420); continue; }
       if (e.e === 'move' && (drift || e.trail)) { const v = at(e.id); sc.move(e.id, e.path, e.trail ? 115 : 190); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; continue; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); const mine0 = e.from && !e.dot && unit(e.from)?.side === 's' && unit(e.id)?.side === 'c' && store.get('unc.cine') !== '0'; if (mine0 && !sc.cining() && sc.cine(e.from, e.id)) await sleep(640); const close = mine0 && sc.cining(); if (e.from && e.k === 'beam') { const f = at(e.from); sc.ray(f.x, f.y, v.x, v.y, 0xff2a1a); await sleep(180); } else if (e.from && e.k === 'fire') { if (!fired) { fired = true; sc.breath(e.from, e.id); await sleep(420); } sc.burst(v.x, v.y, 0xff7a2a); await sleep(90); } else if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); const f0 = at(e.from); if (close && Math.abs(f0.x - v.x) + Math.abs(f0.y - v.y) > 1) { sc.fly(460); await sleep(460); } } sc.hit(e.id, e.crit); const dies = close && (unit(e.id)?.hp ?? 1) <= 0; if (close) sc.impact(e.id, e.crit, dies); if (close && (e.crit || dies || e.k) && !cutBusy) { cutBusy = true; await sleep(90); await cutIn(unit(e.from).kind, unit(e.id).kind, e.n, dies ? 'Finished' : e.crit ? 'Critical' : e.eff === 'weak' ? 'Weak to it' : 'Hit', cutAct && cutAct.t === 'abil' ? `assets/icons/${cutAct.a}.jpg` : gearOf(unit(e.from)).weapon ? `assets/items/${gearOf(unit(e.from)).weapon}.jpg` : ''); cutBusy = false; } snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : close ? (e.crit || dies ? 950 : 600) : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); const mine0 = e.from && !e.dot && unit(e.from)?.side === 's' && unit(e.id)?.side === 'c' && store.get('unc.cine') !== '0'; const kill0 = (unit(e.id)?.hp ?? 1) <= 0; if (mine0 && !sc.cining() && (kill0 || ((e.crit || e.eff === 'weak' || !fightShot) && e.eff !== 'resist')) && sc.cine(e.from, e.id)) { fightShot = true; tip.hidden = true; await sleep(230); } /* a close-up for the blows that matter: a kill, a critical, a weakness found, the first blow of a fight. The rest land at the pace of play. */ const close = mine0 && sc.cining(); if (e.from && e.k === 'beam') { const f = at(e.from); sc.ray(f.x, f.y, v.x, v.y, 0xff2a1a); await sleep(180); } else if (e.from && e.k === 'fire') { if (!fired) { fired = true; sc.breath(e.from, e.id); await sleep(420); } sc.burst(v.x, v.y, 0xff7a2a); await sleep(90); } else if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); const f0 = at(e.from); if (close && Math.abs(f0.x - v.x) + Math.abs(f0.y - v.y) > 1) { sc.fly(320); await sleep(320); } } sc.hit(e.id, e.crit); const dies = close && (unit(e.id)?.hp ?? 1) <= 0; if (close) sc.impact(e.id, e.crit, dies); if (dies && !fell.has(e.id)) { fell.add(e.id); sc.gone(e.id); } if (close && (e.crit || dies || e.k) && !cutBusy) { cutBusy = true; await sleep(90); await cutIn(unit(e.from).kind, unit(e.id).kind, e.n, dies ? 'Finished' : e.crit ? 'Critical' : e.eff === 'weak' ? 'Weak to it' : 'Hit', cutAct && cutAct.t === 'abil' ? `assets/icons/${cutAct.a}.jpg` : gearOf(unit(e.from)).weapon ? `assets/items/${gearOf(unit(e.from)).weapon}.jpg` : ''); cutBusy = false; } snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : close ? 460 : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
       else if (e.e === 'status') { const v = at(e.id); float(v.x, v.y, { bleed: 'Bleeding', poison: 'Poisoned', mark: 'Marked', calm: 'Calmed', root: 'Held' }[e.s] || e.s, 'txt'); await sleep(110); }
-      else if (e.e === 'study') { const v = at(e.id); float(v.x, v.y, '+' + e.n + ' study', 'study'); snd.study(); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
-      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { if (e.e === 'flee') sc.cineEnd(); const v = at(e.id); sc.gone(e.id); e.e === 'flee' ? snd.flee() : snd.die(); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
+      else if (e.e === 'study') { const v = at(e.id); if (e.seen || cutAct?.t !== 'study') studyCard(e); float(v.x, v.y, '+' + e.n + ' study', 'study'); snd.study(); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
+      else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { if (e.e === 'flee') sc.cineEnd(); const v = at(e.id); if (!fell.has(e.id)) sc.gone(e.id); e.e === 'flee' ? snd.flee() : snd.die(); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
       else if (e.e === 'spawn') { const u = unit(e.id); if (u) { sc.add({ id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant }); sc.burst(u.x, u.y, 0xb6e33a); vp.set(u.id, { x: u.x, y: u.y }); await sleep(180); } }
       else if (e.e === 'eat') { const v = at(e.id); float(v.x, v.y, 'Feeds', 'txt'); await sleep(220); }
       else if (e.e === 'phase' && e.free) { drift = e.who === 'c'; }
@@ -385,16 +403,16 @@ export function mountBattle(root, onFinish) {
     const shut = st.room.props.filter(q => q.kind === 'chest' && !q.done && q.lock !== 'plates' && !C.chestOpen(st, q));
     try { ev = C.apply(st, a); } catch (e) { if (e.illegal) { toast(e.message); return; } throw e; }
     const flair = a.t === 'study' ? 'study' : a.t === 'abil' ? (/brace|riposte|guard/.test(a.a) ? 'guard' : 'skill') : a.t === 'use' ? 'study' : null;
-    log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st); drawLog();
+    log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st);
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; passed.clear(); sel = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
-    if (a.t === 'abil' && a.id != null && unit(a.id)?.side === 'c' && store.get('unc.cine') !== '0' && !sc.cining() && sc.cine(a.u, a.id)) await sleep(560); // the close-up opens on the cast, not only on the blow
+    if (a.t === 'abil' && a.id != null && unit(a.id)?.side === 'c' && store.get('unc.cine') !== '0' && !castSeen.has(a.a) && !sc.cining() && sc.cine(a.u, a.id)) { castSeen.add(a.a); fightShot = true; tip.hidden = true; await sleep(230); } // the close-up opens on the cast, not only on the blow
     if (flair) { const own = a.t === 'abil' ? sc.act(a.u, 'a:' + a.a) : 0; const d = own || sc.act(a.u, flair); if (d) await sleep(own ? Math.min(d * .55, 1500) : Math.min(d * .5, 700)); }
-    cutAct = a; await play(ev, before);
+    if (C.exploring(st)) fightShot = false; cutAct = a; if (a.t === 'study') { const se = ev.find(e => e.e === 'study' && !e.seen); if (se) studyCard(se); } await play(ev, before); drawLog();
     for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
-    if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); }
+    if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); head(); await entrance(); }
     busy = false;
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();
@@ -422,7 +440,7 @@ export function mountBattle(root, onFinish) {
     const card = (t, c) => t === 'elite' ? `<button data-c="${c}"><span class="chip">Elite</span><h3>${place(t)}</h3><p>${esc(D.SPECIES[reg.elite].name)} ${P[0][1]}</p></button>`
       : t === 'quiet' ? `<button data-c="${c}"><span class="chip" style="background:rgba(143,224,194,.14);color:var(--calm)">Quiet</span><h3>${place(t)}</h3><p>${P[1][1]}</p></button>`
       : `<button data-c="${c}"><span class="chip" style="background:rgba(232,195,106,.14);color:var(--gilt)">Hall</span><h3>${place(t)}</h3><p>${ROAD[spec.region][1]}</p></button>`;
-    const stay = '<button class="link" data-c="x" style="align-self:flex-start">Not yet. Stay in this hall.</button>';
+    const stay = (spec.type === 'observe' ? `<p class="dim" style="font-size:13.5px">Your subject, the ${esc(D.SPECIES[reg.observe].name)}, is in every hall before the last: one of them, or two where it is quiet.</p>` : '') + '<button class="link" data-c="x" style="align-self:flex-start">Not yet. Stay in this hall.</button>';
     const boons = () => { v.innerHTML = `<div class="modal"><p class="label">Hall ${st.roomIdx + 1} of ${LEN} cleared · ${st.boons.length} boon${st.boons.length === 1 ? '' : 's'} carried</p><h2>Something worth taking.</h2><p class="dim" style="margin-top:-6px">Take one. It stays with the whole party until the expedition ends.</p>
       <div class="boonpick">${st.offer.map((id, i) => `<button data-b="${i}"><img src="assets/icons/boon_${id}.jpg" alt="" onerror="this.style.visibility='hidden'"><h3>${esc(D.BOONS[id].name)}</h3><p>${esc(D.BOONS[id].desc)}</p></button>`).join('')}</div>${stay}</div>`; };
     const doors = () => { v.innerHTML = `<div class="modal"><p class="label">Hall ${st.roomIdx + 2} of ${LEN} · ${left === 1 ? 'the last fork before the great one' : left + ' forks before the great one'}</p><h2>Two doors.</h2><div class="paths">${card(opt[0], 0)}${card(opt[1], 1)}</div>${stay}</div>`; };
@@ -452,6 +470,13 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
   };
   // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.
+  // Walking up to look: one Seeker goes alone, and never onto a tile where a roaming hunter would notice. The others stay put.
+  async function creep(o) { const me = unit(sel); if (!live(me)) return; let moved = 0, held = false;
+    const quiet = (x, y) => st.units.every(h => !(h.side === 'c' && live(h) && h.mood === 'roam' && !(h.calm > 0)) || md({ x, y }, h) > C.noticeRadius(st, h));
+    while (!busy && !st.outcome && live(me) && live(o) && C.exploring(st) && md(me, o) > 2 && moved < 6) { const dist = md(me, o); let best = null;
+      for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far >= dist || far < 2 || !quiet(x, y)) continue; if (!best || far < best.far || (far === best.far && d < best.d)) best = { x, y, far, d }; }
+      if (!best) { held = true; break; } moved++; await send({ t: 'move', u: me.id, x: best.x, y: best.y, solo: true }); }
+    if (live(o)) { info = { u: o.id }; sync(); } if (held && live(o) && md(me, o) > 3) say(C.exploring(st) ? 'Any closer and something here will notice' : ''); }
   async function approach(tx, ty, need, what) {
     const me = unit(sel); const T0 = { x: tx, y: ty }; if (!live(me)) return; if (me.ap < 1) return say('No actions left this turn'); let moved = 0;
     const calm0 = C.exploring(st);
@@ -465,6 +490,10 @@ export function mountBattle(root, onFinish) {
     if (busy || st.outcome) return;
     const o = C.unitAt(st, x, y); const p = propAt(x, y); const a = targets().get(x + ',' + y);
     if (o && o.side === 's' && !(mode && a)) { sel = o.id; mode = null; info = null; armed = null; return sync(); }
+    const me0 = unit(sel);
+    if (mode?.k === 'atk') { if (o && o.side === 'c' && live(o) && live(me0)) { const r = C.weaponRange(st, me0); if (md(me0, o) <= r && me0.ap > 0) { mode = null; return send({ t: 'atk', u: me0.id, id: o.id }); } return approach(x, y, r, 'Weapon'); } mode = null; return sync(); }
+    /* a creature that is not hunting you is something to look at: a click walks up to watching distance and opens what is known. Striking it takes the Attack button. */
+    if (!mode && o && o.side === 'c' && live(o) && !C.isHostile(st, o) && live(me0)) { armed = null; return creep(o); }
     if (a) {
       if (a.t === 'atk' && !C.isHostile(st, o) && armed !== o.id) { armed = o.id; info = { u: o.id }; return sync(); }
       if (a.t === 'use' || a.t === 'atk') info = null; return send(a);
@@ -479,7 +508,7 @@ export function mountBattle(root, onFinish) {
     }
     if (live(me) && p && !a && md(me, p) > (p.kind === 'plate' ? 0 : 1)) return approach(x, y, p.kind === 'plate' ? 0 : 1, 'Reach'); // scenery and samples: walk up to them
     if (live(me) && !o && !p && !a) { if (mode) { const need = mode.k === 'abil' ? C.abilRange(st, me, mode.id) : mode.k === 'dev' ? C.DEV_INFO[C.devKind(me)].range : 3; if (md(me, { x, y }) > need) return approach(x, y, need, mode.k === 'abil' ? D.ABILITIES[mode.id].name : mode.k === 'study' ? 'Study' : 'The device'); say('That cannot be used there'); }
-      else if (st.room.rock[y * C.W + x]) say('Blocked: boulders'); else return approach(x, y, 0, 'Move'); }
+      else if (st.room.rock[y * C.W + x]) say(CWF ? 'Blocked: machinery' : 'Blocked: boulders'); else return approach(x, y, 0, 'Move'); }
     if (mode) mode = null;
     armed = null; info = o ? { u: o.id } : p ? { p: p.pid } : null; sync();
   }

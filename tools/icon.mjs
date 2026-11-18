@@ -37,6 +37,8 @@ const ICONS = {
   boon_field_kit: ['support', 'an open leather field surgery roll with brass instruments, bandages and a small glowing vial.'],
   boon_soft_step: ['control', 'a bare footprint pressed softly into moss, fading, with a feather lying beside it.'],
   boon_ember_oil: ['attack', 'a small brass oil flask tipped over a blade, the oil catching into orange flame.'],
+  attack: ['attack', 'a single heavy steel blade caught mid-swing, a bright curved arc of motion trailing behind its edge, sparks at the tip.'],
+  watch: ['lore', 'a brass field spyglass half extended, a small sketchbook with a pencil drawing of an animal lying open beside it.'],
   arc_pulse: ['attack', 'a brass tesla coil emitter firing a forked bolt of lightning that jumps between two points.'],
   overclock: ['support', 'a brass pocket watch with its gears exposed and spinning fast, hands blurred, sparks and gold light spilling out.'],
   device: ['device', 'a brass field gadget: a seed-shaped canister with a pull ring, a glass window showing glowing liquid, copper pipes.'],
