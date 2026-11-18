@@ -940,7 +940,7 @@ var UncEngine = (() => {
   };
 
   // core.js
-  var VERSION = 22;
+  var VERSION = 23;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2072,6 +2072,7 @@ var UncEngine = (() => {
     return t;
   }
   function pickTarget(st, c, ts) {
+    if (c.side === "c" && st.spec.type === "observe") ts = ts.filter((t) => t.kind !== REGIONS[st.spec.region].observe);
     if (!ts.length) return null;
     const S = SPECIES[c.kind] || {};
     if (!S.boss) {

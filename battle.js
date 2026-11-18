@@ -3,7 +3,7 @@ import { C, D, G, $, esc, art, face, store, toast, itemCard } from './ui.js';
 import { createScene } from './scene3d.js';
 import { snd } from './sound.js';
 
-const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers, flora and no hunters. The party rests here and recovers. Nothing to clear, so no case and no boon.']],
+const PATHS = { verdant: [['The Overgrowth', 'has been seen in there. Harder. What it leaves behind is worth a better case.'], ['The Still Pond', 'Grazers and flora. What hunts in here hunts them, though it will turn on you if you walk into it. The party rests here and recovers. Nothing to clear, so no case and no boon.']],
   clockwork: [['The Foundry Floor', 'is working the line. Harder. What it leaves behind is worth a better case.'], ['The Winding Garden', 'Tended, quiet, watched. The party rests here and recovers. Nothing to clear, so no case and no boon.']] };
 // Things around the hall that are not part of the fight. Tap one to read it.
 const DECOR = {
@@ -186,7 +186,7 @@ export function mountBattle(root, onFinish) {
   let trkMin = store.get('unc.trk') === '1';
   function head() {
     const [t, ok] = objective(); const w = st.room.wonder && D.WONDERS[st.room.wonder]; const wKnown = w && (G.state.cat['w:' + st.room.wonder] || st.room.props.some(p => p.kind === 'wonder' && p.id === st.room.wonder && p.done)); const hunting = foes().filter(c => C.isHostile(st, c)).length; const adv = C.canAdvance(st);
-    const next = st.outcome ? '' : st.side && !hunting ? 'You are off the path. Look around and try things. Head back when you are done.' : ok && st.roomIdx >= LEN - 1 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
+    const next = st.outcome ? '' : st.side && !hunting ? 'You are off the path. Look around and try things. Head back when you are done.' : hunting && st.roomIdx >= LEN - 1 && foes().some(c => D.SPECIES[c.kind].boss) ? `${esc(D.SPECIES[foes().find(c => D.SPECIES[c.kind].boss).kind].name)} stands between you and the way out.` : ok && st.roomIdx >= LEN - 1 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= LEN - 1 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
     const pips = Array.from({ length: LEN }, (_, i) => i).map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
     $('.tracker', root).innerHTML = trkMin ? `<button class="trk min" data-act="trk" aria-expanded="false"><span class="rooms">${pips}</span><b>${MISSION[spec.type] || 'Mission'}</b><span class="${ok ? 'ok' : ''}">${ok ? 'Objective met' : 'Show mission'}</span></button>`
       : `<div class="trk"><div class="trh"><span class="label">${MISSION[spec.type] || 'Mission'} · ${esc(reg.short)}</span><button class="link" data-act="trk" aria-expanded="true">Hide</button></div>
@@ -238,7 +238,7 @@ export function mountBattle(root, onFinish) {
         <div class="hc-wr">${sg >= 2 || u.studied >= 2 || st.res.read?.[u.kind] ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="rs"><b>Resists</b> ${D.FAMILY_NAME[S.resist]} weapons</span>` : sg >= 1 || u.studied >= 1 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="un"><b>Resists</b> not yet known</span>` : '<span class="un"><b>Weak to</b> not yet known</span><span class="un"><b>Resists</b> not yet known</span>'}</div>
         ${u.armor ? `<p class="dim" style="font-size:12.5px;margin-top:6px">Armor ${u.armor} is taken off every hit, so many small hits do little. Poison and Bleed ignore it.</p>` : ''}
         ${u.variant ? `<p style="margin-top:6px;font-size:13px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
-        <div class="hc-foot"><span>Field notes${u.studied ? ` · +${u.studied * 10}% damage to it` : ''}</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
+        <div class="hc-foot"><span>${st.res.read?.[u.kind] ? 'Full record · +15% damage to its kind' : u.studied ? `Field notes ${u.studied} of ${u.variant ? 5 : 3} · get closer for the full record` : 'No field notes yet'}</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
     } else if (u && live(u) && u.side === 's') {
       h = `<div class="hc-art">${art(u.kind)}</div><p class="label">${esc(D.ARCHETYPES[u.kind].name)} · level ${u.sh.lvl}</p><h4>${esc(u.name)}</h4>
         <div class="hc-hp ally"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i><span class="num">${Math.max(0, u.hp)} / ${u.max}</span></div>
@@ -474,7 +474,7 @@ export function mountBattle(root, onFinish) {
   // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.
   // Walking up to look: one Seeker goes alone, and never onto a tile where a roaming hunter would notice. The others stay put.
   async function creep(o) { const me = unit(sel); if (!live(me)) return; let moved = 0, held = false; const near = o.ai === 'ambush' ? 4 : o.ai === 'skittish' ? 2 : 1; /* as close as it will stand for */
-    const quiet = (x, y) => st.units.every(h => !(h.side === 'c' && live(h) && h.mood === 'roam' && !(h.calm > 0)) || md({ x, y }, h) > C.noticeRadius(st, h));
+    const quiet = (x, y) => st.units.every(h => h === o || !(h.side === 'c' && live(h) && !(h.calm > 0)) || (h.mood === 'roam' ? md({ x, y }, h) > C.noticeRadius(st, h) : h.ai === 'ambush' ? md({ x, y }, h) > 3 : true)); /* nor into the reach of anything lying in wait */
     while (!busy && !st.outcome && live(me) && live(o) && C.exploring(st) && md(me, o) > near && moved < 6) { const dist = md(me, o); let best = null;
       for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far >= dist || far < near || !quiet(x, y)) continue; if (!best || far < best.far || (far === best.far && d < best.d)) best = { x, y, far, d }; }
       if (!best) { held = true; break; } moved++; await send({ t: 'move', u: me.id, x: best.x, y: best.y, solo: true }); }

@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 22;
+export const VERSION = 23;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -455,6 +455,7 @@ function targetsOf(st, c) {
   return t;
 }
 function pickTarget(st, c, ts) {
+  if (c.side === 'c' && st.spec.type === 'observe') ts = ts.filter(t => t.kind !== D.REGIONS[st.spec.region].observe); /* nothing in the halls hunts the animal you were sent to record: it is why the contract is possible */
   if (!ts.length) return null; const S = D.SPECIES[c.kind] || {};
   if (!S.boss) { const lure = ts.filter(t => t.kind === 'lure' && md(t, c) <= 6)[0]; if (lure) return lure; }
   const taunt = ts.filter(t => t.taunt > 0 && md(t, c) === 1)[0]; if (taunt) return taunt;
