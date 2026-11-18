@@ -539,9 +539,9 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 
 /* The close-up when a Seeker strikes: the interface steps back, the frame narrows, the blow flashes */
 .game .hud, .game .panel.info { transition: opacity .45s ease; }
-.game.cine .hud, .game.cine .panel.info, .game.cine .tip, .game.cine .sitetag { opacity: 0; pointer-events: none; }
-.game::before, .game::after { content: ''; position: absolute; left: 0; right: 0; height: 0; background: #05030c; z-index: 9; transition: height .55s cubic-bezier(.4, 0, .2, 1); pointer-events: none; }
-.game::before { top: 0; } .game::after { bottom: 0; } .game.cine::before, .game.cine::after { height: 9vh; }
+.game.cine .hud, .game.cine .panel.info, .game.cine .tiletip, .game.cine .sitetag { opacity: 0; pointer-events: none; }
+.game::before, .game .board::before { content: ''; position: absolute; left: 0; right: 0; height: 0; background: #05030c; z-index: 9; transition: height .55s cubic-bezier(.4, 0, .2, 1); pointer-events: none; }
+.game::before { top: 0; } .game .board::before { bottom: 0; z-index: 3; } .game.cine::before, .game.cine .board::before { height: 9vh; }
 .game .board::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 45%, rgba(255, 244, 214, .55), rgba(255, 200, 120, .12) 45%, transparent 70%); }
 .game.flash .board::after { animation: blowflash .42s ease-out; }
 @keyframes blowflash { 0% { opacity: 1; } 100% { opacity: 0; } }
