@@ -941,7 +941,7 @@ var UncEngine = (() => {
   };
 
   // core.js
-  var VERSION = 24;
+  var VERSION = 25;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1746,6 +1746,7 @@ var UncEngine = (() => {
       if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15);
     }
     ev.push({ e: "hit", from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? o.kind || "dot" : null, k: o.dot ? null : o.kind || null, eff: o.eff || null });
+    if (src && src.side !== "c" && t.side === "c") t.byParty = 1;
     provoke(st, src, t);
     if (t.hp <= 0) kill(st, src, t, ev);
     return amt;
@@ -1823,7 +1824,7 @@ var UncEngine = (() => {
       st.res.bossDown = true;
       st.res.cases.push("boss");
     } else if (S.elite) st.res.cases.push("elite");
-    if (t.kind === REGIONS[st.spec.region].observe && st.spec.type === "observe" && !(src && src.side === "c")) st.res.obsKilled = true;
+    if (t.kind === REGIONS[st.spec.region].observe && st.spec.type === "observe" && (src ? src.side !== "c" : t.byParty)) st.res.obsKilled = true;
     const corpse = { x: t.x, y: t.y, mat: S.mat, n: t.variant === "gilded" ? 2 : 1 };
     const k = src && src.side === "a" ? st.units.find((u) => u.id === src.owner) : src;
     if (k && k.side === "s") {
@@ -2023,6 +2024,7 @@ var UncEngine = (() => {
   }
   function ignite(st, u, t, ev) {
     if (!alive(t)) return;
+    if (u && u.side !== "c") t.byParty = 1;
     t.burn = Math.max(t.burn || 0, 2 + (u.fx.s_pyre ? 1 : 0));
     t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100));
     ev.push({ e: "status", id: t.id, s: "burn" });
@@ -2894,6 +2896,7 @@ var UncEngine = (() => {
         const t = tgt("c");
         if (md(u, t) > rng) bad("Out of range.");
         pay2();
+        t.byParty = 1;
         t.poison += 3;
         t.poisonPot = Math.max(t.poisonPot || 0, poisonPot(u));
         ev.push({ e: "status", id: t.id, s: "poison" });

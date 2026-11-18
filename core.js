@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 24;
+export const VERSION = 25;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -328,7 +328,7 @@ function hurt(st, src, t, amt, ev, o = {}) {
   }
   t.hp -= amt; if (t.side === 's') { st.res.dmgTaken += amt; if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15); }
   ev.push({ e: 'hit', from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? (o.kind || 'dot') : null, k: o.dot ? null : (o.kind || null), eff: o.eff || null });
-  provoke(st, src, t);
+  if (src && src.side !== 'c' && t.side === 'c') t.byParty = 1; provoke(st, src, t);
   if (t.hp <= 0) kill(st, src, t, ev);
   return amt;
 }
@@ -354,7 +354,7 @@ function kill(st, src, t, ev) {
   st.res.kills[t.kind] = (st.res.kills[t.kind] || 0) + 1; st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1;
   if (!t.noLoot) st.res.xp += S.boss ? 75 : S.elite ? 35 : 8;
   if (S.boss) { st.res.bossDown = true; st.res.cases.push('boss'); } else if (S.elite) st.res.cases.push('elite');
-  if (t.kind === D.REGIONS[st.spec.region].observe && st.spec.type === 'observe' && !(src && src.side === 'c')) st.res.obsKilled = true; // a predator taking one is not on you
+  if (t.kind === D.REGIONS[st.spec.region].observe && st.spec.type === 'observe' && (src ? src.side !== 'c' : t.byParty)) st.res.obsKilled = true; /* a predator taking one is not on you, and neither is one that bleeds out from a predator's bite: only what the party struck, poisoned or burned counts */
   const corpse = { x: t.x, y: t.y, mat: S.mat, n: (t.variant === 'gilded' ? 2 : 1) };
   const k = src && src.side === 'a' ? st.units.find(u => u.id === src.owner) : src;
   if (k && k.side === 's') {
@@ -430,7 +430,7 @@ function strike(st, u, t, ev, o = {}) {
   return dealt;
 }
 // Burning: a fixed amount each turn for a few turns. A fresh flame replaces an older, weaker one.
-function ignite(st, u, t, ev) { if (!alive(t)) return; t.burn = Math.max(t.burn || 0, 2 + (u.fx.s_pyre ? 1 : 0)); t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100)); ev.push({ e: 'status', id: t.id, s: 'burn' }); }
+function ignite(st, u, t, ev) { if (!alive(t)) return; if (u && u.side !== 'c') t.byParty = 1; t.burn = Math.max(t.burn || 0, 2 + (u.fx.s_pyre ? 1 : 0)); t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100)); ev.push({ e: 'status', id: t.id, s: 'burn' }); }
 /* How close you get is how much you learn: from three tiles a sketch (1), from two a proper look (2), beside it the full record (3). An odd one holds two more. Anything that sharpens the eye counts as a tile closer. */
 export function studyReach(st, u) { let b = (u.m.study || 0) + (u.fx.t_curious ? 1 : 0); if (st.room.props.some(q => !q.done && q.id === 'lantern_moss' && md(q, u) <= 2)) b++; return b; }
 export function studyBand(st, u, t) { const d = Math.max(1, md(u, t) - studyReach(st, u)); return (d <= 1 ? 3 : d === 2 ? 2 : d === 3 ? 1 : 0) + (t.variant ? 2 : 0); }
@@ -762,7 +762,7 @@ function applyAction(st, a) {
     else if (id === 'snare') { if (!inb(a.x, a.y) || !free(st, a.x, a.y) || md(u, a) > rng) bad('Pick an empty tile within reach.'); pay(); st.room.traps.push({ x: a.x, y: a.y, owner: u.id, dmg: fl(5 * ts * pw / 10000), bleed: !!u.fx.s_trapper }); ev.push({ e: 'trapset', x: a.x, y: a.y }); }
     else if (id === 'deadeye') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); strike(st, u, t, ev, { mult: 190, crit: t.mark > 0, abil: false }); }
     else if (id === 'mend') { const t = tgt('s'); if (md(u, t) > rng) bad('Out of range.'); pay(); heal(st, t, fl((8 + 2 * u.sh.lvl) * (100 + (u.m.healPow || 0) + 4 * u.sh.attr.adaptation) / 100), ev, t !== u); if (u.fx.s_medic) { t.bleed = 0; t.poison = 0; t.regenT = 2; } }
-    else if (id === 'spore_dart') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); t.poison += 3; t.poisonPot = Math.max(t.poisonPot || 0, poisonPot(u)); ev.push({ e: 'status', id: t.id, s: 'poison' }); }
+    else if (id === 'spore_dart') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); t.byParty = 1; t.poison += 3; t.poisonPot = Math.max(t.poisonPot || 0, poisonPot(u)); ev.push({ e: 'status', id: t.id, s: 'poison' }); }
     else if (id === 'soothe') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); if (D.SPECIES[t.kind].boss) bad('It does not hear you.'); pay(); t.calm = 2; ev.push({ e: 'status', id: t.id, s: 'calm' }); }
     else if (id === 'drone') { if (!inb(a.x, a.y) || !free(st, a.x, a.y) || md(u, a) > rng) bad('Pick an empty tile within reach.'); pay(); summon(st, u, 'drone', a.x, a.y, ev); }
     else if (id === 'arc_pulse') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); const d = fl(R(st).range(5, 7) * ts * pw / 10000); const tx = t.x, ty = t.y; const n = creatures(st).filter(c => c !== t && md(c, t) === 1)[0];
