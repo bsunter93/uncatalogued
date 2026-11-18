@@ -4,8 +4,45 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
+
+// The ink look (?look=classic turns it off): flat washes, a drawn line that boils a little, and paper under everything.
+const INK = typeof location !== 'undefined' && !/[?&]look=classic/.test(location.search);
+if (INK) { document.documentElement.classList.add('ink'); const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Special+Elite&display=swap'; document.head.appendChild(l); }
+const InkShader = { uniforms: { tDiffuse: { value: null }, px: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, seed: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform vec2 px; uniform float seed; varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(hash(i), hash(i + vec2(1., 0.)), f.x), mix(hash(i + vec2(0., 1.)), hash(i + vec2(1., 1.)), f.x), f.y); }
+    vec3 tx(vec2 uv) { return texture2D(tDiffuse, uv).rgb; }
+    vec3 soft(vec2 uv, float r) { return tx(uv) * .28 + (tx(uv + px * vec2(r, 0.)) + tx(uv - px * vec2(r, 0.)) + tx(uv + px * vec2(0., r)) + tx(uv - px * vec2(0., r))) * .12 + (tx(uv + px * vec2(r, r)) + tx(uv - px * vec2(r, r)) + tx(uv + px * vec2(r, -r)) + tx(uv + px * vec2(-r, r))) * .06; }
+    float lum(vec3 c) { return dot(c, vec3(.299, .587, .114)); }
+    void main() { vec2 pp = vUv / px; vec2 wob = (vec2(noise(pp * .03 + seed), noise(pp * .03 + seed + 31.)) - .5) * px * .6;
+      vec3 c = soft(vUv, 1.1); float l = lum(c); float t = l * 5., fr = fract(t); float q = (floor(t) + smoothstep(.3, .7, fr)) / 5.; c *= mix(l, q, .35) / max(l, .001); /* light in soft steps: the step edge is a blend, never a hard cut */ /* the wash: detail blurred away, light in steps */
+      float g = lum(c); c = mix(vec3(g), c, 1.12); /* colour kept clear: washing it out read as mud */
+      vec2 u = vUv + wob; float r = 1.; float a = lum(soft(u + px * vec2(-r, -r), 2.)), b = lum(soft(u + px * vec2(0., -r), 2.)), cc = lum(soft(u + px * vec2(r, -r), 2.)), d = lum(soft(u + px * vec2(-r, 0.), 2.)), e = lum(soft(u + px * vec2(r, 0.), 2.)), f = lum(soft(u + px * vec2(-r, r), 2.)), h = lum(soft(u + px * vec2(0., r), 2.)), i = lum(soft(u + px * vec2(r, r), 2.));
+      float gx = (cc + 2. * e + i) - (a + 2. * d + f), gy = (f + 2. * h + i) - (a + 2. * b + cc); float edge = sqrt(gx * gx + gy * gy); float ink = smoothstep(.13, .42, edge) * (.75 + .25 * noise(pp * .5 + seed));
+      c *= vec3(1., .985, .955); c *= 1. - (noise(pp * .85) - .5) * .035; /* paper tone and tooth */
+      c = mix(c, c * vec3(.5, .44, .48), ink * .85); /* the line is a darker wash of what is under it, not black */ gl_FragColor = vec4(c, 1.); }` };
+
+// Undergrowth as real leaves, not pictures on cards: each leaf is a folded strip that arches out from the root, coloured from a dark base to a pale tip.
+const _plants = {};
+function plantGeo(kind, cw) { const key = kind + (cw ? 'c' : 'v'); if (_plants[key]) return _plants[key]; const pos = [], colr = [], idx = []; let sd = kind.length * 977 + (cw ? 31 : 7); const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const C = h => new THREE.Color(h), PAL = cw ? { fern: [C(0x6a3010), C(0xd08430)], grass: [C(0x4a3a22), C(0xb89048)], leaf: [C(0x1c4a50), C(0x3f9c92)], bell: C(0x5fe0e8) } : { fern: [C(0x14503f), C(0x3fa884)], grass: [C(0x1f5a30), C(0x74c868)], leaf: [C(0x1f5a34), C(0x62b04e)], bell: C(0x9a7ae8) };
+  const strip = (bx, bz, th, L, W, lift, arch, segs, c0, c1, saw) => { const dx = Math.cos(th), dz = Math.sin(th), sx = -dz, sz = dx; let x = bx, y = 0, z = bz; const b0 = pos.length / 3; const tc = new THREE.Color();
+    for (let i = 0; i <= segs; i++) { const t = i / segs, ph = lift - arch * t; if (i) { x += Math.cos(ph) * dx * L / segs; z += Math.cos(ph) * dz * L / segs; y += Math.sin(ph) * L / segs; }
+      let w = W * (.18 + .82 * Math.sin(Math.PI * Math.min(1, .08 + t * .98)) ** .75) * (i === segs ? .05 : 1); if (saw && i % 2) w *= .62; const fold = w * .32;
+      pos.push(x - sx * w, y + fold, z - sz * w, x, y, z, x + sx * w, y + fold, z + sz * w); tc.copy(c0).lerp(c1, t ** .8); colr.push(tc.r, tc.g, tc.b, tc.r * .72, tc.g * .72, tc.b * .72, tc.r, tc.g, tc.b);
+      if (i) { const a = b0 + (i - 1) * 3, b = b0 + i * 3; idx.push(a, a + 1, b, a + 1, b + 1, b, a + 1, a + 2, b + 1, a + 2, b + 2, b + 1); } } return [x, y, z]; };
+  const [c0, c1] = PAL[kind];
+  if (kind === 'fern') { const n = 9; for (let i = 0; i < n; i++) strip(0, 0, i * 6.283 / n + rnd() * .5, .5 + rnd() * .16, .085, 1.3 + rnd() * .12, 1.25 + rnd() * .3, 12, c0, c1, true); for (let i = 0; i < 4; i++) strip(0, 0, rnd() * 6.283, .26 + rnd() * .08, .06, 1.45, .9, 8, c0, c1, true); }
+  else if (kind === 'grass') { for (let i = 0; i < 16; i++) { const a = rnd() * 6.283, d = rnd() * .07; strip(Math.cos(a) * d, Math.sin(a) * d, a + (rnd() - .5), .3 + rnd() * .24, .026, 1.42 + rnd() * .1, .7 + rnd() * .7, 5, c0, c1, false); }
+    for (let i = 0; i < 3; i++) { const a = i * 2.1 + rnd(), tip = strip(0, 0, a, .44 + rnd() * .1, .008, 1.5, 1.25, 6, c0, c1, false); const b0 = pos.length / 3, B = PAL.bell; for (let k = 0; k < 5; k++) { const q = k * 6.283 / 5; pos.push(tip[0] + Math.cos(q) * .035, tip[1] - .075, tip[2] + Math.sin(q) * .035); colr.push(B.r, B.g, B.b); } pos.push(tip[0], tip[1] + .01, tip[2]); colr.push(B.r * .7, B.g * .7, B.b * .7); for (let k = 0; k < 5; k++) idx.push(b0 + k, b0 + (k + 1) % 5, b0 + 5); } }
+  else { const n = 7; for (let i = 0; i < n; i++) strip(0, 0, i * 6.283 / n + rnd() * .4, .3 + rnd() * .12, .13 + rnd() * .04, 1.05 + (i % 2) * .3, .8, 7, c0, c1, false); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(colr, 3)); g.setIndex(idx); g.computeVertexNormals(); return _plants[key] = g; }
+const _plantMat = {}; const plantMat = cw => _plantMat[cw ? 1 : 0] || (_plantMat[cw ? 1 : 0] = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: cw ? 0x2a1a0c : 0x0e2a1c, emissiveIntensity: 1 }));
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
 const GLB = { firebrand: ['garrow_anim', 2.15], tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
@@ -61,6 +98,24 @@ const RIG = {
 // Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
 const ABL = { vanguard: ['brace', 'shove', 'riposte'], tracker: ['mark', 'snare', 'deadeye'], naturalist: ['mend', 'spore_dart', 'soothe'], tinkerer: ['drone', 'arc_pulse', 'overclock'], firebrand: ['kindle', 'fire_breath', 'red_glare'] };
 const FLAME = { kindled_pair: .72, kindled_dagger: .36 }; // blades that take a flame, and how long each is against the hero's height
+// Where the palm is and which way it faces, measured from the hand's own vertices on the rest pose: the fingers run along the longest spread, the palm faces along the thinnest.
+function palmFrame(wrap, boneName, fore) {
+  let out = null; wrap.traverse(m => { if (out || !m.isSkinnedMesh) return; const bi = m.skeleton.bones.findIndex(b => b.name === boneName); if (bi < 0) return;
+    const pos = m.geometry.attributes.position, si = m.geometry.attributes.skinIndex, sw = m.geometry.attributes.skinWeight, pts = [], v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) { let w = 0; for (let k = 0; k < 4; k++) if (si.getComponent(i, k) === bi) w += sw.getComponent(i, k); if (w < .6) continue; if (m.getVertexPosition) m.getVertexPosition(i, v); else v.fromBufferAttribute(pos, i); pts.push(v.clone().applyMatrix4(m.matrixWorld)); }
+    if (pts.length < 12) return; const c = new THREE.Vector3(); for (const p of pts) c.add(p); c.divideScalar(pts.length);
+    const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]; for (const p of pts) { const d = [p.x - c.x, p.y - c.y, p.z - c.z]; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) A[i][j] += d[i] * d[j] / pts.length; }
+    const V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]; for (let sweep = 0; sweep < 24; sweep++) for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) { if (Math.abs(A[p][q]) < 1e-12) continue; const th = .5 * Math.atan2(2 * A[p][q], A[q][q] - A[p][p]), cs = Math.cos(th), sn = Math.sin(th);
+      for (let k = 0; k < 3; k++) { const a = A[k][p], b = A[k][q]; A[k][p] = cs * a - sn * b; A[k][q] = sn * a + cs * b; } for (let k = 0; k < 3; k++) { const a = A[p][k], b = A[q][k]; A[p][k] = cs * a - sn * b; A[q][k] = sn * a + cs * b; } for (let k = 0; k < 3; k++) { const a = V[k][p], b = V[k][q]; V[k][p] = cs * a - sn * b; V[k][q] = sn * a + cs * b; } }
+    const ev = [0, 1, 2].map(i => ({ l: A[i][i], v: new THREE.Vector3(V[0][i], V[1][i], V[2][i]).normalize() })).sort((a, b) => b.l - a.l);
+    const d = ev[0].v.clone(); if (d.dot(fore) < 0) d.negate(); const n = ev[2].v.clone(); if (n.dot(new THREE.Vector3(-Math.sign(c.x) * .6, -1, 0)) < 0) n.negate(); const g = new THREE.Vector3().crossVectors(n, d).normalize(); if (g.z < 0) g.negate();
+    out = { c, d, n, g, thick: Math.sqrt(Math.max(ev[2].l, 0)) }; }); return out; }
+// Turn a weapon from grip space so its handle lies across the palm, blade out past the thumb, edge toward the knuckles.
+const GRIPDIR = { melee: [0, Math.sin(.698), Math.cos(.698)], pole: [0, 1, 0] };
+function palmGrip(pf, cls) { const a0 = GRIPDIR[cls]; if (!pf || !a0) return null; const a = new THREE.Vector3(...a0), x = new THREE.Vector3(1, 0, 0), e = new THREE.Vector3().crossVectors(x, a).normalize();
+  const g = pf.g.clone(), d = pf.d.clone().addScaledVector(g, -pf.d.dot(g)).normalize(), t = new THREE.Vector3().crossVectors(d, g).normalize();
+  const from = new THREE.Matrix4().makeBasis(x, a, e.clone().negate()), to = new THREE.Matrix4().makeBasis(t, g, d); if (from.determinant() * to.determinant() < 0) to.makeBasis(t.negate(), g, d);
+  return { q: new THREE.Quaternion().setFromRotationMatrix(to.multiply(from.invert())), at: pf.c.clone().addScaledVector(pf.n, pf.thick * 1.5 + .012) }; }
 const GEAR = { kindled_pair: ['hand', 'melee', 'kindled_dagger'], marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'rifle'],
   yesterdays_rifle: ['hand', 'rifle'], hunter_mask: ['head', 1.0, .035, .02], collectors_eye: ['head', 1.04, 0],
   // [where it is worn, size against the shoulders, up, forward]
@@ -100,7 +155,7 @@ function prepRig(g, kind) {
   // where gear goes, measured once on the untouched rest pose
   wrap.updateMatrixWorld(true); const B = n => wrap.getObjectByName(n); const P = n => new THREE.Vector3().setFromMatrixPosition(B(n).matrixWorld); const sock = {};
   try {
-    for (const side of ['Right', 'Left']) { const w = P(side + 'Hand'), e = P(side + 'ForeArm'); sock[side + 'Hand'] = { bone: side + 'Hand', at: w.clone().add(w.clone().sub(e).normalize().multiplyScalar(.055)), size: 1, inv: B(side + 'Hand').matrixWorld.clone().invert() }; }
+    for (const side of ['Right', 'Left']) { const w = P(side + 'Hand'), e = P(side + 'ForeArm'); sock[side + 'Hand'] = { bone: side + 'Hand', at: w.clone().add(w.clone().sub(e).normalize().multiplyScalar(.055)), size: 1, inv: B(side + 'Hand').matrixWorld.clone().invert(), palm: palmFrame(wrap, side + 'Hand', w.clone().sub(e).normalize()), rq: B(side + 'Hand').quaternion.clone() }; }
     const hd = P('Head'), he = P('head_end'); sock.head = { bone: 'Head', at: hd.clone().lerp(he, .56), size: hd.distanceTo(he) * .82, inv: B('Head').matrixWorld.clone().invert() };
     const span = Math.abs(P('LeftArm').x - P('RightArm').x); const ch = P('Spine01').lerp(P('Spine'), .35); ch.x = 0; sock.chest = { bone: 'Spine01', at: ch, size: span * 1.62, inv: B('Spine01').matrixWorld.clone().invert() };
     // jewelry, growths and carried things: neck, nape, back, shoulders, wrist, forearm, hips. Each rides the bone under it.
@@ -192,7 +247,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   scene.add(new THREE.HemisphereLight(pal.fill, 0x1a2a14, 1.75)); const lift = new THREE.PointLight(0xfff0d8, 30, 16); lift.position.set(4, 5, 4.5); scene.add(lift);
   const key = new THREE.DirectionalLight(pal.key, 4.2); key.position.set(9, 13, 7); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);  Object.assign(key.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 50 }); key.shadow.bias = -.0008; key.shadow.normalBias = .04; scene.add(key);
   const rim = new THREE.DirectionalLight(pal.rim, .9); rim.position.set(-7, 4, -6); scene.add(rim);
-  const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, cam)); const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .38, .55, .9); composer.addPass(bloom); composer.addPass(new OutputPass());
+  const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, cam)); const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .38, .55, .9); composer.addPass(bloom); composer.addPass(new OutputPass()); const inkPass = INK ? new ShaderPass(InkShader) : null; if (inkPass) { composer.addPass(inkPass); bloom.enabled = false; }
 
   // ground: painted in a canvas, then lit. One composed floor: a paved survey floor where the board is, a worn path from
   // the way in to the gate, moss thickening to the rim, and bare earth under every piece of scenery so it sits in the ground.
@@ -308,14 +363,14 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   if (real) {
     let gateO = null; put('gate', 0, -GZ).then(o => { if (!o) return; gateO = o; env.add(o); o.visible = gate.visible; });
     const cover = new THREE.Group(); here.add(cover);
-    const cardGeo = (() => { const g = new THREE.BufferGeometry(); const v = [], uv = [], nm = [], ix = []; for (let q = 0; q < 2; q++) { const c = Math.cos(q * Math.PI / 2 + .4) * .5, sn = Math.sin(q * Math.PI / 2 + .4) * .5; const b = v.length / 3; v.push(-c, 0, -sn, c, 0, sn, c, .72, sn, -c, .72, -sn); uv.push(0, 0, 1, 0, 1, 1, 0, 1); for (let k = 0; k < 4; k++) nm.push(0, 1, 0); ix.push(b, b + 1, b + 2, b, b + 2, b + 3); } g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nm, 3)); g.setIndex(ix); return g; })();
-    const cardMat = k => { const t = new THREE.Texture(art[k]); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return new THREE.MeshStandardMaterial({ map: t, alphaTest: .5, side: THREE.DoubleSide, roughness: 1, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: .06 }); };
+    const cardGeo = (() => { const g = new THREE.BufferGeometry(); const v = [], uv = [], nm = [], ix = []; for (let q = 0; q < 3; q++) { const c = Math.cos(q * Math.PI / 3 + .4) * .5, sn = Math.sin(q * Math.PI / 3 + .4) * .5; const b = v.length / 3; const lx = -sn * .26 * (q % 2 ? -1 : 1), lz = c * .26 * (q % 2 ? -1 : 1); /* three blades that lean apart, so a plant has body from above and is never a card seen edge-on */ v.push(-c, 0, -sn, c, 0, sn, c + lx, .74, sn + lz, -c + lx, .74, -sn + lz); uv.push(0, 0, 1, 0, 1, 1, 0, 1); for (let k = 0; k < 4; k++) nm.push(0, 1, 0); ix.push(b, b + 1, b + 2, b, b + 2, b + 3); } g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nm, 3)); g.setIndex(ix); return g; })();
+    const cardMat = k => { const t = new THREE.Texture(art[k]); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return new THREE.MeshStandardMaterial({ map: t, alphaTest: .5, side: THREE.DoubleSide, roughness: 1, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: .2 }); }; /* lit from within a little: in the shade of the trees they went black */
     const growCover = id => { for (const o of [...cover.children]) cover.remove(o); const r = rng(seed * 7 + id.charCodeAt(0)); const D0 = decorOf(id).filter(d => d[0] !== 'pond'); const pond = decorOf(id).find(d => d[0] === 'pond');
       const onFloor = (x, z, m) => Math.abs(x) < GH * S / 2 + m && Math.abs(z) < GW * S / 2 + m, onPath = (x, z) => Math.abs(x) < 1.6 && (z > GW * S / 2 || z < -GW * S / 2), inPond = (x, z) => pond && ((x - pond[1] * DK) / 5.6) ** 2 + ((z - pond[2] * DK) / 8.4) ** 2 < 1;
       const ok = (x, z) => x * x + z * z < (TR - .8) ** 2 && !onFloor(x, z, .35) && !onPath(x, z) && !inPond(x, z); const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), V = new THREE.Vector3(), Sc = new THREE.Vector3(), col = new THREE.Color();
       const spots = []; for (const d of D0) { const X = d[1] * DK, Z = d[2] * DK, R = (d[0].startsWith('tree') ? 2.6 : 1.7) * Math.min(2, d[4] || 1); for (let i = 0; i < 9; i++) { const a = r() * 6.283, q = R * (.6 + r() * .6); spots.push([X + Math.cos(a) * q, Z + Math.sin(a) * q]); } } // gathered at the foot of things
       for (let i = 0; i < 46; i++) { const a = r() * 6.283, q = TR * (.55 + r() * .42); const x = Math.cos(a) * q, z = Math.sin(a) * q; const c = 2 + Math.floor(r() * 4); for (let j = 0; j < c; j++) spots.push([x + (r() - .5) * 1.6, z + (r() - .5) * 1.6]); } // and in drifts out toward the rim
-      for (const [k, share, size] of [['tuft', .7, 1.0], ['fern', .3, 1.1]]) { if (!art[k]) continue; const mine = spots.filter((_, i) => (i * 7 % 10 < 7) === (k === 'tuft')).filter(p => ok(p[0], p[1])); const im = new THREE.InstancedMesh(cardGeo, cardMat(k), mine.length); mine.forEach(([x, z], i) => { const sz = size * (.7 + r() * .7); E.set(0, r() * 6.283, 0); Q.setFromEuler(E); Sc.set(sz, sz, sz); V.set(x, -.02, z); M.compose(V, Q, Sc); im.setMatrixAt(i, M); col.setScalar(.62 + r() * .22); im.setColorAt(i, col); }); if (im.instanceColor) im.instanceColor.needsUpdate = true; im.receiveShadow = true; cover.add(im); }
+      for (const [k, size] of [['grass', .95], ['fern', 1.05], ['leaf', .9]]) { const mine = spots.filter((_, i) => (i % 10 < 5 ? 'grass' : i % 10 < 8 ? 'fern' : 'leaf') === k).filter(p => ok(p[0], p[1])); if (!mine.length) continue; const im = new THREE.InstancedMesh(plantGeo(k, CW), plantMat(CW), mine.length); mine.forEach(([x, z], i) => { const sz = size * (.75 + r() * .6); E.set(0, r() * 6.283, 0); Q.setFromEuler(E); Sc.set(sz, sz * (.85 + r() * .3), sz); V.set(x, -.01, z); M.compose(V, Q, Sc); im.setMatrixAt(i, M); col.setScalar(.84 + r() * .2); im.setColorAt(i, col); }); if (im.instanceColor) im.instanceColor.needsUpdate = true; im.receiveShadow = true; cover.add(im); }
       const rk = al('rock'); loadGLB(rk).then(m => { if (!m || dead || site !== id) return; for (let i = 0; i < 26; i++) { const a = i / 26 * 6.283 + r() * .16; if (Math.cos(a) > .5 && Math.abs(Math.sin(a)) < .55) continue; const q = TR - .9 - r() * 1.1, x = Math.cos(a) * q, z = Math.sin(a) * q; if (onPath(x, z) || inPond(x, z)) continue; const o = m.clone(true); o.scale.setScalar(gsz(rk) * (.7 + r() * .9)); o.position.set(x, -.05, z); o.rotation.y = r() * 6.283; cover.add(o); } }); };
     dressSite = id => { gate.visible = !places[id]; if (gateO) gateO.visible = gate.visible; pl1.intensity = gate.visible ? 14 : 0; seam.visible = !places[id]; paintGround(id); gt.needsUpdate = true; ready.then(() => { if (!dead && site === id) growCover(id); });
       for (const o of [...decor.children]) { if (o.userData.light) scene.remove(o.userData.light); decor.remove(o); } const mySite = id;
@@ -378,15 +433,15 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   }
   // Put what the Seeker has equipped on the model: weapon in hand, head piece, body armor.
   function wear(o, gear) {
-    const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null; o.flames = [];
+    const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null; o.flames = []; o.wrist = [];
     const flame = (piece, id) => { const len = FLAME[id]; if (!len) return; const dir = new THREE.Vector3(0, Math.sin(.698), Math.cos(.698)), f = new THREE.Group(); // a blade in grip space leans 40 degrees forward of straight up
       for (const [r, h, c, op] of [[.075, .86, 0xff5a14, .55], [.04, .7, 0xffd24a, .8]]) { const m = new THREE.Mesh(new THREE.ConeGeometry(len * r, len * h, 7, 1, true), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); m.position.y = len * h * .5; f.add(m); }
       const l = new THREE.PointLight(0xff8a3a, 5, 3.5); l.position.y = len * .5; f.add(l); f.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); f.position.copy(dir).multiplyScalar(len * .04); f.visible = !!o.lit; piece.add(f); o.flames.push(f); };
     const off = GEAR[gear.weapon] && GEAR[gear.weapon][0] === 'hand' && GEAR[gear.weapon][2], sl = off && sock.LeftHand; // a second blade for the left hand
-    if (sl) loadGear(off).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(sl.bone); if (!bone) return; const piece = m.clone(true); const L = sl.inv.clone().multiply(new THREE.Matrix4().compose(sl.at.clone(), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece); flame(piece, off); });
+    if (sl) loadGear(off).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(sl.bone); if (!bone) return; const piece = m.clone(true); const pgl = palmGrip(sl.palm, 'melee'); if (pgl) o.wrist.push([bone, sl.rq]); const L = sl.inv.clone().multiply(new THREE.Matrix4().compose(pgl ? pgl.at : sl.at.clone(), pgl ? pgl.q : new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece); flame(piece, off); });
     for (const id of [gear.weapon, gear.head, gear.body, gear.accessory, gear.implant, gear.device]) { const G0 = GEAR[id]; if (!G0) continue; const s = sock[G0[0] === 'hand' ? 'RightHand' : G0[0]]; if (!s) continue; if (G0[0] === 'hand') o.wclass = G0[1];
       loadGear(id).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(s.bone); if (!bone) return; const piece = m.clone(true); const k = G0[0] === 'hand' ? 1 : s.size * G0[1];
-        const W = new THREE.Matrix4().compose(s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, G0[0] === 'hand' ? 0 : G0[3] || 0)), s.q || new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece);
+        const pg = G0[0] === 'hand' ? palmGrip(s.palm, G0[1]) : null; if (pg) o.wrist.push([bone, s.rq]); const W = new THREE.Matrix4().compose(pg ? pg.at : s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, G0[0] === 'hand' ? 0 : G0[3] || 0)), pg ? pg.q : s.q || new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece);
         if (G0[0] === 'hand') { o.weap = { piece, rest: piece.quaternion.clone(), axis: longAxis(m) }; flame(piece, id); } }); }
   }
   // Point the held weapon's long axis where the body is facing, eased in and out over the strike.
@@ -511,7 +566,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now; const slowK = cine && now < cine.slowTo ? (now < cine.stopTo ? .02 : .22) : 1; // a held frame at the blow, then the follow-through in slow motion
     fN++; renderer.shadowMap.needsUpdate = fN % 2 === 0; fAcc += dt; if (fN % 90 === 0) { const avg = fAcc / 90; fAcc = 0; slow = avg > .026 && fN > 400 && !document.hidden ? slow + 1 : 0; if (slow >= 2 && dpr > 1) { slow = 0; dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); } } // two slow stretches in a row, after loading, before giving up sharpness
     for (const [id, o] of units) {
-      const b = o.body; if (o.mixer) o.mixer.update(dt * slowK); if (o.aim) level(o, now); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
+      const b = o.body; if (o.mixer) o.mixer.update(dt * slowK); if (o.wrist) for (const [wb, wq] of o.wrist) wb.quaternion.copy(wq); /* a hand that holds something keeps a straight wrist */ if (o.aim) level(o, now); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
       if (b.userData.spin) b.userData.spin.forEach((r, i) => { r.rotation.x += .01 * (i + 1); r.rotation.y += .007 * (i + 1); });
       b.position.x = b.position.z = 0;
       if (o.real && !o.mixer && !o.kick && !o.lunge && !o.dying) { const w = o.walking ? 1 : 0; b.rotation.z = Math.sin(t * (w ? 13 : 1.3) + o.phase) * (w ? .09 : .025); b.rotation.x = Math.sin(t * (w ? 6.5 : .9) + o.phase * 2) * (w ? .05 : .02); if (w && !b.userData.hover) b.position.y += Math.abs(Math.sin(t * 13 + o.phase)) * .07; }
@@ -559,7 +614,8 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
       farG.position.copy(flight.from).addScaledVector(flight.delta, k); farG.position.y += liftY; here.position.copy(flight.delta).multiplyScalar(k); here.position.y += liftY; if (k0 >= 1) flight.done(); }
     const shownTags = [];
     for (const k in marksFar) { const L = marksFar[k], tag = L.userData.tag; if (!tag.parentNode) continue; const show = L.visible && !flight && tag.textContent; if (show) { v3.set(L.position.x + farG.position.x, L.position.y + farG.position.y + 5, L.position.z + farG.position.z).project(cam); const ok = v3.z < 1 && Math.abs(v3.x) < .95 && v3.y < .97 && v3.y > -.2; tag.hidden = !ok; if (ok) shownTags.push([tag, (v3.x * .5 + .5) * el.clientWidth, (-v3.y * .5 + .5) * el.clientHeight, v3.z]); } else tag.hidden = true; }
-    shownTags.sort((a, b) => a[3] - b[3]); for (let i = 0; i < shownTags.length; i++) { const t = shownTags[i]; for (let g = 0; g < 6; g++) { const hit = shownTags.slice(0, i).find(o => Math.abs(o[1] - t[1]) < 170 && Math.abs(o[2] - t[2]) < 30); if (!hit) break; t[2] = hit[2] - 32; } t[0].style.left = t[1] + 'px'; t[0].style.top = t[2] + 'px'; } // nearer places keep their spot; ones behind step up out of the way
+    shownTags.sort((a, b) => a[3] - b[3]); for (let i = 0; i < shownTags.length; i++) { const t = shownTags[i]; for (let g = 0; g < 6; g++) { const hit = shownTags.slice(0, i).find(o => Math.abs(o[1] - t[1]) < 170 && Math.abs(o[2] - t[2]) < 30); if (!hit) break; t[2] = hit[2] - 32; } t[0].style.left = t[1] + 'px'; t[0].style.top = t[2] + 'px'; t[0].style.visibility = t[2] < 62 || (t[1] < 400 && t[2] < 220) ? 'hidden' : ''; /* never under the top bar or the contract panel */ } // nearer places keep their spot; ones behind step up out of the way
+    if (inkPass) { const sz = renderer.getDrawingBufferSize(new THREE.Vector2()); inkPass.uniforms.px.value.set(1 / sz.x, 1 / sz.y); } /* the line holds still: a moving line read as noise */
     composer.render();
   })();
   if (location.hostname === 'localhost') api.dbg = { units, cam, renderer, scene }; // local testing only

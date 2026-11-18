@@ -649,6 +649,26 @@ export function devKind(u) { return u.sh.dev === 'unfinished' ? (u.devNow || 'pu
 export const DEV_INFO = { lure: { range: 4, target: 'tile', ap: 1 }, barrier: { range: 3, target: 'ally', ap: 1 }, pulse: { range: 3, target: 'any', ap: 1 }, drone: { range: 2, target: 'tile', ap: 1 }, blink: { range: 5, target: 'tile', ap: 0 }, gravity: { range: 4, target: 'any', ap: 1 } };
 export function abilCd(u, id) { return Math.max(1, D.ABILITIES[id].cd + (u.fx.overload ? 1 : 0) - (u.m.cdr || 0) - (id === 'snare' && u.fx.s_trapper ? 2 : 0)); }
 export function abilRange(st, u, id) { const a = D.ABILITIES[id]; return a.range === 'weapon' ? weaponRange(st, u) : a.range; }
+/* The numbers behind an ability for this Seeker right now, for the hover card. Reads only; the action code above is what decides. */
+export function abilInfo(st, u, id) {
+  const A = D.ABILITIES[id], ts = tierScale(st.tier), pw = abilPow(u), w = u.sh.w, sc = n => fl(n * ts * pw / 10000), out = [], pct = (n, p) => fl(n * p / 100);
+  const burn = fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100), burnT = 2 + (u.fx.s_pyre ? 1 : 0), pp = poisonPot(u), pz = n => fl(n * (1 + st.tier) / 2 * (100 + pp) / 100);
+  if (id === 'brace') out.push(`Shield ${sc(8)}`, 'Taunt until your next turn');
+  else if (id === 'shove') out.push(`${w.min}-${w.max} damage`, 'Push 2 tiles', `+${fl((4 + u.sh.attr.force) * ts / 100)} if it hits something`);
+  else if (id === 'riposte') out.push(`${pct(w.min, u.fx.s_retaliator ? 160 : 100)}-${pct(w.max, u.fx.s_retaliator ? 160 : 100)} damage per strike back`);
+  else if (id === 'mark') out.push('+25% damage taken', '2 turns');
+  else if (id === 'snare') out.push(`${sc(5)} damage`, 'Held 2 turns');
+  else if (id === 'deadeye') out.push(`${pct(w.min, 190)}-${pct(w.max, 190)} damage (190%)`, 'Critical on a Marked target');
+  else if (id === 'mend') out.push(`Heals ${fl((8 + 2 * u.sh.lvl) * (100 + (u.m.healPow || 0) + 4 * u.sh.attr.adaptation) / 100)}`);
+  else if (id === 'spore_dart') out.push('3 Poison', `${pz(3)}, ${pz(2)}, ${pz(1)} damage over 3 turns`);
+  else if (id === 'soothe') out.push('Calm 2 turns');
+  else if (id === 'drone') { const k = u.fx.s_dronewright ? 150 : 100; out.push(`${pct(sc(3), k)}-${pct(sc(5), k)} damage a turn`, u.fx.s_dronewright ? 'Stays all fight' : '3 turns', `${fl(8 * ts / 100)} health`, 'Shoots 4 tiles'); }
+  else if (id === 'arc_pulse') out.push(`${sc(5)}-${sc(7)} damage`, 'Half to one creature beside it', 'Ignores 1 armor');
+  else if (id === 'overclock') out.push('+2 actions now');
+  else if (id === 'kindle') out.push('Blades lit 2 turns', `Burning: ${burn} damage a turn for ${burnT} turns`);
+  else if (id === 'fire_breath') out.push(`${sc(5)}-${sc(7)} damage to each`, `Burning: ${burn} a turn for ${burnT} turns`);
+  else if (id === 'red_glare') out.push(`${sc(6)}-${sc(8)} damage`, 'Ignores all armor');
+  const rg = A.target === 'self' ? 0 : abilRange(st, u, id); out.push((rg ? `Range ${rg} · ` : '') + `${A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'Free'} · ready every ${abilCd(u, id)} turns`); return out; }
 
 const bad = msg => { const e = new Error(msg); e.illegal = true; throw e; };
 // Apply one player action. Throws on anything illegal. Returns the list of events for animation.

@@ -650,3 +650,22 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 .game .held .hb.ins { box-shadow: 0 0 0 1px #ffd05a, 0 0 10px rgba(255, 208, 90, .45); }
 .game .held .hb.ins b { position: absolute; right: -4px; bottom: -5px; min-width: 15px; padding: 0 3px; font-size: 11px; line-height: 15px; text-align: center; color: #1a1208; background: #ffd05a; border-radius: 8px; }
 .game .studycard .sc-pay { margin-top: 6px; color: #ffd98a; font-size: 13px; }
+
+/* Ink look (the default; ?look=classic turns it off): the HUD as pages from a field journal. Paper, ink, one rust accent. No glow, no gradient, no round corners. */
+html.ink { --paper: #e9dfc8; --ink: #221b1d; --rust: #9a3b22; --display: 'IM Fell English', Georgia, serif; --mono: 'Special Elite', 'Courier New', monospace; }
+html.ink .game .hud.htop, html.ink .game .hud.hbot { background-image: none !important; }
+html.ink .game .trk, html.ink .game .agrp, html.ink .game .scard, html.ink .game .sitetag, html.ink .game .tip, html.ink .game .hcard, html.ink .game .studycard, html.ink .modal, html.ink .game .hbot [data-tip]::after { background: var(--paper) !important; background-image: none !important; color: var(--ink) !important; border: 1.5px solid var(--ink) !important; border-radius: 0 !important; box-shadow: 3px 3px 0 rgba(34, 27, 29, .5) !important; text-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.ink .game .trk *, html.ink .game .sitetag, html.ink .game .tip *, html.ink .game .hcard *, html.ink .game .studycard *, html.ink .modal * { color: var(--ink) !important; text-shadow: none !important; }
+html.ink .game .trk .label, html.ink .game .trk small, html.ink .modal .label { font-family: var(--mono) !important; letter-spacing: .06em; }
+html.ink .game .trk b, html.ink .game .trk .nx b { color: var(--rust) !important; }
+html.ink .game .trk i { background: rgba(34, 27, 29, .22) !important; border-radius: 0 !important; box-shadow: none !important; } html.ink .game .trk i.on { background: var(--ink) !important; }
+html.ink .game .act { background: var(--ink) !important; border-width: 2px !important; border-style: solid !important; border-radius: 0 !important; box-shadow: none !important; } /* the kind colour on the border stays: it says attack, guard or aid at a glance */
+html.ink .game .act:not([disabled]):hover { transform: translateY(-3px); }
+html.ink .game .act[aria-pressed="true"], html.ink .game .scard.sel { outline: 2.5px solid var(--rust) !important; outline-offset: 1px; }
+html.ink .game .act img, html.ink .game .scard .face, html.ink .game .scard .face img { border-radius: 0 !important; box-shadow: none !important; }
+html.ink .game .scard .bar { background: rgba(34, 27, 29, .2) !important; border-radius: 0 !important; } html.ink .game .scard .bar > * { border-radius: 0 !important; background: #3d6b4f !important; box-shadow: none !important; }
+html.ink .game * { transition-timing-function: steps(3) !important; }
+
+.game .hbot .hint { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; max-width: min(820px, 94vw); }
+html.ink .game .htop .link, html.ink .game .htop .label.turn, html.ink .game .hbot .hint { background: var(--paper) !important; color: var(--ink) !important; text-shadow: none !important; border: 1.5px solid var(--ink); padding: 3px 8px !important; text-decoration: none !important; border-radius: 0 !important; }
+html.ink .game .hbot .hint b { color: var(--rust) !important; }
