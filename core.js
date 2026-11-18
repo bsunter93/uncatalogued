@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 23;
+export const VERSION = 24;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -150,7 +150,10 @@ export function createRun(spec) {
   { const pr = mkRng((spec.seed ^ 0x51de) >>> 0 || 7); const pl = (D.PLACES[spec.region] || []).slice(); for (let i = pl.length - 1; i > 0; i--) { const j = pr.next() % (i + 1); [pl[i], pl[j]] = [pl[j], pl[i]]; } st.places = pl; st.side = null; st.wandered = {}; } // which side place each hall can see
   // The way through: a first hall, then a run of forks, then the great one. Each fork offers two different kinds of hall, and every second fork has a quiet one to rest in.
   { const rr = mkRng((spec.seed ^ 0x2f6b) >>> 0 || 11); const LEN = spec.len || 3; st.route = [null]; st.path = [];
-    for (let i = 1; i < LEN - 1; i++) { const pairs = i % 2 ? [['standard', 'elite'], ['elite', 'quiet'], ['standard', 'quiet']] : [['standard', 'quiet'], ['elite', 'quiet']]; const p = pairs[rr.next() % pairs.length].slice(); if (rr.next() % 2) p.reverse(); st.route.push(p); } }
+    /* rest is scarce: a quiet door stands at two forks in five, never at two in a row, so no route can be walked from one quiet hall to the next */
+    const forks = LEN - 2, rest = new Set(), order = []; for (let i = 1; i <= forks; i++) order.push(i); for (let i = order.length - 1; i > 0; i--) { const j = rr.next() % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
+    for (const i of order) if (rest.size < Math.max(1, Math.floor(forks * 2 / 5)) && !rest.has(i - 1) && !rest.has(i + 1)) rest.add(i);
+    for (let i = 1; i < LEN - 1; i++) { const p = rest.has(i) ? [rr.next() % 2 ? 'standard' : 'elite', 'quiet'] : ['standard', 'elite']; if (rr.next() % 2) p.reverse(); st.route.push(p); } }
   st.boons = []; st.offer = null; st.bf = {}; // boons taken, the three on offer in this hall, and the party-wide ones that are not plain numbers
   for (const sh of spec.squad) {
     st.units.push({ id: st.uid++, side: 's', kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });

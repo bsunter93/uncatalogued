@@ -940,7 +940,7 @@ var UncEngine = (() => {
   };
 
   // core.js
-  var VERSION = 23;
+  var VERSION = 24;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1261,9 +1261,15 @@ var UncEngine = (() => {
       const LEN = spec.len || 3;
       st.route = [null];
       st.path = [];
+      const forks = LEN - 2, rest = /* @__PURE__ */ new Set(), order = [];
+      for (let i = 1; i <= forks; i++) order.push(i);
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = rr.next() % (i + 1);
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+      for (const i of order) if (rest.size < Math.max(1, Math.floor(forks * 2 / 5)) && !rest.has(i - 1) && !rest.has(i + 1)) rest.add(i);
       for (let i = 1; i < LEN - 1; i++) {
-        const pairs = i % 2 ? [["standard", "elite"], ["elite", "quiet"], ["standard", "quiet"]] : [["standard", "quiet"], ["elite", "quiet"]];
-        const p = pairs[rr.next() % pairs.length].slice();
+        const p = rest.has(i) ? [rr.next() % 2 ? "standard" : "elite", "quiet"] : ["standard", "elite"];
         if (rr.next() % 2) p.reverse();
         st.route.push(p);
       }
