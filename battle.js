@@ -55,7 +55,8 @@ const learn = k => { const o = knownSet(); if (o[k]) return false; o[k] = 1; sto
 const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
 const off = why => `aria-disabled="true" data-why="${why}"`;
 const KINDWORD = { attack: 'strike', defend: 'guard', support: 'aid', control: 'hold', lore: 'observe' };
-const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt="" onerror="this.style.visibility='hidden'"><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
+const btn = (kind, icon, name, sub, attrs) => { const tt = /title="([^"]*)"/.exec(attrs); attrs = attrs.replace(/title="[^"]*"/, ''); const cd = /^ready in (\d+)/.exec(sub); // the bar shows pictures only: the name, cost and what it does are in the hover card
+  return `<button class="act k-${kind}" aria-label="${name}" data-tip="${name} · ${sub}" data-desc="${tt ? tt[1] : ''}" ${attrs}>${cd ? `<em class="cdn">${cd[1]}</em>` : ''}<img src="assets/icons/${icon}.jpg" alt="" onerror="this.style.visibility='hidden'"><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`; };
 // The same places in the Clockwork Wilds, where things are built and not grown.
 const DECOR_CW = {
   survey: ['Tinker bench', 'Left mid-task', 'Half-built animals in rows, each a little closer to finished than the last. The newest one has no maker\'s mark.'],
@@ -83,7 +84,7 @@ export function mountBattle(root, onFinish) {
   const first = !G.state.stats.runs;
 
   root.innerHTML = `<div class="game"><div class="board three"></div>
-    <div class="hud htop"><div class="tracker"></div><span class="grow"></span><span class="label turn"></span><button class="link" data-act="log" aria-expanded="false">Log</button><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
+    <div class="hud htop"><div class="tracker"></div><span class="grow"></span><span class="label turn"></span><button class="link" data-act="log" aria-expanded="false">Log</button><button class="link" data-act="cine" title="Cut to a close-up when a Seeker strikes"></button><button class="link" data-act="snd"></button><button class="link" data-act="retreat">Retreat</button></div>
     <div class="panel info" hidden></div><div class="clog" hidden><div class="clh"><span class="label">Combat log</span><button class="link" data-act="log">Close</button></div><ol></ol></div>
     <div class="hud hbot"><div class="scards"></div><div class="mid"><div class="hint"></div><div class="actions"></div></div></div></div>`;
   const wake = () => snd.start(spec.region); root.addEventListener('pointerdown', wake, { once: true });
@@ -92,10 +93,12 @@ export function mountBattle(root, onFinish) {
   const sc = createScene(board, { onTile: (x, y) => tileClick(x, y), onMiss: () => { if (!busy && !st.outcome) say('Nothing to walk to there'); }, onDecor: (k, lit) => { if (!LORE[k]) return; info = { d: k, lit }; armed = null; snd.pick(); panel(); },
     onHover: (t, d) => { tipFor(t); const o = t && C.unitAt(st, t[0], t[1]); const p = t && propAt(t[0], t[1]); const nh = o && live(o) ? { u: o.id } : p ? { p: p.pid } : d && LORE[d] ? { d } : null; if (JSON.stringify(nh) !== JSON.stringify(hov)) { hov = nh; if (!info) panel(); } }, region: (location.hostname === 'localhost' && new URLSearchParams(location.search).get('region')) || spec.region, seed: spec.seed, places: { P0: st.places[0], P1: st.places[1] } });
   // which far place the party is standing in: the start, one of the two doors, or the last room
-  const siteNow = () => st.side ? 'P' + st.roomIdx : st.roomIdx === 0 ? 'S' : st.roomIdx === 1 ? ((log.find(a => a.t === 'next' && a.c != null)?.c) ? 'B' : 'A') : 'F';
+  const LEN = spec.len || 3; const ROAD = { verdant: ['The Long Gallery', 'Residents going about their day, and some of them hunt. A case for clearing it.'], clockwork: ['The Assembly Row', 'The line still runs and its keepers still walk it. A case for clearing it.'] };
+  // each hall stands at one of the far places: the kind of hall picks it, and the party never arrives where it already is
+  const siteNow = () => { if (st.side) return 'P' + st.roomIdx; let at = 'S'; for (let i = 1; i <= st.roomIdx; i++) { if (i === LEN - 1) { at = 'F'; break; } const t = st.path[i]; let to = t === 'elite' ? 'A' : t === 'quiet' ? 'B' : 'S'; if (to === at) to = at === 'A' ? 'B' : at === 'B' ? 'S' : 'A'; at = to; } return at; };
   if (location.hostname === 'localhost') { window.__sc = sc; window.__b = { get st() { return st; }, get busy() { return busy; }, send: a => send(a), C, siteNow: () => siteNow(), tile: (x, y) => tileClick(x, y) }; } // local testing hooks
   const cap = t => t ? t[0].toUpperCase() + t.slice(1) : ''; const placeTag = i => { const id = st.places[i]; if (!id) return ''; const W0 = D.WONDERS[id]; return Object.values(st.wandered).includes(id) ? W0.name : cap(W0.seen); }; // a far place is only named once the party has been
-  const nameSites = () => sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: spec.type === 'pursue' ? D.SPECIES[reg.boss].name : 'The last room', P0: placeTag(0), P1: placeTag(1) });
+  const nameSites = () => sc.names({ A: PATHS[spec.region]?.[0][0], B: PATHS[spec.region]?.[1][0], F: D.SPECIES[reg.boss].name, P0: placeTag(0), P1: placeTag(1) });
   nameSites(); sc.place(siteNow());
   const unit = id => st.units.find(u => u.id === id);
   // what each Seeker is wearing, by item type, so the scene can show it
@@ -159,22 +162,22 @@ export function mountBattle(root, onFinish) {
   }
   function objective() {
     const rs = st.res; const obs = D.SPECIES[reg.observe].name;
-    if (spec.type === 'pursue') return [`Bring down <b>${esc(D.SPECIES[reg.boss].name)}</b>${st.roomIdx < 2 ? '. It waits in the last room.' : ''}`, rs.bossDown];
+    if (spec.type === 'pursue') return [`Bring down <b>${esc(D.SPECIES[reg.boss].name)}</b>${st.roomIdx < LEN - 1 ? '. It waits in the last hall.' : ''}`, rs.bossDown];
     if (spec.type === 'observe') return [`Study <b>${esc(obs)}</b>: <span class="num">${Math.min(6, rs.study[reg.observe] || 0)}/6</span>. Kill none of them.${rs.obsKilled ? ' One has died. The contract is void.' : ''}`, (rs.study[reg.observe] || 0) >= 6 && !rs.obsKilled];
     if (spec.type === 'harvest') return [`Gather flora: <span class="num">${Math.min(4, rs.floraN)}/4</span>`, rs.floraN >= 4];
-    return [`Open the <b>sealed case</b>${st.roomIdx < 2 ? ' in the last room' : ' at the far wall'}.`, rs.objCache];
+    return [`Open the <b>sealed case</b>${st.roomIdx < LEN - 1 ? ' in the last hall' : ' at the far wall'}.`, rs.objCache];
   }
   let trkMin = store.get('unc.trk') === '1';
   function head() {
     const [t, ok] = objective(); const w = st.room.wonder && D.WONDERS[st.room.wonder]; const wKnown = w && (G.state.cat['w:' + st.room.wonder] || st.room.props.some(p => p.kind === 'wonder' && p.id === st.room.wonder && p.done)); const hunting = foes().filter(c => C.isHostile(st, c)).length; const adv = C.canAdvance(st);
-    const next = st.outcome ? '' : st.side && !hunting ? 'You are off the path. Look around and try things. Head back when you are done.' : ok && st.roomIdx >= 2 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
-    const pips = [0, 1, 2].map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
+    const next = st.outcome ? '' : st.side && !hunting ? 'You are off the path. Look around and try things. Head back when you are done.' : ok && st.roomIdx >= LEN - 1 ? 'Objective met. Extract when you are ready.' : hunting ? `${hunting} creature${hunting === 1 ? ' is' : 's are'} hunting you. Fight, hold them off, or calm them.` : adv ? `The room is quiet. Study or gather what you want, then ${st.roomIdx >= 2 ? 'extract' : 'move on through the gate'}.` : 'End the turn to let the room move.';
+    const pips = Array.from({ length: LEN }, (_, i) => i).map(i => `<i class="${i < st.roomIdx ? 'done' : i === st.roomIdx ? 'on' : ''}"></i>`).join('');
     $('.tracker', root).innerHTML = trkMin ? `<button class="trk min" data-act="trk" aria-expanded="false"><span class="rooms">${pips}</span><b>${MISSION[spec.type] || 'Mission'}</b><span class="${ok ? 'ok' : ''}">${ok ? 'Objective met' : 'Show mission'}</span></button>`
       : `<div class="trk"><div class="trh"><span class="label">${MISSION[spec.type] || 'Mission'} · ${esc(reg.short)}</span><button class="link" data-act="trk" aria-expanded="true">Hide</button></div>
         <p class="goal ${ok ? 'ok' : ''}"><span class="chk">${ok ? '&#10003;' : ''}</span><span>${t}</span></p>
-        <div class="step"><span class="rooms">${pips}</span><span>Room ${st.roomIdx + 1} of 3</span></div>
+        <div class="step"><span class="rooms">${pips}</span><span>Hall ${st.roomIdx + 1} of ${LEN}${st.roomIdx === LEN - 2 ? ' · the great one is next' : ''}</span></div>
         ${next ? `<p class="next"><b>Next</b> ${next}</p>` : ''}${w ? (wKnown ? `<p class="won"><b>${esc(w.name)}.</b> ${esc(w.effect)}</p>` : `<p class="won"><b>Something about this hall is not right.</b> Find it and record it to learn what it does.</p>`) : ''}</div>`;
-    $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · ${C.exploring(st) ? 'Exploring' : 'Round ' + (st.turn - fightFrom + 1)}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off';
+    $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · ${C.exploring(st) ? 'Exploring' : 'Round ' + (st.turn - fightFrom + 1)}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off'; $('[data-act="cine"]', root).textContent = store.get('unc.cine') === '0' ? 'Close-ups off' : 'Close-ups on';
     $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You lose most cases.' : 'Retreat';
   }
   function actions() {
@@ -191,7 +194,7 @@ export function mountBattle(root, onFinish) {
     const calm = C.exploring(st);
     if (live(u) && !calm) { const others = mine().some(x => x !== u && live(x) && x.ap > 0 && !passed.has(x.id)); own.push(btn('flow', 'end', 'End turn', others ? `${esc(u.name)} is done` : 'last Seeker: creatures act', `data-act="pass" title="Finish ${esc(u.name)}'s turn and hand over to the next Seeker" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${u.ap <= 0 ? 'ready' : ''} `)); }
     const far = C.exploring(st) ? C.placeFor(st) : null; if (far) b.push(btn('lore', 'study', 'Wander off', 'to ' + D.WONDERS[far].seen, `data-act="wander" title="Leave the hall for a while and go and look. You can come back." ${busy ? 'disabled' : ''}`));
-    if (adv) b.push(btn('flow', 'move_on', st.side ? 'Head back' : st.roomIdx >= 2 ? 'Extract' : 'Move on', st.side ? 'to the hall you left' : st.roomIdx >= 2 ? 'end the expedition' : 'through the gate', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
+    if (adv) b.push(btn('flow', 'move_on', st.side ? 'Head back' : st.roomIdx >= LEN - 1 ? 'Extract' : st.roomIdx === LEN - 2 ? 'Face the great one' : 'Move on', st.side ? 'to the hall you left' : st.roomIdx >= LEN - 1 ? 'end the expedition' : st.roomIdx === LEN - 2 ? D.SPECIES[reg.boss].name + ' is through the gate' : 'choose the next hall', `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
     b.push(btn('flow', 'end', calm ? 'Wait' : 'End round', calm ? 'watch the hall move' : 'all Seekers done', `data-act="end" title="${calm ? 'Stay put for a moment and watch' : 'End the turn for the whole party now'}" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
     // two framed groups: what only this Seeker can do, and what anyone can do
     const pips = live(u) && !calm ? `<span class="pips" title="Actions left this turn">${'<i class="on"></i>'.repeat(Math.max(0, u.ap))}${'<i></i>'.repeat(Math.max(0, (u.apMax || 2) - u.ap))}</span>` : '';
@@ -199,7 +202,7 @@ export function mountBattle(root, onFinish) {
       + `<div class="agrp all"><div class="agh"><span class="label">Party</span><span class="agk">any Seeker</span></div><div class="agb">${b.join('')}</div></div>`;
   }
   function cards() {
-    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button><button class="sheetbtn" data-sheet="${u.id}" title="Open ${esc(u.name)}'s sheet" aria-label="Open ${esc(u.name)}'s sheet">Sheet</button>`).join('');
+    $('.scards', root).innerHTML = mine().map(u => `<button class="scard ${live(u) ? '' : 'down'}" data-sel="${u.id}" aria-pressed="${u.id === sel}" data-tip="${esc(u.name)} · ${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}" data-desc="${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + ' damage · armor ' + u.armor + '. Click again for the full sheet.' : 'Down until the next hall.'}">${face(u.kind)}<span class="nm">${esc(u.name)}<span class="num">${Math.max(0, u.hp)}/${u.max}${u.shield ? ' +' + u.shield : ''}</span></span><span class="bar"><i style="width:${Math.max(0, u.hp / u.max * 100)}%"></i></span><span class="sub label" style="grid-column:2">${live(u) ? D.ARCHETYPES[u.kind].name + ' · ' + u.sh.w.min + '-' + u.sh.w.max + (C.weaponRange(st, u) > 1 ? ' at ' + C.weaponRange(st, u) : '') + ' · armor ' + u.armor : 'Down until the next room'}</span><span class="aps" style="grid-column:2">${'<i></i>'.repeat(Math.max(0, live(u) ? u.ap : 0))}</span></button><button class="sheetbtn" data-sheet="${u.id}" title="Open ${esc(u.name)}'s sheet" aria-label="Open ${esc(u.name)}'s sheet">Sheet</button>`).join('');
   }
   function panel() {
     const el = $('.info', root); let h = '';
@@ -315,18 +318,28 @@ export function mountBattle(root, onFinish) {
   function say(txt, at) { const u = at || unit(sel) || mine()[0]; if (!u) return toast(txt); float(u.x, u.y, txt, 'txt why'); }
   function banner(txt) { const b = document.createElement('div'); b.className = 'banner'; b.textContent = txt; board.append(b); setTimeout(() => b.remove(), 1000); }
 
+  // The cut-away. Paintings load ahead of time; if either one is not ready the blow simply plays in the hall.
+  const CUT_HERO = { vanguard: 'hobb', tracker: 'sile', naturalist: 'oyelaran', tinkerer: 'tamsin', firebrand: 'garrow' }; const cutImg = {};
+  const cutLoad = id => { if (!id || cutImg[id]) return; const im = new Image(); im.src = `assets/cut/${id}.jpg`; cutImg[id] = im; };
+  const cutReady = id => cutImg[id] && cutImg[id].complete && cutImg[id].naturalWidth > 0;
+  for (const u of st.units) cutLoad(u.side === 's' ? CUT_HERO[u.kind] : u.side === 'c' ? u.kind : null);
+  let cutAct = null; // what the Seeker just did, so the cut-away can show the very weapon or spell
+  async function cutIn(fromKind, toKind, n, word, art) { const h = CUT_HERO[fromKind]; cutLoad(h); cutLoad(toKind); if (!cutReady(h) || !cutReady(toKind)) return false;
+    const d = document.createElement('div'); d.className = 'cutin'; d.innerHTML = `<div class="pane hero"><img src="assets/cut/${h}.jpg" alt=""></div><div class="pane foe"><img src="assets/cut/${toKind}.jpg" alt=""></div><i class="slash"></i>${art ? `<img class="tool" src="${art}" alt="" onerror="this.remove()">` : ''}<b class="num">${n}<small>${word}</small></b>`;
+    root.querySelector('.game').append(d); await sleep(1250); d.remove(); return true; }
   async function play(ev, before) {
     const vp = new Map(before.map(u => [u.id, { x: u.x, y: u.y }]));
     const at = id => { if (!vp.has(id)) { const u = unit(id); vp.set(id, u ? { x: u.x, y: u.y } : { x: 0, y: 0 }); } return vp.get(id); };
-    let theirs = false, drift = false; // drift: the hall moving on its own while the party explores. Nothing waits for it.
+    let theirs = false, drift = false, cutBusy = false; // drift: the hall moving on its own while the party explores. Nothing waits for it.
     for (const e of ev) {
+      if (e.e === 'phase' && sc.cining()) { sc.cineEnd(); await sleep(220); }
       if (e.e === 'text' && /^(Witnessed|Notices)/.test(e.msg)) { const v0 = at(e.id); sc.focus(v0.x, v0.y); await sleep(350); }
-      if (e.e === 'room') { banner(`Room ${e.idx + 1}`); snd.room(); return; }
-      if (e.e === 'side') { banner(e.id ? D.WONDERS[e.id].name : 'Back in the hall'); snd.room(); return; }
+      if (e.e === 'room') { sc.cineEnd(); banner(e.idx === LEN - 1 ? D.SPECIES[reg.boss].name : `Hall ${e.idx + 1}`); snd.room(); return; }
+      if (e.e === 'side') { sc.cineEnd(); banner(e.id ? D.WONDERS[e.id].name : 'Back in the hall'); snd.room(); return; }
       if (e.e === 'find') { const F0 = D.FINDS[st.room.props.find(q => q.pid === e.pid)?.id] || {}; const res = { notes: 'Field notes on the ' + (D.SPECIES[e.kind]?.name || 'residents') + ': +3.', case: 'A sealed case comes out with you.', mats: 'Two of ' + (D.MATERIALS[e.mat]?.name || 'something useful') + '.', mend: 'The whole party is restored.', lore: 'Worth writing down. Experience for everyone.', wake: 'It was not empty.' }[e.what]; float(e.x, e.y, e.what === 'wake' ? 'Something wakes' : 'Found', e.what === 'wake' ? 'txt why' : 'study'); sc.burst(e.x, e.y, e.what === 'wake' ? 0xff5a4a : 0xffd05a); e.what === 'wake' ? snd.warn() : snd.pick(); toast((F0.name || 'It') + ': ' + (e.what === 'wake' ? '' : (F0.after || '') + ' ') + res, e.what === 'wake' ? '' : 'good'); await sleep(420); continue; }
       if (e.e === 'move' && (drift || e.trail)) { const v = at(e.id); sc.move(e.id, e.path, e.trail ? 115 : 190); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; continue; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); if (e.from && e.k === 'beam') { const f = at(e.from); sc.ray(f.x, f.y, v.x, v.y, 0xff2a1a); await sleep(180); } else if (e.from && e.k === 'fire') { sc.burst(v.x, v.y, 0xff7a2a); await sleep(90); } else if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); const mine0 = e.from && !e.dot && unit(e.from)?.side === 's' && unit(e.id)?.side === 'c' && store.get('unc.cine') !== '0'; if (mine0 && !sc.cining() && sc.cine(e.from, e.id)) await sleep(640); const close = mine0 && sc.cining(); if (e.from && e.k === 'beam') { const f = at(e.from); sc.ray(f.x, f.y, v.x, v.y, 0xff2a1a); await sleep(180); } else if (e.from && e.k === 'fire') { sc.burst(v.x, v.y, 0xff7a2a); await sleep(90); } else if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); const f0 = at(e.from); if (close && Math.abs(f0.x - v.x) + Math.abs(f0.y - v.y) > 1) { sc.fly(460); await sleep(460); } } sc.hit(e.id, e.crit); const dies = close && (unit(e.id)?.hp ?? 1) <= 0; if (close) sc.impact(e.id, e.crit, dies); if (close && (e.crit || dies || e.k) && !cutBusy) { cutBusy = true; await sleep(90); await cutIn(unit(e.from).kind, unit(e.id).kind, e.n, dies ? 'Finished' : e.crit ? 'Critical' : e.eff === 'weak' ? 'Weak to it' : 'Hit', cutAct && cutAct.t === 'abil' ? `assets/icons/${cutAct.a}.jpg` : gearOf(unit(e.from)).weapon ? `assets/items/${gearOf(unit(e.from)).weapon}.jpg` : ''); cutBusy = false; } snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : close ? (e.crit || dies ? 950 : 600) : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
@@ -346,6 +359,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'chest') { float(e.x, e.y, 'Opened', 'study'); sc.burst(e.x, e.y, 0xffd05a); snd.pick(); toast('The chest: a sealed case comes out with you. It is opened at extraction.', 'good'); await sleep(420); }
       else if (e.e === 'prop') { const p = st.room.props.find(q => q.pid === e.pid); if (p) { float(p.x, p.y, p.kind === 'wonder' ? 'Recorded' : p.kind === 'cache' ? 'Case taken' : 'Gathered', 'study'); sc.burst(p.x, p.y, 0xffd05a); snd.pick(); } await sleep(200); }
     }
+    sc.cineEnd();
   }
   async function send(a) {
     if (busy || st.outcome) return;
@@ -360,7 +374,7 @@ export function mountBattle(root, onFinish) {
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; passed.clear(); sel = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
-    await play(ev, before);
+    cutAct = a; await play(ev, before);
     for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
@@ -386,9 +400,10 @@ export function mountBattle(root, onFinish) {
   }
   function choosePath() {
     const P = PATHS[spec.region]; const v = document.createElement('div'); v.className = 'veil';
-    v.innerHTML = `<div class="modal"><p class="label">Room 2 of 3</p><h2>Two doors.</h2><div class="paths">
-      <button data-c="0"><span class="chip">Elite</span><h3>${P[0][0]}</h3><p>${esc(D.SPECIES[reg.elite].name)} ${P[0][1]}</p></button>
-      <button data-c="1"><span class="chip" style="background:rgba(143,224,194,.14);color:var(--calm)">Quiet</span><h3>${P[1][0]}</h3><p>${P[1][1]}</p></button></div>
+    const opt = st.route[st.roomIdx + 1]; const left = LEN - 2 - st.roomIdx; const card = (t, c) => t === 'elite' ? `<button data-c="${c}"><span class="chip">Elite</span><h3>${P[0][0]}</h3><p>${esc(D.SPECIES[reg.elite].name)} ${P[0][1]}</p></button>`
+      : t === 'quiet' ? `<button data-c="${c}"><span class="chip" style="background:rgba(143,224,194,.14);color:var(--calm)">Quiet</span><h3>${P[1][0]}</h3><p>${P[1][1]}</p></button>`
+      : `<button data-c="${c}"><span class="chip" style="background:rgba(232,195,106,.14);color:var(--gilt)">Hall</span><h3>${ROAD[spec.region][0]}</h3><p>${ROAD[spec.region][1]}</p></button>`;
+    v.innerHTML = `<div class="modal"><p class="label">Hall ${st.roomIdx + 2} of ${LEN} · ${left === 1 ? 'the last fork before the great one' : left + ' forks before the great one'}</p><h2>Two doors.</h2><div class="paths">${card(opt[0], 0)}${card(opt[1], 1)}</div>
       <button class="link" data-c="x" style="align-self:flex-start">Not yet. Stay in this room.</button></div>`;
     v.onclick = e => { const b = e.target.closest('[data-c]'); if (!b) return; v.remove(); if (b.dataset.c !== 'x') send({ t: 'next', c: +b.dataset.c }); };
     document.body.append(v);
@@ -396,19 +411,20 @@ export function mountBattle(root, onFinish) {
   root.onclick = e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.act === 'snd') { snd.toggle(); head(); return; }
+    if (b.dataset.act === 'cine') { store.set('unc.cine', store.get('unc.cine') === '0' ? '1' : '0'); head(); return; }
     if (b.dataset.act === 'log') { logOpen = !logOpen; drawLog(); return; }
     if (b.dataset.act === 'trk') { trkMin = !trkMin; store.set('unc.trk', trkMin ? '1' : '0'); head(); return; }
     if (b.dataset.sheet) { openSheet(+b.dataset.sheet); return; }
     if (b.dataset.act === 'closeinfo') { info = null; armed = null; sync(); return; }
     if (b.getAttribute('aria-disabled') === 'true') { say(b.dataset.why); return; }
     if (busy) return; snd.click();
-    if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
+    if (b.dataset.sel) { const u = unit(+b.dataset.sel); if (u && u.id === sel) { openSheet(u.id); return; } if (live(u)) { sel = u.id; mode = null; info = null; armed = null; sync(); } return; }
     if (b.dataset.abil) { const id = b.dataset.abil; const u = unit(sel); if (D.ABILITIES[id].target === 'self') return send({ t: 'abil', u: u.id, a: id }); mode = mode?.id === id ? null : { k: 'abil', id }; armed = null; sync(); return; }
     if (b.dataset.mode) { mode = mode?.k === b.dataset.mode ? null : { k: b.dataset.mode }; armed = null; sync(); return; }
     if (b.dataset.act === 'end') return send({ t: 'end' });
     if (b.dataset.act === 'pass') { passed.add(sel); const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (!n) return send({ t: 'end' }); sel = n.id; mode = null; info = null; armed = null; sc.focus(n.x, n.y); return sync(); }
     if (b.dataset.act === 'wander') return send({ t: 'wander' });
-    if (b.dataset.act === 'next') return st.roomIdx === 0 && !st.side ? choosePath() : send({ t: 'next' });
+    if (b.dataset.act === 'next') return st.roomIdx < LEN - 2 && !st.side ? choosePath() : send({ t: 'next' });
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
   };
   // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.

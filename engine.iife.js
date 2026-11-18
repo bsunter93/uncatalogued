@@ -832,7 +832,7 @@ var UncEngine = (() => {
     pursue: { name: "Pursue", verb: "Bring down", text: "Find the great one at the end of the hall and end it." },
     observe: { name: "Observe", verb: "Observe", text: "Study the species and leave every one of them alive." },
     harvest: { name: "Harvest", verb: "Harvest", text: "Gather flora across the expedition." },
-    recover: { name: "Recover", verb: "Recover", text: "A sealed case sits at the far end of the last room. Open it." }
+    recover: { name: "Recover", verb: "Recover", text: "A sealed case sits behind the great one in the last hall. Open it." }
   };
   var MILESTONES = [
     { id: "bench", name: "A place to work", need: "12 Catalogue entries", reward: "Workbench: refine and calibrate equipment", test: (c) => [c.entries, 12] },
@@ -916,7 +916,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 18;
+  var VERSION = 19;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1232,6 +1232,18 @@ var UncEngine = (() => {
       st.side = null;
       st.wandered = {};
     }
+    {
+      const rr = mkRng((spec.seed ^ 12139) >>> 0 || 11);
+      const LEN = spec.len || 3;
+      st.route = [null];
+      st.path = [];
+      for (let i = 1; i < LEN - 1; i++) {
+        const pairs = i % 2 ? [["standard", "elite"], ["elite", "quiet"], ["standard", "quiet"]] : [["standard", "quiet"], ["elite", "quiet"]];
+        const p = pairs[rr.next() % pairs.length].slice();
+        if (rr.next() % 2) p.reverse();
+        st.route.push(p);
+      }
+    }
     for (const sh of spec.squad) {
       st.units.push({ id: st.uid++, side: "s", kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
     }
@@ -1362,7 +1374,7 @@ var UncEngine = (() => {
     const r = R(st);
     const sp = st.spec;
     const reg = sp.region;
-    const last = st.roomIdx + 1 === 2;
+    const last = st.roomIdx + 1 === (sp.len || 3) - 1;
     st.roomIdx++;
     st.turn = 1;
     st.units = st.units.filter((u) => u.side === "s");
@@ -1422,7 +1434,8 @@ var UncEngine = (() => {
       return null;
     };
     let etype = type;
-    if (last) etype = sp.type === "pursue" ? "boss" : sp.type === "recover" ? "elite" : "standard";
+    if (last) etype = "boss";
+    st.path.push(etype);
     const tpl = r.pick(ENC[reg][etype]).map((a) => a.slice());
     if (sp.intro && st.roomIdx === 0) {
       tpl.length = 0;
@@ -1431,7 +1444,7 @@ var UncEngine = (() => {
     if (st.tier >= 3 && etype !== "boss") tpl[0][1]++;
     if (st.tier >= 4 && etype === "boss") tpl[1][1]++;
     if (sp.mods.hunt && etype !== "elite" && etype !== "boss") tpl.push([REGIONS[reg].elite, 1]);
-    if (sp.type === "observe" && (last || etype === "quiet")) tpl.push([REGIONS[reg].observe, last ? 3 : 1]);
+    if (sp.type === "observe" && etype !== "boss") tpl.push([REGIONS[reg].observe, etype === "quiet" ? 2 : 1]);
     if (etype !== "boss" && !(sp.intro && st.roomIdx === 0)) {
       for (const k of AMBIENT[reg] || []) if (!tpl.some((t) => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
     }
@@ -2465,14 +2478,15 @@ var UncEngine = (() => {
       st.res.rooms++;
       st.res.xp += 15;
       if (st.room.type !== "quiet" && !creatures(st).some((c) => c.hunter && c.calm <= 0)) st.res.cases.push("standard");
-      if (st.roomIdx >= 2) {
+      const LEN = st.spec.len || 3;
+      if (st.roomIdx >= LEN - 1) {
         finish(st, "win", ev);
         return ev;
       }
       let type = "standard";
-      if (st.roomIdx === 0) {
+      if (st.roomIdx + 1 < LEN - 1) {
         if (a.c !== 0 && a.c !== 1) bad("Choose a path.");
-        type = a.c === 0 ? "elite" : "quiet";
+        type = st.route[st.roomIdx + 1][a.c];
       }
       st.turns++;
       enterRoom(st, type, ev);
@@ -3015,7 +3029,7 @@ var UncEngine = (() => {
     let vb = state.unlocks.variants ? 50 : 0;
     const sheets = squad.map((id) => sheet(state, id));
     for (const s of sheets) vb += s.m.variantSense || 0;
-    return { seed, region: c.region, type: c.type, tier, mods: c.mods || {}, target: c.target, weekly: !!c.weekly, week: c.week, intro: !state.stats.runs && !c.weekly, squad: sheets, stages, variantBoost: vb };
+    return { seed, region: c.region, type: c.type, tier, mods: c.mods || {}, target: c.target, weekly: !!c.weekly, week: c.week, intro: !state.stats.runs && !c.weekly, len: !state.stats.runs && !c.weekly ? 4 : 7, squad: sheets, stages, variantBoost: vb };
   }
   function checkMilestones(state, r, now, fresh, out) {
     const ctx = indexCtx(state);

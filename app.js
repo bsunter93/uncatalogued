@@ -102,7 +102,7 @@ function contractCard(c, i, selected) {
   const R = D.REGIONS[c.region]; const T = D.CONTRACT_TYPES[c.type];
   const tgt = c.type === 'pursue' ? R.boss : c.type === 'observe' ? R.observe : c.type === 'harvest' ? R.flora[0] : 'cache';
   const title = c.type === 'pursue' ? `Bring down ${D.SPECIES[R.boss].name}` : c.type === 'observe' ? `Observe the ${D.SPECIES[R.observe].name}` : c.type === 'harvest' ? 'Harvest the flora' : 'Recover the sealed case';
-  const text = c.type === 'observe' ? `Record six studies of the ${D.SPECIES[R.observe].name} and leave every one of them alive.` : c.type === 'harvest' ? 'Gather four plants across three rooms.' : c.type === 'pursue' ? 'Two rooms, then the great one. Kill it.' : T.text;
+  const text = c.type === 'observe' ? `Record six studies of the ${D.SPECIES[R.observe].name} and leave every one of them alive.` : c.type === 'harvest' ? 'Gather four plants along the way. The great one waits at the end.' : c.type === 'pursue' ? 'Six halls and five forks, then the great one. Kill it.' : T.text;
   const known = c.type === 'pursue' || c.type === 'observe' ? have('f:' + tgt) : true;
   return `<button class="contract" data-contract="${i}" aria-pressed="${selected}">
     <div class="row" style="gap:6px"><span class="label">${c.weekly ? 'Weekly trial · same rooms for everyone' : esc(R.short)}</span></div>

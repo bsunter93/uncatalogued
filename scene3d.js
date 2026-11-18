@@ -427,6 +427,12 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
       o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 110; },
     act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1.2 }) : 0; },
     hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1.3 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
+    cine(id, tid, ms = 4200) { const a = units.get(id), t = units.get(tid); if (!a || !t || a === t) return false; a.g.getWorldPosition(cA); t.g.getWorldPosition(cT); cD.subVectors(cT, cA); cS.set(cD.z, 0, -cD.x).normalize();
+      cine = { a, t, t0: performance.now(), ms, out: 0, sgn: cS.dot(cP.copy(cam.position).sub(cA)) >= 0 ? 1 : -1, shake: 0, amp: 0, slowTo: 0, stopTo: 0 }; el.parentElement && el.parentElement.classList.add('cine'); return true; },
+    cining() { return !!cine && !cine.out; },
+    impact(tid, crit, dead) { if (!cine) return; const n = performance.now(); cine.shake = n; cine.amp = crit || dead ? .16 : .09; cine.stopTo = n + (crit || dead ? 110 : 70); cine.slowTo = n + (crit || dead ? 900 : 520); const t = units.get(tid); if (t) { t.g.getWorldPosition(cT); cT.y += .7; spark(cT, crit ? 0xffd05a : 0xfff0d0, crit || dead ? 34 : 18); } el.parentElement && (el.parentElement.classList.remove('flash'), void el.parentElement.offsetWidth, el.parentElement.classList.add('flash')); },
+    fly(ms = 460) { if (cine) cine.fly = { t0: performance.now(), ms }; }, // ride the shot from the shooter to the target
+    cineEnd() { if (cine && !cine.out) cine.out = performance.now(); },
     burst(x, y, c = 0x3fe0ff) { spark(new THREE.Vector3(wx(y), .3, wz(x)), c, 26); },
     ray(x0, y0, x1, y1, c = 0xff2a1a) { // two thin beams from eye height to the target, gone in a quarter second
       const a = new THREE.Vector3(wx(y0), 1.62, wz(x0)), b = new THREE.Vector3(wx(y1), .7, wz(x1)), d = b.clone().sub(a), len = d.length(); if (len < .01) return;
@@ -462,11 +468,12 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
 
   // Frame the whole board between the top bar and the bottom controls, whatever the window shape.
   const base = new THREE.Vector3(), pv = new THREE.Vector3(), ptr = { x: 0, y: 0 }, look = new THREE.Vector3(0, .3, 0);
+  let fov0 = 46, cine = null; const cA = new THREE.Vector3(), cT = new THREE.Vector3(), cD = new THREE.Vector3(), cS = new THREE.Vector3(), cP = new THREE.Vector3(), cL = new THREE.Vector3(), cN = new THREE.Vector3(); // the close-up: a camera over the attacker's shoulder for the moment a blow lands
   let vw = 0, vh = 0, hudPx = 150, voNow = 0; // when zoomed in, the picture is lifted by half the HUD's height so the Seeker in focus is not under the action bar
   function resize() {
-    const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05; cam.clearViewOffset(); vw = w; vh = h; hudPx = tall ? 330 : 150; voNow = 0;
-    cam.fov = tall ? 44 : vista ? 46 : 30; cam.updateProjectionMatrix(); const far = vista && !tall; look.set(far ? -3 : 0, far ? 1.6 : .3, 0); const dir = (tall ? pv.set(0, 1.5, 1) : pv.set(1, vista ? .36 : .8, .1)).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
-    const top = far ? .22 : 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 330 : 150) / h; // phones look down the hall; wide screens look across it, so both sides are seen in profile
+    const w = el.clientWidth, h = el.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); composer.setSize(w, h); cam.aspect = w / h; const tall = cam.aspect < 1.05; cam.clearViewOffset(); vw = w; vh = h; hudPx = tall ? 150 : 110; voNow = 0;
+    cam.fov = fov0 = tall ? 44 : vista ? 46 : 30; cam.updateProjectionMatrix(); const far = vista && !tall; look.set(far ? -3 : 0, far ? 1.6 : .3, 0); const dir = (tall ? pv.set(0, 1.5, 1) : pv.set(1, vista ? .36 : .8, .1)).normalize().clone(); const hw = GH * S / 2 + .3, hd = GW * S / 2 + .3;
+    const top = far ? .22 : 1 - 2 * (tall ? 110 : 64) / h, bot = -1 + 2 * (tall ? 170 : 120) / h; // phones look down the hall; wide screens look across it, so both sides are seen in profile
     const pts = tall ? [[-hw, 0, hd], [hw, 0, hd], [-hw, 1.7, -hd], [hw, 1.7, -hd], [-hw, 0, -hd], [hw, 0, -hd]] : [[hw, 0, hd], [hw, 0, -hd], [-hw, 2.2, hd], [-hw, 3.4, -hd], [-hw, 0, hd], [-hw, 0, -hd]];
     for (let d = 7; d < 46; d += .35) { cam.position.copy(dir).multiplyScalar(d).add(pv.set(look.x, 0, 0)); cam.lookAt(look); cam.updateMatrixWorld(); let ok = true; for (const p of pts) { pv.set(p[0], p[1], p[2]).project(cam); if (pv.z > 1 || pv.z < -1 || Math.abs(pv.x) > .93 || pv.y > top || pv.y < bot) { ok = false; break; } } if (ok) break; }
     // slide the view so the board sits in the open band, not dead centre behind the controls
@@ -476,10 +483,10 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   let dead = false, last = performance.now(); const v3 = new THREE.Vector3();
   let fN = 0, fAcc = 0, slow = 0;
   (function frame() {
-    if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now;
+    if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now; const slowK = cine && now < cine.slowTo ? (now < cine.stopTo ? .02 : .22) : 1; // a held frame at the blow, then the follow-through in slow motion
     fN++; renderer.shadowMap.needsUpdate = fN % 2 === 0; fAcc += dt; if (fN % 90 === 0) { const avg = fAcc / 90; fAcc = 0; slow = avg > .026 && fN > 400 && !document.hidden ? slow + 1 : 0; if (slow >= 2 && dpr > 1) { slow = 0; dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); } } // two slow stretches in a row, after loading, before giving up sharpness
     for (const [id, o] of units) {
-      const b = o.body; if (o.mixer) o.mixer.update(dt); if (o.aim) level(o, now); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
+      const b = o.body; if (o.mixer) o.mixer.update(dt * slowK); if (o.aim) level(o, now); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : Math.abs(Math.sin(t * 1.7 + o.phase)) * .025; if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 2 + o.phase) * .02);
       if (b.userData.spin) b.userData.spin.forEach((r, i) => { r.rotation.x += .01 * (i + 1); r.rotation.y += .007 * (i + 1); });
       b.position.x = b.position.z = 0;
       if (o.real && !o.mixer && !o.kick) { const w = o.walking ? 1 : 0; b.rotation.z = Math.sin(t * (w ? 13 : 1.3) + o.phase) * (w ? .09 : .025); b.rotation.x = Math.sin(t * (w ? 6.5 : .9) + o.phase * 2) * (w ? .05 : .02); if (w && !b.userData.hover) b.position.y += Math.abs(Math.sin(t * 13 + o.phase)) * .07; }
@@ -503,7 +510,16 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     for (const [, o] of units) if (o.flames) for (let i = 0; i < o.flames.length; i++) { const f = o.flames[i]; f.visible = !!o.lit; if (o.lit) f.scale.set(1 + Math.sin(t * 23 + i) * .12, 1 + Math.sin(t * 17 + i * 2) * .1, 1 + Math.cos(t * 19 + i) * .12); }
     zoomNow += (zoom - zoomNow) * .14; focNow.lerp(zoom < .98 ? focus : ORIGIN, .12);
     { const vo = Math.round(hudPx * .5 * Math.min(1, (1 - zoomNow) * 2)); if (vw && vo !== voNow) { voNow = vo; if (vo) cam.setViewOffset(vw, vh, 0, vo, vw, vh); else cam.clearViewOffset(); } }
-    cam.position.set(focNow.x + base.x * zoomNow + Math.sin(t * .17) * .22 * zoomNow + ptr.x * .7 * zoomNow, base.y * zoomNow + Math.sin(t * .23) * .1 - ptr.y * .3 * zoomNow + .3 * (1 - zoomNow), focNow.z + base.z * zoomNow + Math.cos(t * .13) * .12); cam.lookAt(focNow.x + look.x * zoomNow, look.y * zoomNow + .3 * (1 - zoomNow) + (1 - zoomNow) * .5, focNow.z);
+    cam.position.set(focNow.x + base.x * zoomNow + Math.sin(t * .17) * .22 * zoomNow + ptr.x * .7 * zoomNow, base.y * zoomNow + Math.sin(t * .23) * .1 - ptr.y * .3 * zoomNow + .3 * (1 - zoomNow), focNow.z + base.z * zoomNow + Math.cos(t * .13) * .12); cN.set(focNow.x + look.x * zoomNow, look.y * zoomNow + .3 * (1 - zoomNow) + (1 - zoomNow) * .5, focNow.z); cam.lookAt(cN);
+    if (cine) { const wi = Math.min(1, (now - cine.t0) / 620), wo = cine.out ? 1 - (now - cine.out) / 720 : 1; if (now > cine.t0 + cine.ms && !cine.out) cine.out = now;
+      if (wo <= 0 || !cine.a.g.parent || !cine.t.g.parent) { cine = null; if (cam.fov !== fov0) { cam.fov = fov0; cam.updateProjectionMatrix(); } el.parentElement && el.parentElement.classList.remove('cine'); for (const [, o] of units) if (o.cineHid) { o.cineHid = false; o.g.visible = true; } }
+      else { const w = Math.max(0, Math.min(wi, wo)), e = w * w * w * (w * (w * 6 - 15) + 10); /* eased at both ends, so the camera swoops in and settles instead of cutting */ cine.a.g.getWorldPosition(cA); cine.t.g.getWorldPosition(cT); cD.subVectors(cT, cA); cD.y = 0; const dist = Math.max(.8, cD.length()); cD.normalize(); cS.set(cD.z, 0, -cD.x);
+        const k = Math.min(1, (now - cine.t0) / 1600), back = 1.25 + Math.min(1.1, dist * .22) - k * .35, hit = cine.shake ? Math.max(0, 1 - (now - cine.shake) / 380) : 0;
+        cP.copy(cA).addScaledVector(cD, -back).addScaledVector(cS, .8 * cine.sgn); cP.y = cA.y + 1.42 + dist * .04; cL.copy(cT).addScaledVector(cD, -dist * .22); cL.y = cT.y + .72;
+        if (hit) { const a0 = hit * hit * cine.amp; cP.x += Math.sin(now * .09) * a0; cP.y += Math.cos(now * .13) * a0 * .8; cP.z += Math.sin(now * .11 + 1) * a0; }
+        let fv = 27 - hit * 3; if (cine.fly) { const q = Math.min(1, (now - cine.fly.t0) / cine.fly.ms), q2 = q * q; if (q < 1 || now < cine.fly.t0 + cine.fly.ms + 140) { cP.copy(cA).addScaledVector(cD, .7 + (dist - 1.6) * q2); cP.y = cA.y + 1.3 - .5 * q2; cL.copy(cT); cL.y = cT.y + .7; fv = 64 - 26 * q2 - hit * 4; } }
+        for (const [, o] of units) { if (o === cine.a || o === cine.t) continue; const near = e > .35 && o.g.getWorldPosition(cS).distanceTo(cP) < 2.1; if (near && o.g.visible) { o.g.visible = false; o.cineHid = true; } else if (!near && o.cineHid) { o.g.visible = true; o.cineHid = false; } } // nobody stands between the lens and the blow
+        cam.position.lerp(cP, e); cN.lerp(cL, e); cam.lookAt(cN); const f = fov0 + (fv - fov0) * e; if (Math.abs(cam.fov - f) > .04) { cam.fov = f; cam.updateProjectionMatrix(); } } }
     if (flight) { const k0 = Math.min(1, (now - flight.t0) / flight.ms); const k = k0 < .5 ? 4 * k0 * k0 * k0 : 1 - Math.pow(-2 * k0 + 2, 3) / 2; const liftY = -Math.sin(k0 * Math.PI) * 22;
       farG.position.copy(flight.from).addScaledVector(flight.delta, k); farG.position.y += liftY; here.position.copy(flight.delta).multiplyScalar(k); here.position.y += liftY; if (k0 >= 1) flight.done(); }
     const shownTags = [];

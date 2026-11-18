@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 18;
+export const VERSION = 19;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -148,6 +148,9 @@ export function createRun(spec) {
   const st = { spec, rs: spec.seed, tier: spec.tier, roomIdx: -1, uid: 1, units: [], outcome: null, turn: 0, turns: 0, heartUsed: false, kills3: {},
     res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false } };
   { const pr = mkRng((spec.seed ^ 0x51de) >>> 0 || 7); const pl = (D.PLACES[spec.region] || []).slice(); for (let i = pl.length - 1; i > 0; i--) { const j = pr.next() % (i + 1); [pl[i], pl[j]] = [pl[j], pl[i]]; } st.places = pl; st.side = null; st.wandered = {}; } // which side place each hall can see
+  // The way through: a first hall, then a run of forks, then the great one. Each fork offers two different kinds of hall, and every second fork has a quiet one to rest in.
+  { const rr = mkRng((spec.seed ^ 0x2f6b) >>> 0 || 11); const LEN = spec.len || 3; st.route = [null]; st.path = [];
+    for (let i = 1; i < LEN - 1; i++) { const pairs = i % 2 ? [['standard', 'elite'], ['elite', 'quiet'], ['standard', 'quiet']] : [['standard', 'quiet'], ['elite', 'quiet']]; const p = pairs[rr.next() % pairs.length].slice(); if (rr.next() % 2) p.reverse(); st.route.push(p); } }
   for (const sh of spec.squad) {
     st.units.push({ id: st.uid++, side: 's', kind: sh.arch, name: sh.name, sh, m: sh.m, fx: sh.fx, x: 0, y: 0, hp: sh.maxHp, max: sh.maxHp, armor: sh.armor, move: sh.move, shield: 0, ap: 2, cds: {}, charges: 0, abilN: 0, killN: 0 });
   }
@@ -197,7 +200,7 @@ function leaveSide(st, ev) {
   st.turn = b.turn; st.side = null; ev.push({ e: 'side', id: null });
 }
 function enterRoom(st, type, ev) {
-  const r = R(st); const sp = st.spec; const reg = sp.region; const last = st.roomIdx + 1 === 2;
+  const r = R(st); const sp = st.spec; const reg = sp.region; const last = st.roomIdx + 1 === (sp.len || 3) - 1;
   st.roomIdx++; st.turn = 1;
   st.units = st.units.filter(u => u.side === 's');
   const room = st.room = { type, rock: new Array(W * H).fill(0), props: [], traps: [], corpses: [], wonder: null, firstDeath: false, pid: 1 };
@@ -217,13 +220,13 @@ function enterRoom(st, type, ev) {
   });
   const spot = (minX) => { for (let i = 0; i < 200; i++) { const x = r.range(minX, W - 1), y = r.int(H); if (free(st, x, y)) return [x, y]; } for (let x = W - 1; x >= 0; x--) for (let y = 0; y < H; y++) if (free(st, x, y)) return [x, y]; return null; };
   // encounter
-  let etype = type; if (last) etype = sp.type === 'pursue' ? 'boss' : sp.type === 'recover' ? 'elite' : 'standard';
+  let etype = type; if (last) etype = 'boss'; st.path.push(etype); // every way through ends at the great one
   const tpl = r.pick(ENC[reg][etype]).map(a => a.slice());
   if (sp.intro && st.roomIdx === 0) { tpl.length = 0; tpl.push(['thornling', 2], ['mossback', 1]); }
   if (st.tier >= 3 && etype !== 'boss') tpl[0][1]++;
   if (st.tier >= 4 && etype === 'boss') tpl[1][1]++;
   if (sp.mods.hunt && etype !== 'elite' && etype !== 'boss') tpl.push([D.REGIONS[reg].elite, 1]);
-  if (sp.type === 'observe' && (last || etype === 'quiet')) tpl.push([D.REGIONS[reg].observe, last ? 3 : 1]);
+  if (sp.type === 'observe' && etype !== 'boss') tpl.push([D.REGIONS[reg].observe, etype === 'quiet' ? 2 : 1]);
   // the hall has residents that have nothing to do with you
   if (etype !== 'boss' && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
   for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 9 : 5); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
@@ -647,8 +650,8 @@ function applyAction(st, a) {
     if (st.side) { leaveSide(st, ev); return ev; }
     for (const c of st.room.corpses) addMat(st, c.mat, c.n);
     st.res.rooms++; st.res.xp += 15; if (st.room.type !== 'quiet' && !creatures(st).some(c => c.hunter && c.calm <= 0)) st.res.cases.push('standard');
-    if (st.roomIdx >= 2) { finish(st, 'win', ev); return ev; }
-    let type = 'standard'; if (st.roomIdx === 0) { if (a.c !== 0 && a.c !== 1) bad('Choose a path.'); type = a.c === 0 ? 'elite' : 'quiet'; }
+    const LEN = st.spec.len || 3; if (st.roomIdx >= LEN - 1) { finish(st, 'win', ev); return ev; }
+    let type = 'standard'; if (st.roomIdx + 1 < LEN - 1) { if (a.c !== 0 && a.c !== 1) bad('Choose a path.'); type = st.route[st.roomIdx + 1][a.c]; }
     st.turns++; enterRoom(st, type, ev); return ev;
   }
   const u = st.units.find(x => x.id === a.u && x.side === 's'); if (!u || !alive(u)) bad('No such Seeker.');
@@ -817,7 +820,7 @@ export function makeBoard(state, seed) {
 export function buildSpec(state, c, squad, tier, seed) {
   const stages = {}; for (const k in state.cat) if (k[0] === 'f') stages[k.slice(2)] = stageOf(state.cat[k]);
   let vb = state.unlocks.variants ? 50 : 0; const sheets = squad.map(id => sheet(state, id)); for (const s of sheets) vb += s.m.variantSense || 0;
-  return { seed, region: c.region, type: c.type, tier, mods: c.mods || {}, target: c.target, weekly: !!c.weekly, week: c.week, intro: !state.stats.runs && !c.weekly, squad: sheets, stages, variantBoost: vb };
+  return { seed, region: c.region, type: c.type, tier, mods: c.mods || {}, target: c.target, weekly: !!c.weekly, week: c.week, intro: !state.stats.runs && !c.weekly, len: !state.stats.runs && !c.weekly ? 4 : 7, squad: sheets, stages, variantBoost: vb };
 }
 function checkMilestones(state, r, now, fresh, out) {
   const ctx = indexCtx(state);

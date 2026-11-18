@@ -362,7 +362,7 @@ export const CONTRACT_TYPES = {
   pursue: { name: 'Pursue', verb: 'Bring down', text: 'Find the great one at the end of the hall and end it.' },
   observe: { name: 'Observe', verb: 'Observe', text: 'Study the species and leave every one of them alive.' },
   harvest: { name: 'Harvest', verb: 'Harvest', text: 'Gather flora across the expedition.' },
-  recover: { name: 'Recover', verb: 'Recover', text: 'A sealed case sits at the far end of the last room. Open it.' },
+  recover: { name: 'Recover', verb: 'Recover', text: 'A sealed case sits behind the great one in the last hall. Open it.' },
 };
 
 // Index milestones. test(ctx) -> [have, need]
