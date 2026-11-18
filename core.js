@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 17;
+export const VERSION = 18;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -130,15 +130,15 @@ const ENC = {
     boss: [[['orchardmother', 1], ['thornling', 3]]],
   },
   clockwork: {
-    standard: [[['mite', 4]], [['mite', 3], ['pollinator', 1]], [['mite', 2], ['coilfawn', 2], ['warden', 1]], [['mite', 3], ['coilfawn', 1]], [['mite', 3], ['pollinator', 1], ['warden', 1]]],
+    standard: [[['mite', 4]], [['mite', 3], ['pollinator', 1]], [['mite', 2], ['coilfawn', 2], ['warden', 1]], [['mite', 3], ['coilfawn', 1]], [['mite', 3], ['pollinator', 1], ['warden', 1]], [['mite', 2], ['latchjaw', 1], ['tickwren', 3]], [['latchjaw', 1], ['coilfawn', 2], ['warden', 1]], [['mite', 3], ['tickwren', 2]]],
     elite: [[['mantis', 1], ['coilfawn', 2], ['warden', 1]], [['mantis', 1], ['mite', 3]]],
-    quiet: [[['coilfawn', 2], ['warden', 1], ['pollinator', 1]], [['coilfawn', 3], ['pollinator', 2]]],
+    quiet: [[['coilfawn', 2], ['warden', 1], ['pollinator', 1]], [['coilfawn', 3], ['pollinator', 2]], [['tickwren', 3], ['coilfawn', 1], ['warden', 1], ['latchjaw', 1]]],
     boss: [[['regulator', 1], ['mite', 2], ['pollinator', 1]]],
   },
 };
 // 'roam' means it has not noticed the party and is living its own life.
-const NOTICE = { pack: 2, predator: 3, scavenger: 2 }; const AMBIENT = { verdant: ['mossback', 'glasswing', 'lampmoth'], clockwork: ['coilfawn', 'pollinator'] };
-const MOOD0 = { pack: 'roam', scavenger: 'roam', predator: 'roam', boss_orchard: 'hostile', boss_regulator: 'hostile', grazer: 'docile', mender: 'docile', sentinel: 'docile', skittish: 'wary', ambush: 'territorial' };
+const NOTICE = { pack: 2, predator: 3, scavenger: 2 }; const AMBIENT = { verdant: ['mossback', 'glasswing', 'lampmoth'], clockwork: ['coilfawn', 'pollinator', 'lamplighter'] };
+const MOOD0 = { pack: 'roam', scavenger: 'roam', predator: 'roam', boss_orchard: 'hostile', boss_regulator: 'hostile', grazer: 'docile', mender: 'docile', lighter: 'docile', sentinel: 'docile', skittish: 'wary', ambush: 'territorial' };
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const K = (x, y) => y * W + x;
 const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -317,7 +317,7 @@ function provoke(st, src, t) {
   if (t.side !== 'c') return; t.calm = 0; const beast = src && src.side === 'c';
   if (t.mood === 'roam' && !beast) t.mood = 'hostile';
   if (t.ai === 'grazer') { t.mood = 'hostile'; t.grudge = beast ? src.id : 0; }
-  if (t.ai === 'mender') t.mood = 'flee';
+  if (t.ai === 'mender' || t.ai === 'lighter') t.mood = 'flee';
   if (t.ai === 'sentinel' && src) { t.mood = 'hostile'; t.grudge = src.side === 'c' ? src.id : 0; }
   if (D.SPECIES[t.kind].prey && src) for (const w of creatures(st)) if (w.ai === 'sentinel' && w !== src) { w.mood = 'hostile'; w.grudge = src.side === 'c' ? src.id : 0; w.calm = 0; }
 }
@@ -478,6 +478,11 @@ export function plan(st, c) {
   if (c.ai === 'grazer' && c.mood === 'docile') { const fl0 = st.room.props.filter(p => !p.done && p.kind === 'flora').sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0];
     if (fl0 && md(fl0, c) <= 1) return { k: 'idle', graze: fl0.pid, label: 'Grazing' };
     return { k: 'idle', mv: (c.id + st.turn) % 2 ? stepToward(st, c, fl0 || c.home, 1) : null, label: fl0 ? 'Ambling to graze' : 'Grazing' }; }
+  if (c.ai === 'lighter') { // it keeps the lamps: a dark one is a job, and a lit one draws the hall
+    if (c.mood === 'flee') return { k: 'flee', label: 'Fleeing' };
+    const lp = st.room.props.filter(p => !p.done && p.kind === 'fixture' && p.id === 'lamp' && !p.lit).sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0];
+    if (!lp) return { k: 'idle', mv: (c.id + st.turn) % 3 ? null : stepToward(st, c, c.home, 1), label: 'Winding down' };
+    return md(lp, c) <= 1 ? { k: 'light', pid: lp.pid, label: 'Lighting the lamp' } : { k: 'idle', mv: stepToward(st, c, lp, 2, 1), label: 'Walking its round' }; }
   if (c.ai === 'mender') {
     if (c.mood === 'flee') return { k: 'flee', label: 'Fleeing' };
     const t = creatures(st).filter(o => o !== c && D.SPECIES[o.kind].mech && o.hp < o.max && md(o, c) <= 4).sort((a, b) => (a.hp / a.max) - (b.hp / b.max) || a.id - b.id)[0];
@@ -529,7 +534,7 @@ function witness(st, c, what, ev) {
   const seen = st.room.seenActs || (st.room.seenActs = {}); const key = c.kind + ':' + what; if (seen[key]) return;
   const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (!w || md(w, c) > (what === 'kill' || what === 'hunt' ? 10 : 7)) return; // a hunt is loud enough to follow from across the hall
   seen[key] = 1; st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2; st.res.xp += 4;
-  ev.push({ e: 'text', id: c.id, msg: what === 'kill' ? 'Witnessed: a kill' : what === 'hunt' ? 'Witnessed: a hunt' : what === 'feed' ? 'Witnessed: feeding' : 'Witnessed: grazing' }, { e: 'study', id: c.id, by: w.id, n: 2, left: 0, seen: what });
+  ev.push({ e: 'text', id: c.id, msg: what === 'kill' ? 'Witnessed: a kill' : what === 'hunt' ? 'Witnessed: a hunt' : what === 'feed' ? 'Witnessed: feeding' : what === 'light' ? 'Witnessed: a lamp lit' : 'Witnessed: grazing' }, { e: 'study', id: c.id, by: w.id, n: 2, left: 0, seen: what });
 }
 // Anything still living its own life notices the party when they come close, and its kin take the alarm.
 function notice(st, ev) {
@@ -559,6 +564,7 @@ function act(st, c, ev) {
   else if (p.k === 'pull') { if (t && !t.fx.anchor) { let best = null, bd = 99; for (const [dx, dy] of DIRS) { const x = c.x + dx, y = c.y + dy; if (free(st, x, y)) { const d = Math.abs(x - t.x) + Math.abs(y - t.y); if (d < bd) { bd = d; best = [x, y]; } } } if (best) { t.x = best[0]; t.y = best[1]; ev.push({ e: 'move', id: t.id, path: [best], shove: true }, { e: 'text', id: t.id, msg: 'Dragged' }); } } }
   else if (p.k === 'eat') { const cp = st.room.corpses[p.ci]; if (cp && md(cp, c) <= 1) { st.room.corpses.splice(p.ci, 1); c.max += 4; c.hp = Math.min(c.max, c.hp + 10); c.dmg = [c.dmg[0] + 2, c.dmg[1] + 2]; ev.push({ e: 'eat', id: c.id, x: cp.x, y: cp.y }); witness(st, c, 'feed', ev); } }
   else if (p.k === 'heal') { if (t) heal(st, t, fl(6 * tierScale(st.tier) / 100), ev); }
+  else if (p.k === 'light') { const lp = st.room.props.find(q => q.pid === p.pid); if (lp && !lp.lit) { lp.lit = true; ev.push({ e: 'fx', pid: lp.pid, what: 'lit', x: lp.x, y: lp.y }); witness(st, c, 'light', ev); } }
   else if (p.k === 'seed') { const r = R(st); let n = 0; for (let i = 0; i < 40 && n < 2; i++) { const x = c.x + r.range(-2, 2), y = c.y + r.range(-2, 2); if (free(st, x, y)) { const u = spawn(st, 'thornling', x, y, r, ev, false); u.noLoot = true; n++; } } }
   else if (p.k === 'tele') { c.tele = p.line; ev.push({ e: 'tele', id: c.id, line: p.line }); if (t && md(c, t) === 1) creatureAttack(st, c, t, ev); }
   else if (p.k === 'purge') { const L = c.tele; c.tele = null; ev.push({ e: 'purge', line: L }); const d = fl(c.dmg[1] * 130 / 100); for (const o of st.units.filter(u => u !== c && alive(u) && (L.axis === 'row' ? u.y === L.i : u.x === L.i))) hurt(st, c, o, d, ev, {}); if (t && alive(t) && md(c, t) === 1) creatureAttack(st, c, t, ev); }

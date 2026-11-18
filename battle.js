@@ -31,6 +31,7 @@ export const NATURE = {
   grazer: ['Grazer', 'Harmless unless hurt. A safe subject for study.'],
   skittish: ['Skittish', 'It runs from anything close. Study it from the edge of your range.'],
   scavenger: ['Scavenger', 'It comes for the dead and feeds to heal. Clear the bodies or kill it first.'],
+  lighter: ['Keeper', 'It tends the lamps and nothing else. Where it lights one, the hall gathers.'],
   mender: ['Mender', 'It repairs the others. Deal with it before the things it tends.'],
   sentinel: ['Sentinel', 'It guards a place and holds a grudge. Leave its ground and it lets you go.'],
   boss_orchard: ['Great one', 'It cannot be calmed. Watch for what it grows between its turns.'],

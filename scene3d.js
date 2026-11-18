@@ -9,7 +9,7 @@ import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
 const GLB = { firebrand: ['garrow_anim', 2.15], tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
-  stalkbriar: ['stalkbriar', .95], dewhare: ['dewhare', .85], lampmoth: ['lampmoth', .5], glasswing: ['glasswing', 1.25], gulper: ['gulper', 1.7], carrion: ['carrion', 1.35], hush: ['hush', 2.1], mite: ['mite', .85], pollinator: ['pollinator', 1.15], coilfawn: ['coilfawn', 1.55], warden: ['warden', 2.4], mantis: ['mantis', 1.75], regulator: ['regulator', 4.2],
+  latchjaw: ['latchjaw', .9], tickwren: ['tickwren', .45], lamplighter: ['lamplighter', 1.15], stalkbriar: ['stalkbriar', .95], dewhare: ['dewhare', .85], lampmoth: ['lampmoth', .5], glasswing: ['glasswing', 1.25], gulper: ['gulper', 1.7], carrion: ['carrion', 1.35], hush: ['hush', 2.1], mite: ['mite', .85], pollinator: ['pollinator', 1.15], coilfawn: ['coilfawn', 1.55], warden: ['warden', 2.4], mantis: ['mantis', 1.75], regulator: ['regulator', 4.2],
   // things on the board
   fx_bellcap: ['p_mushrooms', 1.25], fx_lamp: ['p_lamp', 2.1], fx_case: ['p_case_broken', 1.35],
   rock: ['p_boulder', 1.45], cache: ['p_cache', 1.0], lantern_moss: ['p_lantern_moss', 1.05], snare_vine: ['p_snare_vine', 1.15], heartfruit: ['p_heartfruit', 1.0], mirror_reed: ['p_mirror_reed', 1.2],
@@ -68,7 +68,7 @@ const CLASS_CLIP = { melee: { a: ['Right_Hand_Sword_Slash', 0, 1.3, 1.3, 420], c
 const gearWait = {};
 const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .24; } } });
 const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
-const FLIES = { lampmoth: 1.15, glasswing: 1.0, pollinator: .9, drone: 1.0 }; // how high the ones with wings hold themselves
+const FLIES = { tickwren: 1.0, lampmoth: 1.15, glasswing: 1.0, pollinator: .9, drone: 1.0 }; // how high the ones with wings hold themselves
 let ALIAS = {}; const CW_ALIAS = { tree_a: 'c_tree_a', tree_b: 'c_tree_b', gate: 'c_gate', rock: 'c_rock', lamp: 'c_lamp', fx_lamp: 'c_lamp', mushrooms: 'c_vent', fx_bellcap: 'c_vent', survey: 'c_bench', column_fallen: 'c_gear', plinth: 'c_boiler', case_broken: 'c_orrery' };
 const al = k => ALIAS[k] || k, gsz = k => GLB[al(k)][1];
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();

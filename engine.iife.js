@@ -161,7 +161,7 @@ var UncEngine = (() => {
       code: "CW",
       blurb: "The keepers were machines. The exhibits were animals. After long enough, nobody could say which was which.",
       fam: { organic: 15, relic: 70, anomalous: 15 },
-      fauna: ["mite", "pollinator", "coilfawn", "warden", "mantis", "regulator"],
+      fauna: ["mite", "pollinator", "coilfawn", "tickwren", "lamplighter", "warden", "latchjaw", "mantis", "regulator"],
       flora: ["copper_lily", "tick_fern", "mirror_reed"],
       wonders: ["counting_clock", "remembering_room", "painted_door"],
       boss: "regulator",
@@ -422,6 +422,59 @@ var UncEngine = (() => {
       hunts: true,
       blurb: "It prays with both blades and something always answers.",
       behavior: "Hunts Coilfawn when one is closer than you are. That brings the Wardens down on it. You are allowed to watch."
+    },
+    latchjaw: {
+      name: "Latchjaw",
+      latin: "Canis serratus",
+      region: "clockwork",
+      weak: "organic",
+      resist: "relic",
+      hp: 24,
+      dmg: [5, 7],
+      armor: 1,
+      move: 4,
+      range: 1,
+      ai: "predator",
+      mat: "filament",
+      mech: true,
+      hunts: true,
+      blurb: "Built to catch what got out. Nothing told it when to stop.",
+      behavior: "Runs down Tickwrens and Coilfawn when one is closer than you are. Every Warden in the hall turns on it for that. Let them settle it, or step in."
+    },
+    tickwren: {
+      name: "Tickwren",
+      latin: "Troglodytes horarius",
+      region: "clockwork",
+      weak: "anomalous",
+      resist: "relic",
+      hp: 6,
+      dmg: [1, 1],
+      armor: 0,
+      move: 5,
+      range: 1,
+      ai: "skittish",
+      mat: "machine_sap",
+      mech: true,
+      prey: true,
+      blurb: "It sings the hour. The hour is always wrong and always the same.",
+      behavior: "A flock keeps its distance and scatters when one is hurt. The Wardens count them. Harm one and you answer for it."
+    },
+    lamplighter: {
+      name: "Lamplighter",
+      latin: "Lucifer pedester",
+      region: "clockwork",
+      weak: "organic",
+      resist: "relic",
+      hp: 14,
+      dmg: [0, 0],
+      armor: 1,
+      move: 3,
+      range: 1,
+      ai: "lighter",
+      mat: "filament",
+      mech: true,
+      blurb: "It walks the same round it walked when there were visitors. It still tips its lid to the empty benches.",
+      behavior: "Harmless. Walks to any lamp that is dark and lights it. A lit lamp draws the hall to it, so the Lamplighter decides where everything gathers. Flees if struck."
     },
     regulator: {
       name: "The Regulator",
@@ -863,7 +916,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 17;
+  var VERSION = 18;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1140,15 +1193,15 @@ var UncEngine = (() => {
       boss: [[["orchardmother", 1], ["thornling", 3]]]
     },
     clockwork: {
-      standard: [[["mite", 4]], [["mite", 3], ["pollinator", 1]], [["mite", 2], ["coilfawn", 2], ["warden", 1]], [["mite", 3], ["coilfawn", 1]], [["mite", 3], ["pollinator", 1], ["warden", 1]]],
+      standard: [[["mite", 4]], [["mite", 3], ["pollinator", 1]], [["mite", 2], ["coilfawn", 2], ["warden", 1]], [["mite", 3], ["coilfawn", 1]], [["mite", 3], ["pollinator", 1], ["warden", 1]], [["mite", 2], ["latchjaw", 1], ["tickwren", 3]], [["latchjaw", 1], ["coilfawn", 2], ["warden", 1]], [["mite", 3], ["tickwren", 2]]],
       elite: [[["mantis", 1], ["coilfawn", 2], ["warden", 1]], [["mantis", 1], ["mite", 3]]],
-      quiet: [[["coilfawn", 2], ["warden", 1], ["pollinator", 1]], [["coilfawn", 3], ["pollinator", 2]]],
+      quiet: [[["coilfawn", 2], ["warden", 1], ["pollinator", 1]], [["coilfawn", 3], ["pollinator", 2]], [["tickwren", 3], ["coilfawn", 1], ["warden", 1], ["latchjaw", 1]]],
       boss: [[["regulator", 1], ["mite", 2], ["pollinator", 1]]]
     }
   };
   var NOTICE = { pack: 2, predator: 3, scavenger: 2 };
-  var AMBIENT = { verdant: ["mossback", "glasswing", "lampmoth"], clockwork: ["coilfawn", "pollinator"] };
-  var MOOD0 = { pack: "roam", scavenger: "roam", predator: "roam", boss_orchard: "hostile", boss_regulator: "hostile", grazer: "docile", mender: "docile", sentinel: "docile", skittish: "wary", ambush: "territorial" };
+  var AMBIENT = { verdant: ["mossback", "glasswing", "lampmoth"], clockwork: ["coilfawn", "pollinator", "lamplighter"] };
+  var MOOD0 = { pack: "roam", scavenger: "roam", predator: "roam", boss_orchard: "hostile", boss_regulator: "hostile", grazer: "docile", mender: "docile", lighter: "docile", sentinel: "docile", skittish: "wary", ambush: "territorial" };
   var md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   var K = (x, y) => y * W + x;
   var DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
@@ -1622,7 +1675,7 @@ var UncEngine = (() => {
       t.mood = "hostile";
       t.grudge = beast ? src.id : 0;
     }
-    if (t.ai === "mender") t.mood = "flee";
+    if (t.ai === "mender" || t.ai === "lighter") t.mood = "flee";
     if (t.ai === "sentinel" && src) {
       t.mood = "hostile";
       t.grudge = src.side === "c" ? src.id : 0;
@@ -2013,6 +2066,12 @@ var UncEngine = (() => {
       if (fl0 && md(fl0, c) <= 1) return { k: "idle", graze: fl0.pid, label: "Grazing" };
       return { k: "idle", mv: (c.id + st.turn) % 2 ? stepToward(st, c, fl0 || c.home, 1) : null, label: fl0 ? "Ambling to graze" : "Grazing" };
     }
+    if (c.ai === "lighter") {
+      if (c.mood === "flee") return { k: "flee", label: "Fleeing" };
+      const lp = st.room.props.filter((p) => !p.done && p.kind === "fixture" && p.id === "lamp" && !p.lit).sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0];
+      if (!lp) return { k: "idle", mv: (c.id + st.turn) % 3 ? null : stepToward(st, c, c.home, 1), label: "Winding down" };
+      return md(lp, c) <= 1 ? { k: "light", pid: lp.pid, label: "Lighting the lamp" } : { k: "idle", mv: stepToward(st, c, lp, 2, 1), label: "Walking its round" };
+    }
     if (c.ai === "mender") {
       if (c.mood === "flee") return { k: "flee", label: "Fleeing" };
       const t2 = creatures(st).filter((o) => o !== c && SPECIES[o.kind].mech && o.hp < o.max && md(o, c) <= 4).sort((a, b) => a.hp / a.max - b.hp / b.max || a.id - b.id)[0];
@@ -2098,7 +2157,7 @@ var UncEngine = (() => {
     seen[key] = 1;
     st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2;
     st.res.xp += 4;
-    ev.push({ e: "text", id: c.id, msg: what === "kill" ? "Witnessed: a kill" : what === "hunt" ? "Witnessed: a hunt" : what === "feed" ? "Witnessed: feeding" : "Witnessed: grazing" }, { e: "study", id: c.id, by: w.id, n: 2, left: 0, seen: what });
+    ev.push({ e: "text", id: c.id, msg: what === "kill" ? "Witnessed: a kill" : what === "hunt" ? "Witnessed: a hunt" : what === "feed" ? "Witnessed: feeding" : what === "light" ? "Witnessed: a lamp lit" : "Witnessed: grazing" }, { e: "study", id: c.id, by: w.id, n: 2, left: 0, seen: what });
   }
   function notice(st, ev) {
     const sk = seekers(st).filter(alive);
@@ -2198,6 +2257,13 @@ var UncEngine = (() => {
       }
     } else if (p.k === "heal") {
       if (t) heal(st, t, fl(6 * tierScale(st.tier) / 100), ev);
+    } else if (p.k === "light") {
+      const lp = st.room.props.find((q) => q.pid === p.pid);
+      if (lp && !lp.lit) {
+        lp.lit = true;
+        ev.push({ e: "fx", pid: lp.pid, what: "lit", x: lp.x, y: lp.y });
+        witness(st, c, "light", ev);
+      }
     } else if (p.k === "seed") {
       const r = R(st);
       let n = 0;
