@@ -52,6 +52,7 @@ const RIG = {
   naturalist: ['oyelaran_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 760],
 };
 // Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
+const ABL = { vanguard: ['brace', 'shove', 'riposte'], tracker: ['mark', 'snare', 'deadeye'], naturalist: ['mend', 'spore_dart', 'soothe'], tinkerer: ['drone', 'arc_pulse', 'overclock'], firebrand: ['kindle', 'fire_breath', 'red_glare'] };
 const FLAME = { kindled_pair: .72, kindled_dagger: .36 }; // blades that take a flame, and how long each is against the hero's height
 const GEAR = { kindled_pair: ['hand', 'melee', 'kindled_dagger'], marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'rifle'],
   yesterdays_rifle: ['hand', 'rifle'], hunter_mask: ['head', 1.0, .035, .02], collectors_eye: ['head', 1.04, 0],
@@ -111,6 +112,7 @@ function prepRig(g, kind) {
   } catch { /* a rig without these bones just shows no gear */ }
   wrap.userData.sock = sock;
   gl.loadAsync(new URL(`assets/models/${RIG[kind][0].replace('_anim', '_cls')}.glb`, import.meta.url).href).then(c => { for (const a of c.animations) { tether(a); clips['c:' + a.name] = a; } }).catch(() => {});
+  for (const id of ABL[kind] || []) gl.loadAsync(new URL(`assets/models/abl_${id}.glb`, import.meta.url).href).then(c => { const a = c.animations[0]; if (a) { tether(a); clips['a:' + id] = a; } }).catch(() => {}); // each ability has its own motion, made for this hero's skeleton
   g.scene = wrap;
 }
 // Models load when something that uses them appears. Loading all of them up front made every visit fetch both regions.

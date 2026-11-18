@@ -373,7 +373,8 @@ export function mountBattle(root, onFinish) {
     log.push(a); store.set('unc.run', JSON.stringify({ at: run.at, log })); record(a, ev, st); drawLog();
     armed = null; retreatArmed = false; if (a.t !== 'move') mode = null; if (a.t === 'end' || a.t === 'next') { mode = null; info = null; passed.clear(); sel = null; }
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
-    if (flair) { const d = sc.act(a.u, flair); if (d) await sleep(Math.min(d * .5, 700)); }
+    if (a.t === 'abil' && a.id != null && unit(a.id)?.side === 'c' && store.get('unc.cine') !== '0' && !sc.cining() && sc.cine(a.u, a.id)) await sleep(560); // the close-up opens on the cast, not only on the blow
+    if (flair) { const own = a.t === 'abil' ? sc.act(a.u, 'a:' + a.a) : 0; const d = own || sc.act(a.u, flair); if (d) await sleep(own ? Math.min(d * .55, 1500) : Math.min(d * .5, 700)); }
     cutAct = a; await play(ev, before);
     for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
