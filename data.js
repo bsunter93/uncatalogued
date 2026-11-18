@@ -134,6 +134,9 @@ export const ARCHETYPES = {
   tinkerer: { name: 'Tinkerer', seeker: 'Tamsin-7', bio: 'A maintenance unit that stopped maintaining. Calls the Wardens "management".',
     attr: { force: 1, precision: 3, vitality: 3, adaptation: 2, insight: 6 }, abilities: ['drone', 'arc_pulse', 'overclock'], start: { weapon: 'pulse_rifle', body: 'relay_harness' },
     passive: 'Spare parts: devices have one extra charge.' },
+  firebrand: { name: 'Firebrand', seeker: 'Garrow', bio: 'An exhibit that let itself out. Half lion, half eagle, all temper. Wants its own entry written properly.',
+    attr: { force: 3, precision: 6, vitality: 1, adaptation: 2, insight: 3 }, abilities: ['kindle', 'fire_breath', 'red_glare'], start: { weapon: 'kindled_pair', body: 'chitin_plate' },
+    passive: 'Twin blades: the dagger follows every weapon attack for 40%. Burns hot: every hit taken deals 1 more.' },
 };
 
 export const ABILITIES = {
@@ -149,6 +152,9 @@ export const ABILITIES = {
   drone: { name: 'Deploy Drone', ap: 1, cd: 4, target: 'tile', range: 2, desc: 'Launch a drone that shoots the nearest hostile each turn for 3 turns.' },
   arc_pulse: { name: 'Arc Pulse', ap: 1, cd: 2, target: 'enemy', range: 3, desc: 'Shock a target. The arc jumps to one creature beside it for half.' },
   overclock: { name: 'Overclock', ap: 1, cd: 3, target: 'ally', range: 3, desc: 'Another Seeker gains 2 action points now.' },
+  kindle: { name: 'Kindle', ap: 0, cd: 4, target: 'self', desc: 'Free. Both blades catch fire for 2 turns. Every hit sets its target Burning.' },
+  fire_breath: { name: 'Firebreath', ap: 2, cd: 3, target: 'enemy', range: 2, desc: 'Breathe fire over a creature and everything beside it. All of them are hurt and set Burning.' },
+  red_glare: { name: 'Red Glare', ap: 1, cd: 2, target: 'enemy', range: 5, desc: 'Two red beams from the eyes. Strikes one distant creature and ignores its armor.' },
   // spec upgrades reuse ids with flags in SPECS
 };
 
@@ -168,6 +174,10 @@ export const SPECS = {
   tinkerer: [
     { id: 'dronewright', name: 'Dronewright', desc: 'Drones last the whole room and hit 50% harder.' },
     { id: 'saboteur', name: 'Saboteur', desc: 'Arc Pulse stuns machines for a turn and Marks whatever it hits.' },
+  ],
+  firebrand: [
+    { id: 'pyre', name: 'Pyre', desc: 'Burning lasts a turn longer and hits 50% harder.' },
+    { id: 'cutthroat', name: 'Cutthroat', desc: 'The dagger follows for 70%. +15 critical chance against Burning targets.' },
   ],
 };
 
@@ -192,6 +202,7 @@ export const BASES = {
   spore_sling: { name: 'Spore Sling', slot: 'weapon', fam: 'organic', w: [4, 6, 3, 'adaptation'], tags: ['poison'], m: { poisonHit: 1 }, text: 'Ranged 3. Scales with Adaptation. Each hit applies 1 Poison.' },
   pulse_rifle: { name: 'Pulse Rifle', slot: 'weapon', fam: 'relic', w: [5, 8, 4, 'precision'], tags: ['electric'], m: { pierce: 1 }, text: 'Ranged 4. Scales with Precision. Ignores 1 armor.' },
   arc_lance: { name: 'Arc Lance', slot: 'weapon', fam: 'relic', w: [6, 9, 2, 'insight'], tags: ['electric'], text: 'Reach 2. Scales with Insight.' },
+  kindled_pair: { name: 'Kindled Pair', slot: 'weapon', fam: 'relic', w: [5, 8, 1, 'precision'], tags: [], text: 'Melee. A sword and a dagger that take a flame. Scales with Precision.' },
   echo_blade: { name: 'Echo Blade', slot: 'weapon', fam: 'anomalous', w: [6, 8, 1, 'force'], tags: ['spatial'], m: { echo: 35 }, text: 'Melee. Scales with Force. 35% of each hit lands again next turn.' },
 
   chitin_plate: { name: 'Chitin Plate', slot: 'body', fam: 'organic', m: { armor: 3 }, tags: [], text: '' },
@@ -341,6 +352,7 @@ export const MILESTONES = [
   { id: 'bench', name: 'A place to work', need: '12 Catalogue entries', reward: 'Workbench: refine and calibrate equipment', test: c => [c.entries, 12] },
   { id: 'clockwork', name: 'The second door', need: '24 Catalogue entries', reward: 'The Clockwork Wilds open', test: c => [c.entries, 24] },
   { id: 'tamsin', name: 'A defector', need: 'Catalogue any machine species', reward: 'Tamsin-7 joins as Tinkerer', test: c => [c.mech, 1] },
+  { id: 'garrow', name: 'An exhibit lets itself out', need: 'Investigate 2 species', reward: 'Garrow joins as Firebrand', test: c => [c.investigated, 2] },
   { id: 'mutate', name: 'Biological crafting', need: 'Observe 3 species', reward: 'Workbench: mutate an affix', test: c => [c.observed, 3] },
   { id: 'variants', name: 'An eye for the odd one', need: 'Catalogue 1 variant', reward: 'Variants appear 50% more often', test: c => [c.variants, 1] },
   { id: 'bloom', name: 'What should not be', need: 'Record 1 Wonder', reward: 'Bloom contracts: stranger rooms, better cases', test: c => [c.wonders, 1] },

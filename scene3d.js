@@ -8,7 +8,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skinClone } from 'three/addons/utils/SkeletonUtils.js';
 
 // Real models, loaded once and shared. Until one arrives its unit shows the placeholder shape.
-const GLB = { tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
+const GLB = { firebrand: ['garrow_anim', 2.15], tinkerer: ['tamsin_anim', 1.9], vanguard: ['hobb', 1.95], tracker: ['sile', 1.85], naturalist: ['oyelaran', 2.05], thornling: ['thornling', 1.35], mossback: ['mossback', 2.1], orchardmother: ['orchardmother', 4.2],
   glasswing: ['glasswing', 1.25], gulper: ['gulper', 1.7], carrion: ['carrion', 1.35], hush: ['hush', 2.1], mite: ['mite', .85], pollinator: ['pollinator', 1.15], coilfawn: ['coilfawn', 1.55], warden: ['warden', 2.4], mantis: ['mantis', 1.75], regulator: ['regulator', 4.2],
   // things on the board
   fx_bellcap: ['p_mushrooms', 1.25], fx_lamp: ['p_lamp', 2.1], fx_case: ['p_case_broken', 1.35],
@@ -47,11 +47,13 @@ const DECORS = {
 const RIG = {
   vanguard: ['hobb_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Right_Hand_Sword_Slash', heavy: 'Charged_Slash', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
   tracker: ['sile_anim', { idle: 'Idle', walk: 'Walk_Forward_with_Bow_Aimed', attack: 'Archery_Shot', skill: 'Draw_and_Shoot_from_Back', guard: 'CrouchLookAroundBow', hit: 'Hit_Reaction_with_Bow', die: 'Knock_Down', study: 'Lower_Weapon_Look_Raise', cheer: 'Victory_Cheer' }, 700],
+  firebrand: ['garrow_anim', { idle: 'Combat_Stance', walk: 'Walk_Fight_Forward', attack: 'Heavy_Hammer_Swing', skill: 'Shield_Push_Left', guard: 'Block1', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Alert', cheer: 'Victory_Cheer' }, 620],
   tinkerer: ['tamsin_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 720],
   naturalist: ['oyelaran_anim', { idle: 'Idle', walk: 'Confident_Walk', attack: 'Charged_Spell_Cast', skill: 'mage_soell_cast', guard: 'Long_Breathe_and_Look_Around', hit: 'Hit_Reaction', die: 'Knock_Down', study: 'Torch_Look_Around', cheer: 'Victory_Cheer' }, 760],
 };
 // Gear a Seeker can wear, shown on the model. hand: [slot, weapon class]. head/chest: [slot, size factor, lift].
-const GEAR = { marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'rifle'],
+const FLAME = { kindled_pair: .72, kindled_dagger: .36 }; // blades that take a flame, and how long each is against the hero's height
+const GEAR = { kindled_pair: ['hand', 'melee', 'kindled_dagger'], marrow_cleaver: ['hand', 'melee'], echo_blade: ['hand', 'melee'], arc_lance: ['hand', 'pole'], thorncaster: ['hand', 'gun'], spore_sling: ['hand', 'throw'], pulse_rifle: ['hand', 'rifle'],
   yesterdays_rifle: ['hand', 'rifle'], hunter_mask: ['head', 1.0, .035, .02], collectors_eye: ['head', 1.04, 0],
   // [where it is worn, size against the shoulders, up, forward]
   resin_charm: ['neck', .3], lucky_knot: ['neck', .3], hungry_compass: ['neck', .3], borrowed_moment: ['neck', .3], capacitor_band: ['wristL', .3], bait_satchel: ['hipL', .4],
@@ -94,7 +96,7 @@ function prepRig(g, kind) {
     const hd = P('Head'), he = P('head_end'); sock.head = { bone: 'Head', at: hd.clone().lerp(he, .56), size: hd.distanceTo(he) * .82, inv: B('Head').matrixWorld.clone().invert() };
     const span = Math.abs(P('LeftArm').x - P('RightArm').x); const ch = P('Spine01').lerp(P('Spine'), .35); ch.x = 0; sock.chest = { bone: 'Spine01', at: ch, size: span * 1.62, inv: B('Spine01').matrixWorld.clone().invert() };
     // jewelry, growths and carried things: neck, nape, back, shoulders, wrist, forearm, hips. Each rides the bone under it.
-    const V3 = (x, y, z) => new THREE.Vector3(x, y, z), I = n => B(n).matrixWorld.clone().invert(), SZ = .38, dp = ({ vanguard: .2, tracker: .11, naturalist: .13, tinkerer: .11 })[kind] || .12, // how far the front of the chest is from the spine, per hero // sized against the hero's height, not their shoulders: a narrow hero still needs gear that reads from across the hall
+    const V3 = (x, y, z) => new THREE.Vector3(x, y, z), I = n => B(n).matrixWorld.clone().invert(), SZ = .38, dp = ({ vanguard: .2, firebrand: .2, tracker: .11, naturalist: .13, tinkerer: .11 })[kind] || .12, // how far the front of the chest is from the spine, per hero // sized against the hero's height, not their shoulders: a narrow hero still needs gear that reads from across the hall
       sp2 = P('Spine02'), nk = P('neck'), hp = P('Hips'), LA = P('LeftArm'), RA = P('RightArm'), LF = P('LeftForeArm'), LH = P('LeftHand'), RF = P('RightForeArm'), RH = P('RightHand'); const sx = Math.sign(LA.x - RA.x) || 1;
     const along = (a, b) => new THREE.Quaternion().setFromUnitVectors(V3(0, -1, 0), b.clone().sub(a).normalize());
     sock.neck = { bone: 'Spine02', at: sp2.clone().lerp(nk, .35).add(V3(0, 0, dp)), size: SZ, inv: I('Spine02') };
@@ -133,6 +135,7 @@ const MODELS = {
   vanguard: () => hero(0x4f6f9a, 0x9fb4c8, 0x4fd8e8, g => { g.add(P(cyl(.22, .26, .05, 6), mat(0xc9a24a, { metalness: .5, roughness: .4 }), -.27, .45, .08, { r: [0, 0, Math.PI / 2] }), P(cone(.07, .14, 4), glow(0x4fd8e8, 1.4), -.31, .45, .08, { r: [0, 0, Math.PI / 2] }), P(box(.07, .5, .1), mat(0xd8dde6, { metalness: .6, roughness: .3 }), .27, .5, .05)); }),
   tracker: () => hero(0x3d6b4a, 0x7a5a36, 0xffe14a, g => { g.add(P(tor(.2, .018, 12), mat(0x7a5230), .26, .5, 0, { r: [0, Math.PI / 2, 0], s: [1, 1.5, 1] }), P(cone(.14, .22, 6), mat(0x2f5a3a), 0, .98, 0), P(cyl(.05, .05, .3, 5), mat(0x7a5230), -.12, .62, -.14, { r: [.4, 0, .3] })); }),
   naturalist: () => hero(0x8a4a8f, 0xe8d8b0, 0x9cff7a, g => { g.add(P(cyl(.24, .24, .03, 10), mat(0xd9b96a), 0, .93, 0), P(cyl(.12, .14, .1, 8), mat(0x6a3a7a), 0, .98, 0), P(cyl(.12, .12, .2, 8), mat(0xefe6d0), 0, .42, -.2, { r: [0, 0, Math.PI / 2] }), P(sph(.05, 0), glow(0x9cff7a), .2, .5, .12)); }),
+  firebrand: () => hero(0x2a3550, 0xc9a24a, 0xff6a2a, g => {}), // stand-in until Garrow's model is made
   tinkerer: () => hero(0x8a8f9a, 0xc0c6d0, 0x3fe0ff, g => { g.add(P(cyl(.01, .01, .28, 4), mat(0xc0c6d0), .08, 1.08, 0), P(sph(.035, 0), glow(0x3fe0ff), .08, 1.22, 0), P(box(.2, .22, .12), mat(0x5a6070, { metalness: .5 }), 0, .5, -.19), P(box(.16, .05, .02), glow(0x3fe0ff, 1.6), 0, .86, .15)); }, true),
   thornling: () => G(P(sph(.2, 1), mat(0x7a4a2a), 0, .32, 0), leaves(9, .12, .3, [0xb6e33a, 0x7fc02a, 0x8a3ffc], 1.25, .38), leaves(5, .05, .26, [0xd6f04a], .4, .5), legs(4, .12, .2, 0x4a2f1a), P(sph(.04, 0), glow(0xff5fd2), .08, .32, .18), P(sph(.04, 0), glow(0xff5fd2), -.08, .32, .18)),
   mossback: () => G(P(sph(.42, 1), mat(0x5a7a3a), 0, .42, 0, { s: [1.15, .75, 1.3] }), P(sph(.44, 0), mat(0x7a6a4a), 0, .36, 0, { s: [1.05, .5, 1.2] }), P(sph(.16, 1), mat(0x8a7a52), 0, .3, .58), P(sph(.03, 0), glow(0xffe14a, 1.2), .08, .34, .7), P(sph(.03, 0), glow(0xffe14a, 1.2), -.08, .34, .7), ring(4, .34, (i, a) => P(cyl(.09, .1, .26, 6), mat(0x6a5a3a), 0, .13, 0)), leaves(7, .16, .42, [0x2f9d42, 0x7fc02a, 0xb46bff], .5, .78), P(cone(.08, .5, 5), mat(0x3fb04a), .1, .95, -.1), P(sph(.06, 0), glow(0xff5fd2), -.12, .9, .12)),
@@ -355,11 +358,16 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   }
   // Put what the Seeker has equipped on the model: weapon in hand, head piece, body armor.
   function wear(o, gear) {
-    const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null;
+    const sock = o.body.userData.sock; if (!sock || !gear) return; const body = o.body; o.wclass = null; o.flames = [];
+    const flame = (piece, id) => { const len = FLAME[id]; if (!len) return; const dir = new THREE.Vector3(0, Math.sin(.698), Math.cos(.698)), f = new THREE.Group(); // a blade in grip space leans 40 degrees forward of straight up
+      for (const [r, h, c, op] of [[.075, .86, 0xff5a14, .55], [.04, .7, 0xffd24a, .8]]) { const m = new THREE.Mesh(new THREE.ConeGeometry(len * r, len * h, 7, 1, true), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })); m.position.y = len * h * .5; f.add(m); }
+      const l = new THREE.PointLight(0xff8a3a, 5, 3.5); l.position.y = len * .5; f.add(l); f.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); f.position.copy(dir).multiplyScalar(len * .04); f.visible = !!o.lit; piece.add(f); o.flames.push(f); };
+    const off = GEAR[gear.weapon] && GEAR[gear.weapon][0] === 'hand' && GEAR[gear.weapon][2], sl = off && sock.LeftHand; // a second blade for the left hand
+    if (sl) loadGear(off).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(sl.bone); if (!bone) return; const piece = m.clone(true); const L = sl.inv.clone().multiply(new THREE.Matrix4().compose(sl.at.clone(), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1))); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece); flame(piece, off); });
     for (const id of [gear.weapon, gear.head, gear.body, gear.accessory, gear.implant, gear.device]) { const G0 = GEAR[id]; if (!G0) continue; const s = sock[G0[0] === 'hand' ? 'RightHand' : G0[0]]; if (!s) continue; if (G0[0] === 'hand') o.wclass = G0[1];
       loadGear(id).then(m => { if (!m || o.body !== body) return; const bone = body.getObjectByName(s.bone); if (!bone) return; const piece = m.clone(true); const k = G0[0] === 'hand' ? 1 : s.size * G0[1];
         const W = new THREE.Matrix4().compose(s.at.clone().add(new THREE.Vector3(0, G0[0] === 'hand' ? 0 : G0[2] || 0, G0[0] === 'hand' ? 0 : G0[3] || 0)), s.q || new THREE.Quaternion(), new THREE.Vector3(k, k, k)); const L = s.inv.clone().multiply(W); L.decompose(piece.position, piece.quaternion, piece.scale); bone.add(piece);
-        if (G0[0] === 'hand') o.weap = { piece, rest: piece.quaternion.clone(), axis: longAxis(m) }; }); }
+        if (G0[0] === 'hand') { o.weap = { piece, rest: piece.quaternion.clone(), axis: longAxis(m) }; flame(piece, id); } }); }
   }
   // Point the held weapon's long axis where the body is facing, eased in and out over the strike.
   const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion(), _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
@@ -390,7 +398,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     // list: [{id,x,y,kind,side,variant,ring,label,gone}]
     sync(list, propList, extras) {
       const seen = new Set();
-      for (const u of list) { const o = unitObj(u); seen.add(u.id); o.g.visible = !u.gone; o.lab.hidden = !!u.gone; if (u.gone) continue; if (!o.walking) { o.g.position.x = o.tx = wx(u.y); o.g.position.z = o.tz = wz(u.x); } o.rg.material = RM[u.ring] || RM.calm; o.rg.visible = !!u.ring; if (o.lab.innerHTML !== u.label) o.lab.innerHTML = u.label; }
+      for (const u of list) { const o = unitObj(u); seen.add(u.id); o.g.visible = !u.gone; o.lab.hidden = !!u.gone; if (u.gone) continue; if (!o.walking) { o.g.position.x = o.tx = wx(u.y); o.g.position.z = o.tz = wz(u.x); } o.rg.material = RM[u.ring] || RM.calm; o.rg.visible = !!u.ring; if (o.lab.innerHTML !== u.label) o.lab.innerHTML = u.label; o.lit = !!u.lit; }
       for (const [id, o] of units) if (!seen.has(id)) { o.g.removeFromParent(); o.lab.remove(); units.delete(id); }
       const pseen = new Set();
       for (const p of propList) { pseen.add(p.key); let o = props.get(p.key); if (o && p.lit !== undefined) { if (p.lit && !o.userData.lamp) { const l = new THREE.PointLight(0xffc878, 22, 9); l.position.y = 1.9; o.add(l); o.userData.lamp = l; } else if (!p.lit && o.userData.lamp) { o.remove(o.userData.lamp); o.userData.lamp = null; } o.scale.y = p.spent ? .7 : 1; } if (o && p.model === 'plate') o.userData.mat.emissiveIntensity = p.on ? 1.1 : .1;
@@ -420,6 +428,11 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1.2 }) : 0; },
     hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1.3 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
     burst(x, y, c = 0x3fe0ff) { spark(new THREE.Vector3(wx(y), .3, wz(x)), c, 26); },
+    ray(x0, y0, x1, y1, c = 0xff2a1a) { // two thin beams from eye height to the target, gone in a quarter second
+      const a = new THREE.Vector3(wx(y0), 1.62, wz(x0)), b = new THREE.Vector3(wx(y1), .7, wz(x1)), d = b.clone().sub(a), len = d.length(); if (len < .01) return;
+      const side = new THREE.Vector3(d.z, 0, -d.x).normalize().multiplyScalar(.05); const m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .95, blending: THREE.AdditiveBlending, depthWrite: false });
+      for (const s of [-1, 1]) { const g = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, len, 6), m); g.position.copy(a).addScaledVector(d, .5).addScaledVector(side, s); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); here.add(g); setTimeout(() => { here.remove(g); g.geometry.dispose(); }, 260); }
+      spark(b, c, 18); },
     gone(id) { const o = units.get(id); if (!o) return; if (o.mixer) { play(o, 'die', { once: true, hold: true }); o.dying = performance.now() + 1500; } else o.dying = performance.now(); },
     add(u) { unitObj(u); },
     screen(x, y, h = 1) { const v = new THREE.Vector3(wx(y), h, wz(x)).project(cam); return { left: (v.x * .5 + .5) * 100, top: (-v.y * .5 + .5) * 100 }; },
@@ -487,6 +500,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     for (const k in mk) if (k.endsWith('reach')) mk[k].material.opacity = .17 + Math.sin(t * 2.4) * .05;
     for (const d of decor.children) { const p = d.userData.poke; if (p) { const k = (now - p) / 420; if (k >= 1) { d.userData.poke = 0; d.rotation.z = 0; } else d.rotation.z = Math.sin(k * Math.PI * 3) * .05 * (1 - k); } if (d.userData.light && d.userData.light.intensity) d.userData.light.intensity = 15 + Math.sin(t * 9 + d.userData.i) * 1.2; }
     for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; const k = (now - s.t) / 480; if (k >= 1) { scene.remove(s.m); s.m.geometry.dispose(); sparks.splice(i, 1); continue; } const p = s.m.geometry.attributes.position; for (let j = 0; j < s.v.length; j++) { p.array[j * 3] += s.v[j][0] * .016; p.array[j * 3 + 1] += (s.v[j][1] - k * 6) * .016; p.array[j * 3 + 2] += s.v[j][2] * .016; } p.needsUpdate = true; s.m.material.opacity = 1 - k; }
+    for (const [, o] of units) if (o.flames) for (let i = 0; i < o.flames.length; i++) { const f = o.flames[i]; f.visible = !!o.lit; if (o.lit) f.scale.set(1 + Math.sin(t * 23 + i) * .12, 1 + Math.sin(t * 17 + i * 2) * .1, 1 + Math.cos(t * 19 + i) * .12); }
     zoomNow += (zoom - zoomNow) * .14; focNow.lerp(zoom < .98 ? focus : ORIGIN, .12);
     { const vo = Math.round(hudPx * .5 * Math.min(1, (1 - zoomNow) * 2)); if (vw && vo !== voNow) { voNow = vo; if (vo) cam.setViewOffset(vw, vh, 0, vo, vw, vh); else cam.clearViewOffset(); } }
     cam.position.set(focNow.x + base.x * zoomNow + Math.sin(t * .17) * .22 * zoomNow + ptr.x * .7 * zoomNow, base.y * zoomNow + Math.sin(t * .23) * .1 - ptr.y * .3 * zoomNow + .3 * (1 - zoomNow), focNow.z + base.z * zoomNow + Math.cos(t * .13) * .12); cam.lookAt(focNow.x + look.x * zoomNow, look.y * zoomNow + .3 * (1 - zoomNow) + (1 - zoomNow) * .5, focNow.z);

@@ -489,6 +489,7 @@ h1, h2 { color: #fbf3df; } .label { color: #a48c52; }
 .hc-wr b { display: block; font: 600 9.5px var(--mono); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1px; } .hc-wr .wk { border-color: rgba(240, 98, 74, .6); color: #ffd0c6; } .hc-wr .wk b { color: #f0624a; } .hc-wr .rs { border-color: rgba(90, 169, 238, .6); color: #cfe6ff; } .hc-wr .rs b { color: #5aa9ee; } .hc-wr .un { color: #8f8068; border-style: dashed; }
 
 .face.ph.tinkerer { --fx: 50%; --fy: 24%; }
+.face.ph.firebrand { --fx: 50%; --fy: 22%; }
 
 /* Catalogue record: what you know, and what is still blacked out. */
 .record { display: grid; gap: 8px; } .rec { padding: 8px 10px; border: 1px dashed rgba(184, 150, 74, .35); border-radius: 4px; } .rec.on { border-style: solid; border-color: rgba(184, 150, 74, .5); background: rgba(232, 195, 106, .05); }

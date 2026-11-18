@@ -22,7 +22,7 @@ const DECOR = {
 };
 // What kind of action each button is. The colour on the button says the same thing.
 const KIND = { attack: 'Attack', defend: 'Defend', control: 'Control', support: 'Support', device: 'Device', lore: 'Knowledge', flow: '' };
-const ABIL_KIND = { brace: 'defend', riposte: 'defend', shove: 'attack', deadeye: 'attack', spore_dart: 'attack', arc_pulse: 'attack', mark: 'control', snare: 'control', soothe: 'control', mend: 'support', overclock: 'support', drone: 'device' };
+const ABIL_KIND = { brace: 'defend', riposte: 'defend', shove: 'attack', deadeye: 'attack', spore_dart: 'attack', arc_pulse: 'attack', mark: 'control', snare: 'control', soothe: 'control', mend: 'support', overclock: 'support', drone: 'device', kindle: 'attack', fire_breath: 'attack', red_glare: 'attack' };
 // How each kind of creature behaves, and the one thing worth knowing when you meet it.
 export const NATURE = {
   pack: ['Pack hunter', 'Weak alone. Kill or scatter them one at a time before they gather round a single Seeker.'],
@@ -37,8 +37,8 @@ export const NATURE = {
   boss_regulator: ['Great one', 'It cannot be calmed. The red line on the floor is where it strikes next.'],
 };
 const STATUS = u => { const s = []; const add = (on, cls, t, d) => { if (on) s.push(`<span class="st ${cls}" title="${d}">${t}</span>`); };
-  add(u.shield > 0, 'buff', 'Shield ' + u.shield, 'Absorbs damage before health'); add(u.taunt > 0, 'buff', 'Braced', 'Drawing attacks'); add(u.rip > 0, 'buff', 'Riposte', 'Strikes back when hit in melee'); add(u.calm > 0, 'buff', 'Calm ' + u.calm, 'Will not hunt unless hurt');
-  add(u.bleed > 0, 'bad', 'Bleeding ' + u.bleed, 'Loses health each turn'); add(u.poison > 0, 'bad', 'Poisoned ' + u.poison, 'Loses health each turn, fading by one'); add(u.mark > 0, 'bad', 'Marked', 'Takes 25% more damage'); add(u.root > 0, 'bad', 'Held ' + u.root, 'Cannot move'); add(u.stun > 0, 'bad', 'Stunned', 'Loses its turn');
+  add(u.shield > 0, 'buff', 'Shield ' + u.shield, 'Absorbs damage before health'); add(u.taunt > 0, 'buff', 'Braced', 'Drawing attacks'); add(u.rip > 0, 'buff', 'Riposte', 'Strikes back when hit in melee'); add(u.lit > 0, 'buff', 'Blades alight ' + u.lit, 'Every hit sets its target Burning'); add(u.calm > 0, 'buff', 'Calm ' + u.calm, 'Will not hunt unless hurt');
+  add(u.bleed > 0, 'bad', 'Bleeding ' + u.bleed, 'Loses health each turn'); add(u.burn > 0, 'bad', 'Burning ' + u.burn, 'Loses health each turn until the fire is out'); add(u.poison > 0, 'bad', 'Poisoned ' + u.poison, 'Loses health each turn, fading by one'); add(u.mark > 0, 'bad', 'Marked', 'Takes 25% more damage'); add(u.root > 0, 'bad', 'Held ' + u.root, 'Cannot move'); add(u.stun > 0, 'bad', 'Stunned', 'Loses its turn');
   return s.length ? `<div class="sts2">${s.join('')}</div>` : '<p class="dim" style="font-size:12.5px">No active effects.</p>'; };
 const FIXTURE = {
   bellcap: ['Bellcap', 'Spore cap', 'Strike it and it breathes out. Every living creature within two tiles goes drowsy for two turns. Machines and the great ones ignore it. Once only.'],
@@ -54,7 +54,7 @@ const learn = k => { const o = knownSet(); if (o[k]) return false; o[k] = 1; sto
 const MISSION = { pursue: 'Pursuit', observe: 'Observation', harvest: 'Harvest', cache: 'Recovery' };
 const off = why => `aria-disabled="true" data-why="${why}"`;
 const KINDWORD = { attack: 'strike', defend: 'guard', support: 'aid', control: 'hold', lore: 'observe' };
-const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt=""><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
+const btn = (kind, icon, name, sub, attrs) => `<button class="act k-${kind}" ${attrs}><img src="assets/icons/${icon}.jpg" alt="" onerror="this.style.visibility='hidden'"><span class="tx"><b>${name}</b><small>${sub}</small></span>${KIND[kind] ? `<i class="kd">${KIND[kind]}</i>` : ''}</button>`;
 // The same places in the Clockwork Wilds, where things are built and not grown.
 const DECOR_CW = {
   survey: ['Tinker bench', 'Left mid-task', 'Half-built animals in rows, each a little closer to finished than the last. The newest one has no maker\'s mark.'],
@@ -116,7 +116,7 @@ export function mountBattle(root, onFinish) {
     const rk = st.roomIdx + (st.side ? 's' : ''); if (shownRoom !== rk) { shownRoom = rk; sel = null; mode = null; info = null; sc.setRoom(st); }
     if (!sel || !live(unit(sel)) || unit(sel).ap <= 0) { const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (n && (!sel || !live(unit(sel)) || !mode)) sel = n.id; }
     const m = targets();
-    sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, gone: !live(u), label: live(u) ? label(u) : '',
+    sc.sync(st.units.map(u => { const a = live(u) && m.get(u.x + ',' + u.y); return { id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant, gear: u.side === 's' ? gearOf(u) : null, lit: u.lit > 0, gone: !live(u), label: live(u) ? label(u) : '',
       ring: u.side === 's' ? (u.id === sel ? 'sel' : u.ap <= 0 ? 'spent' : null) : u.side === 'a' ? null : a && a.id === u.id ? 'tg' : C.isHostile(st, u) ? 'hostile' : 'calm' }; }),
       st.room.props.filter(p => !p.done).map(p => ({ key: 'p' + p.pid, x: p.x, y: p.y, model: p.kind === 'fixture' ? 'fx_' + p.id : p.kind === 'flora' ? p.id : p.kind === 'find' ? D.FINDS[p.id].model : p.kind, glyph: p.glyph, on: p.kind === 'plate' && plateOn(p), lit: p.kind === 'plate' ? undefined : !!p.lit, spent: !!p.spent, use: !!m.get(p.x + ',' + p.y) && !mode }))
         .concat(st.room.traps.map(t => ({ key: 't' + t.x + '_' + t.y, x: t.x, y: t.y, model: 'trap' })), st.room.corpses.map(c => ({ key: 'c' + c.x + '_' + c.y, x: c.x, y: c.y, model: 'corpse' }))));
@@ -290,7 +290,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
       else if (e.e === 'shield') push(e.n < 0 ? `${who(e.id)} gains ${-e.n} shield.` : `${who(e.id)}'s shield absorbs ${e.n}.`, cls(e.id));
       else if (e.e === 'text') push(/^Witnessed/.test(e.msg) ? `You watch the ${who(e.id)}. ${e.msg}.` : `${who(e.id)}: ${e.msg}.`, cls(e.id));
-      else if (e.e === 'status') push(`${who(e.id)} is ${{ bleed: 'bleeding', poison: 'poisoned', mark: 'marked', calm: 'calmed', root: 'held in place', stun: 'stunned' }[e.s] || e.s}.`, cls(e.id));
+      else if (e.e === 'status') push(`${who(e.id)} is ${{ bleed: 'bleeding', burn: 'burning', poison: 'poisoned', mark: 'marked', calm: 'calmed', root: 'held in place', stun: 'stunned' }[e.s] || e.s}.`, cls(e.id));
       else if (e.e === 'study') push(`Field notes on ${who(e.id)}: +${e.n}.`, 'ally');
       else if (e.e === 'die') push(`${who(e.id)} dies.`, cls(e.id));
       else if (e.e === 'flee') push(`${who(e.id)} flees the room.`, cls(e.id));
@@ -325,7 +325,7 @@ export function mountBattle(root, onFinish) {
       if (e.e === 'find') { const F0 = D.FINDS[st.room.props.find(q => q.pid === e.pid)?.id] || {}; const res = { notes: 'Field notes on the ' + (D.SPECIES[e.kind]?.name || 'residents') + ': +3.', case: 'A sealed case comes out with you.', mats: 'Two of ' + (D.MATERIALS[e.mat]?.name || 'something useful') + '.', mend: 'The whole party is restored.', lore: 'Worth writing down. Experience for everyone.', wake: 'It was not empty.' }[e.what]; float(e.x, e.y, e.what === 'wake' ? 'Something wakes' : 'Found', e.what === 'wake' ? 'txt why' : 'study'); sc.burst(e.x, e.y, e.what === 'wake' ? 0xff5a4a : 0xffd05a); e.what === 'wake' ? snd.warn() : snd.pick(); toast((F0.name || 'It') + ': ' + (e.what === 'wake' ? '' : (F0.after || '') + ' ') + res, e.what === 'wake' ? '' : 'good'); await sleep(420); continue; }
       if (e.e === 'move' && (drift || e.trail)) { const v = at(e.id); sc.move(e.id, e.path, e.trail ? 115 : 190); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; continue; }
       if (e.e === 'move') { const v = at(e.id); snd.step(); const stp = setInterval(() => snd.step(), 120); await sc.move(e.id, e.path, e.blink ? 1 : e.shove ? 150 : 115); const l = e.path[e.path.length - 1]; v.x = l[0]; v.y = l[1]; clearInterval(stp); await sleep(50); }
-      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : 260); }
+      else if (e.e === 'hit') { const v = at(e.id); if (theirs && !drift) sc.focus(v.x, v.y); if (e.from && e.k === 'beam') { const f = at(e.from); sc.ray(f.x, f.y, v.x, v.y, 0xff2a1a); await sleep(180); } else if (e.from && e.k === 'fire') { sc.burst(v.x, v.y, 0xff7a2a); await sleep(90); } else if (e.from && !e.dot) { const d = sc.lunge(e.from, e.id, e.crit) || 110; snd.swing(); await sleep(d); } sc.hit(e.id, e.crit); snd.hit(e.crit); float(v.x, v.y, (e.crit ? 'CRIT ' : '') + '-' + e.n + (e.dot && e.dot !== 'dot' ? ' ' + e.dot : ''), e.crit ? 'crit' : ''); if (e.eff) setTimeout(() => float(v.x, v.y, e.eff === 'weak' ? 'Weak to it' : 'Resisted', e.eff === 'weak' ? 'txt weak' : 'txt resist'), 160); await sleep(e.dot ? 150 : 260); }
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
@@ -377,7 +377,7 @@ export function mountBattle(root, onFinish) {
       <div class="shtop"><img class="shport" src="assets/portraits/${u.kind}.jpg" alt="" onerror="this.remove()"><div><p class="label">${esc(A.name)} · level ${u.sh.lvl}</p><h2>${esc(u.name)}</h2><p class="dim" style="font-size:13.5px;margin-top:4px">${esc(A.bio || '')}</p>
         <dl class="kv" style="margin-top:10px"><dt>Health</dt><dd class="num">${Math.max(0, u.hp)}/${u.max}</dd><dt>Actions</dt><dd class="num">${u.ap} this turn</dd><dt>Weapon</dt><dd class="num">${w.min}-${w.max} · ${C.weaponRange(st, u) > 1 ? 'range ' + C.weaponRange(st, u) : 'melee'}</dd><dt>Armor</dt><dd class="num">${u.armor}</dd><dt>Move</dt><dd class="num">${u.move} tiles</dd><dt>Critical</dt><dd class="num">${u.sh.crit}%</dd>${u.sh.dev ? `<dt>Device</dt><dd class="num">${u.charges} charge${u.charges === 1 ? '' : 's'} left</dd>` : ''}</dl>
         ${sts.length ? `<p style="margin-top:8px;font-size:13px;color:var(--gilt)">${sts.join(' · ')}</p>` : ''}</div></div>
-      <h3>Abilities</h3><div class="shab">${u.sh.abilities.map(a => `<div class="k-${ABIL_KIND[a] || 'attack'}"><img src="assets/icons/${a}.jpg" alt=""><div><b>${esc(D.ABILITIES[a].name)}</b> <i class="kd">${KIND[ABIL_KIND[a] || 'attack']}</i><p>${esc(D.ABILITIES[a].desc)}</p><small>${D.ABILITIES[a].ap ? D.ABILITIES[a].ap + ' action' + (D.ABILITIES[a].ap > 1 ? 's' : '') : 'Free'} · ready every ${D.ABILITIES[a].cd} turns${(u.cds[a] || 0) > 0 ? ' · ready in ' + u.cds[a] : ''}</small></div></div>`).join('')}</div>
+      <h3>Abilities</h3><div class="shab">${u.sh.abilities.map(a => `<div class="k-${ABIL_KIND[a] || 'attack'}"><img src="assets/icons/${a}.jpg" alt="" onerror="this.style.visibility='hidden'"><div><b>${esc(D.ABILITIES[a].name)}</b> <i class="kd">${KIND[ABIL_KIND[a] || 'attack']}</i><p>${esc(D.ABILITIES[a].desc)}</p><small>${D.ABILITIES[a].ap ? D.ABILITIES[a].ap + ' action' + (D.ABILITIES[a].ap > 1 ? 's' : '') : 'Free'} · ready every ${D.ABILITIES[a].cd} turns${(u.cds[a] || 0) > 0 ? ' · ready in ' + u.cds[a] : ''}</small></div></div>`).join('')}</div>
       ${u.sh.res.active.length ? `<h3>Resonances awake</h3>${u.sh.res.active.map(r => `<div class="reso"><b>${D.RESONANCES[r].name}</b>${esc(D.RESONANCES[r].text)}</div>`).join('')}` : ''}
       <h3>Gear worn</h3><p class="dim" style="font-size:13px;margin:-4px 0 8px">Gear is fixed until the expedition ends. Change it at camp.</p><div class="shgear">${gear.length ? gear.map(it => itemCard(it, { hints: false, worn: false })).join('') : '<p class="dim">Nothing equipped.</p>'}</div></div>`;
     v.onclick = e => { if (e.target === v || e.target.closest('[data-c="x"]')) v.remove(); };

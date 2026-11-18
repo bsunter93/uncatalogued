@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 15;
+export const VERSION = 16;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -213,7 +213,7 @@ function enterRoom(st, type, ev) {
     u.x = i < 4 ? 0 : 1; u.y = (i % 4) + 3;
     if (st.roomIdx > 0) { if (u.dead) { u.dead = false; u.hp = 0; } u.hp = Math.min(u.max, u.hp + fl(u.max * 30 / 100)); }
     u.shield = u.m.shieldStart || 0; u.shieldPeak = u.shield; u.cds = {}; u.charges = u.sh.devCharges; u.phase = u.m.phase ? 1 : 0; u.ap = 2;
-    u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = 0; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false; u.last = null; u.streak = 0; u.wrath = 0; u.usedStub = false;
+    u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = u.burn = u.lit = 0; u.moved = false; u.freeUsed = false; u.killRef = false; u.critRef = false; u.last = null; u.streak = 0; u.wrath = 0; u.usedStub = false;
   });
   const spot = (minX) => { for (let i = 0; i < 200; i++) { const x = r.range(minX, W - 1), y = r.int(H); if (free(st, x, y)) return [x, y]; } for (let x = W - 1; x >= 0; x--) for (let y = 0; y < H; y++) if (free(st, x, y)) return [x, y]; return null; };
   // encounter
@@ -300,13 +300,14 @@ function hurt(st, src, t, amt, ev, o = {}) {
   if (!o.dot) {
     amt = Math.max(1, amt - Math.max(0, t.armor + auraArmor(st, t) - (o.pierce || 0)));
     if (t.side === 's' && t.fx.a_vanguard) amt = Math.max(1, amt - 1);
+    if (t.side === 's' && t.fx.a_firebrand) amt += 1; // plate over a furnace: the Firebrand hits hardest and breaks first
     if (t.phase) { t.phase = 0; ev.push({ e: 'text', id: t.id, msg: 'Passes through' }); return 0; }
     if (t.shield > 0) { const a = Math.min(t.shield, amt); t.shield -= a; amt -= a; ev.push({ e: 'shield', id: t.id, n: a });
       if (t.shield === 0 && t.fx && t.fx.res_rebound) { const v = t.shieldPeak || a; for (const c of creatures(st)) if (md(c, t) === 1) hurt(st, t, c, v, ev, { dot: true }); t.shieldPeak = 0; }
       if (amt <= 0) { provoke(st, src, t); return a; } }
   }
   t.hp -= amt; if (t.side === 's') { st.res.dmgTaken += amt; if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15); }
-  ev.push({ e: 'hit', from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? (o.kind || 'dot') : null, eff: o.eff || null });
+  ev.push({ e: 'hit', from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? (o.kind || 'dot') : null, k: o.dot ? null : (o.kind || null), eff: o.eff || null });
   provoke(st, src, t);
   if (t.hp <= 0) kill(st, src, t, ev);
   return amt;
@@ -385,7 +386,7 @@ function strike(st, u, t, ev, o = {}) {
   if (u.wrath) { pct += u.wrath; u.wrath = 0; }
   let dmg = fl(roll * pct / 100 * (o.mult || 100) / 100);
   if (fx.res_galvanic_rot && t.poison) dmg += 2 * t.poison;
-  let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0);
+  let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0);
   const crit = o.crit || (fx.bloodscent && t.bleed > 0) || r.int(100) < cc;
   if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
   if (t.mark > 0) dmg = fl(dmg * 125 / 100);
@@ -398,13 +399,17 @@ function strike(st, u, t, ev, o = {}) {
     if (m.bleedHit && r.int(100) < m.bleedHit) { t.bleed = 3 + (m.bleedDur || 0); t.bleedD = Math.max(t.bleedD || 0, 2 * st.tier + fl(u.sh.attr.adaptation / 3)); ev.push({ e: 'status', id: t.id, s: 'bleed' }); }
     if (m.poisonHit) { t.poison += m.poisonHit; t.poisonPot = Math.max(t.poisonPot || 0, poisonPot(u)); ev.push({ e: 'status', id: t.id, s: 'poison' }); }
     if (m.echo && dealt > 0) t.echo = (t.echo || 0) + fl(dealt * m.echo / 100);
+    if (u.lit > 0) ignite(st, u, t, ev);
     if (crit && fx.res_displaced_fate) { const dx = Math.sign(t.x - u.x), dy = Math.sign(t.y - u.y); push(st, t, Math.abs(dx) >= Math.abs(dy) && dx ? dx : 0, Math.abs(dx) >= Math.abs(dy) && dx ? 0 : dy || 1, 1, ev, u, 0); }
     if (fx.res_field_notes && wasMarked) gainStudy(st, u, t, 1, ev);
   }
   if (m.leech && t.bleed > 0) heal(st, u, m.leech, ev);
   if (m.chain && !o.noChain && dealt > 0) { const n = creatures(st).filter(c => c !== t && Math.abs(c.x - tx) + Math.abs(c.y - ty) === 1)[0]; if (n) hurt(st, u, n, Math.max(1, fl(dealt * m.chain / 100)), ev, { dot: true, kind: 'arc' }); }
+  if (fx.a_firebrand && !o.off && alive(t)) strike(st, u, t, ev, { off: true, noChain: true, mult: fx.s_cutthroat ? 70 : 40 }); // the dagger, a beat behind the sword
   return dealt;
 }
+// Burning: a fixed amount each turn for a few turns. A fresh flame replaces an older, weaker one.
+function ignite(st, u, t, ev) { if (!alive(t)) return; t.burn = Math.max(t.burn || 0, 2 + (u.fx.s_pyre ? 1 : 0)); t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100)); ev.push({ e: 'status', id: t.id, s: 'burn' }); }
 function gainStudy(st, u, t, pts, ev) {
   const cap = t.variant ? 5 : 3; const g = Math.min(pts, cap - t.studied); if (g <= 0) return 0;
   t.studied += g; st.res.study[t.kind] = (st.res.study[t.kind] || 0) + g; st.res.xp += 2 * g;
@@ -563,6 +568,7 @@ function tickUnit(st, u, ev) {
   if (reg && u.hp < u.max) heal(st, u, reg, ev);
   if (u.echo) { const e = u.echo; u.echo = 0; hurt(st, null, u, e, ev, { dot: true, kind: 'echo' }); if (!alive(u)) return; }
   if (u.poison > 0) { let d = fl(u.poison * (1 + st.tier) / 2 * (100 + (u.poisonPot || 0)) / 100); if (u.side === 'c' && friends(st).some(f => f.kind === 'lure') && seekers(st).some(s => s.fx.res_feeding_frenzy)) d *= 2; hurt(st, null, u, Math.max(1, d), ev, { dot: true, kind: 'poison' }); u.poison = Math.max(0, u.poison - (u.fx && u.fx.t_tissue ? 2 : 1)); if (!alive(u)) return; }
+  if (u.burn > 0) { hurt(st, null, u, u.burnD || 2, ev, { dot: true, kind: 'burn' }); u.burn--; if (!alive(u)) return; }
   if (u.bleed > 0) { hurt(st, null, u, u.bleedD || 2, ev, { dot: true, kind: 'bleed' }); u.bleed = Math.max(0, u.bleed - (u.fx && u.fx.t_tissue ? 2 : 1)); }
 }
 function endPhase(units, keys = ['mark', 'root', 'stun', 'calm', 'regenT']) { for (const u of units) { for (const k of keys) if (u[k] > 0) u[k]--; } }
@@ -581,7 +587,7 @@ function endTurn(st, ev, free) {
   for (const c of st.units.filter(u => u.side === 'c')) { if (alive(c)) act(st, c, ev); if (!seekers(st).some(alive)) break; }
   endPhase(st.units.filter(u => u.side === 'c'));
   for (const c of st.units) if (c.side === 'c') c.hitBy = 0;
-  endPhase(seekers(st), ['rip', 'taunt']);
+  endPhase(seekers(st), free ? ['rip', 'taunt'] : ['rip', 'taunt', 'lit']); // lit blades do not burn down while the hall is only being walked
   if (!seekers(st).some(alive)) { finish(st, 'defeat', ev); return; }
   st.turn++; if (!free) st.turns++; // beats spent exploring are not counted against the expedition
   ev.push({ e: 'phase', who: 's', free: !!free });
@@ -703,6 +709,10 @@ function applyAction(st, a) {
     else if (id === 'arc_pulse') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); const d = fl(R(st).range(5, 7) * ts * pw / 10000); const tx = t.x, ty = t.y; const n = creatures(st).filter(c => c !== t && md(c, t) === 1)[0];
       const zap = (c, v) => { hurt(st, u, c, v, ev, { pierce: 1, kind: 'arc' }); if (alive(c) && u.fx.s_saboteur) { c.mark = 2; if (D.SPECIES[c.kind].mech && !D.SPECIES[c.kind].boss) c.stun = 1; ev.push({ e: 'status', id: c.id, s: 'mark' }); } };
       zap(t, d); if (n) zap(n, Math.max(1, fl(d / 2))); }
+    else if (id === 'kindle') { pay(); u.lit = 2; ev.push({ e: 'text', id: u.id, msg: 'Blades alight' }); }
+    else if (id === 'fire_breath') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); const tx = t.x, ty = t.y; const d = fl(R(st).range(5, 7) * ts * pw / 10000);
+      for (const c of creatures(st).filter(c => Math.abs(c.x - tx) + Math.abs(c.y - ty) <= 1)) { hurt(st, u, c, d, ev, { kind: 'fire' }); ignite(st, u, c, ev); } }
+    else if (id === 'red_glare') { const t = tgt('c'); if (md(u, t) > rng) bad('Out of range.'); pay(); hurt(st, u, t, fl(R(st).range(6, 8) * ts * pw / 10000), ev, { pierce: 99, kind: 'beam' }); }
     else if (id === 'overclock') { const t = tgt('s'); if (t === u) bad('Overclock someone else.'); if (md(u, t) > rng) bad('Out of range.'); pay(); t.ap += 2; ev.push({ e: 'text', id: t.id, msg: '+2 actions' }); }
     return ev;
   }
@@ -802,6 +812,7 @@ function checkMilestones(state, r, now, fresh, out) {
   for (const m of D.MILESTONES) { if (state.unlocks[m.id]) continue; const [h, n] = m.test(ctx); if (h < n) continue;
     state.unlocks[m.id] = now; out.push(m.id);
     if (m.id === 'tamsin') addSeeker(state, 'tinkerer', r, now, fresh);
+    if (m.id === 'garrow') addSeeker(state, 'firebrand', r, now, fresh);
     if (m.id === 'eye') addItem(state, makeSingular(r, 'collectors_eye', Math.max(1, state.tierMax.verdant)), now, fresh); }
 }
 const famMats = fam => Object.keys(D.MATERIALS).filter(m => D.MATERIALS[m].fam === fam);

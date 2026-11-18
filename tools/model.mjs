@@ -5,7 +5,7 @@ const KEY = (process.env.MESHY_API_KEY || readFileSync(homedir() + '/.config/mes
 const API = 'https://api.meshy.ai/openapi/v1/image-to-3d';
 const H = { Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 // name: [concept file, humanoid?, face count]
-const JOBS = { hobb: ['hobb_v4', 1, 14000], sile: ['sile_v4', 1, 14000], oyelaran: ['oyelaran_rig', 1, 14000], thornling: ['thornling', 0, 8000], mossback: ['mossback', 0, 12000], orchardmother: ['orchardmother', 0, 20000] };
+const JOBS = { garrow: ['garrow', 1, 14000], hobb: ['hobb_v4', 1, 14000], sile: ['sile_v4', 1, 14000], oyelaran: ['oyelaran_rig', 1, 14000], thornling: ['thornling', 0, 8000], mossback: ['mossback', 0, 12000], orchardmother: ['orchardmother', 0, 20000] };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 await Promise.all(process.argv.slice(2).map(async name => {
   const [file, human, poly] = JOBS[name];

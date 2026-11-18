@@ -461,6 +461,15 @@ var UncEngine = (() => {
       abilities: ["drone", "arc_pulse", "overclock"],
       start: { weapon: "pulse_rifle", body: "relay_harness" },
       passive: "Spare parts: devices have one extra charge."
+    },
+    firebrand: {
+      name: "Firebrand",
+      seeker: "Garrow",
+      bio: "An exhibit that let itself out. Half lion, half eagle, all temper. Wants its own entry written properly.",
+      attr: { force: 3, precision: 6, vitality: 1, adaptation: 2, insight: 3 },
+      abilities: ["kindle", "fire_breath", "red_glare"],
+      start: { weapon: "kindled_pair", body: "chitin_plate" },
+      passive: "Twin blades: the dagger follows every weapon attack for 40%. Burns hot: every hit taken deals 1 more."
     }
   };
   var ABILITIES = {
@@ -475,7 +484,10 @@ var UncEngine = (() => {
     soothe: { name: "Soothe", ap: 1, cd: 4, target: "enemy", range: 3, desc: "Calm a creature for 2 turns. It stops hunting unless something hurts it. No effect on the great ones." },
     drone: { name: "Deploy Drone", ap: 1, cd: 4, target: "tile", range: 2, desc: "Launch a drone that shoots the nearest hostile each turn for 3 turns." },
     arc_pulse: { name: "Arc Pulse", ap: 1, cd: 2, target: "enemy", range: 3, desc: "Shock a target. The arc jumps to one creature beside it for half." },
-    overclock: { name: "Overclock", ap: 1, cd: 3, target: "ally", range: 3, desc: "Another Seeker gains 2 action points now." }
+    overclock: { name: "Overclock", ap: 1, cd: 3, target: "ally", range: 3, desc: "Another Seeker gains 2 action points now." },
+    kindle: { name: "Kindle", ap: 0, cd: 4, target: "self", desc: "Free. Both blades catch fire for 2 turns. Every hit sets its target Burning." },
+    fire_breath: { name: "Firebreath", ap: 2, cd: 3, target: "enemy", range: 2, desc: "Breathe fire over a creature and everything beside it. All of them are hurt and set Burning." },
+    red_glare: { name: "Red Glare", ap: 1, cd: 2, target: "enemy", range: 5, desc: "Two red beams from the eyes. Strikes one distant creature and ignores its armor." }
     // spec upgrades reuse ids with flags in SPECS
   };
   var SPECS = {
@@ -494,6 +506,10 @@ var UncEngine = (() => {
     tinkerer: [
       { id: "dronewright", name: "Dronewright", desc: "Drones last the whole room and hit 50% harder." },
       { id: "saboteur", name: "Saboteur", desc: "Arc Pulse stuns machines for a turn and Marks whatever it hits." }
+    ],
+    firebrand: [
+      { id: "pyre", name: "Pyre", desc: "Burning lasts a turn longer and hits 50% harder." },
+      { id: "cutthroat", name: "Cutthroat", desc: "The dagger follows for 70%. +15 critical chance against Burning targets." }
     ]
   };
   var TRAITS = {
@@ -515,6 +531,7 @@ var UncEngine = (() => {
     spore_sling: { name: "Spore Sling", slot: "weapon", fam: "organic", w: [4, 6, 3, "adaptation"], tags: ["poison"], m: { poisonHit: 1 }, text: "Ranged 3. Scales with Adaptation. Each hit applies 1 Poison." },
     pulse_rifle: { name: "Pulse Rifle", slot: "weapon", fam: "relic", w: [5, 8, 4, "precision"], tags: ["electric"], m: { pierce: 1 }, text: "Ranged 4. Scales with Precision. Ignores 1 armor." },
     arc_lance: { name: "Arc Lance", slot: "weapon", fam: "relic", w: [6, 9, 2, "insight"], tags: ["electric"], text: "Reach 2. Scales with Insight." },
+    kindled_pair: { name: "Kindled Pair", slot: "weapon", fam: "relic", w: [5, 8, 1, "precision"], tags: [], text: "Melee. A sword and a dagger that take a flame. Scales with Precision." },
     echo_blade: { name: "Echo Blade", slot: "weapon", fam: "anomalous", w: [6, 8, 1, "force"], tags: ["spatial"], m: { echo: 35 }, text: "Melee. Scales with Force. 35% of each hit lands again next turn." },
     chitin_plate: { name: "Chitin Plate", slot: "body", fam: "organic", m: { armor: 3 }, tags: [], text: "" },
     barkweave: { name: "Barkweave Coat", slot: "body", fam: "organic", m: { armor: 1, hp: 8, regen: 1 }, tags: ["regen"], text: "" },
@@ -714,6 +731,7 @@ var UncEngine = (() => {
     { id: "bench", name: "A place to work", need: "12 Catalogue entries", reward: "Workbench: refine and calibrate equipment", test: (c) => [c.entries, 12] },
     { id: "clockwork", name: "The second door", need: "24 Catalogue entries", reward: "The Clockwork Wilds open", test: (c) => [c.entries, 24] },
     { id: "tamsin", name: "A defector", need: "Catalogue any machine species", reward: "Tamsin-7 joins as Tinkerer", test: (c) => [c.mech, 1] },
+    { id: "garrow", name: "An exhibit lets itself out", need: "Investigate 2 species", reward: "Garrow joins as Firebrand", test: (c) => [c.investigated, 2] },
     { id: "mutate", name: "Biological crafting", need: "Observe 3 species", reward: "Workbench: mutate an affix", test: (c) => [c.observed, 3] },
     { id: "variants", name: "An eye for the odd one", need: "Catalogue 1 variant", reward: "Variants appear 50% more often", test: (c) => [c.variants, 1] },
     { id: "bloom", name: "What should not be", need: "Record 1 Wonder", reward: "Bloom contracts: stranger rooms, better cases", test: (c) => [c.wonders, 1] },
@@ -791,7 +809,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 15;
+  var VERSION = 16;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1278,7 +1296,7 @@ var UncEngine = (() => {
       u.charges = u.sh.devCharges;
       u.phase = u.m.phase ? 1 : 0;
       u.ap = 2;
-      u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = 0;
+      u.bleed = u.poison = u.root = u.stun = u.mark = u.rip = u.taunt = u.regenT = u.burn = u.lit = 0;
       u.moved = false;
       u.freeUsed = false;
       u.killRef = false;
@@ -1502,6 +1520,7 @@ var UncEngine = (() => {
     if (!o.dot) {
       amt = Math.max(1, amt - Math.max(0, t.armor + auraArmor(st, t) - (o.pierce || 0)));
       if (t.side === "s" && t.fx.a_vanguard) amt = Math.max(1, amt - 1);
+      if (t.side === "s" && t.fx.a_firebrand) amt += 1;
       if (t.phase) {
         t.phase = 0;
         ev.push({ e: "text", id: t.id, msg: "Passes through" });
@@ -1528,7 +1547,7 @@ var UncEngine = (() => {
       st.res.dmgTaken += amt;
       if (t.fx.s_retaliator) t.wrath = Math.min(45, (t.wrath || 0) + 15);
     }
-    ev.push({ e: "hit", from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? o.kind || "dot" : null, eff: o.eff || null });
+    ev.push({ e: "hit", from: src ? src.id : 0, id: t.id, n: amt, crit: !!o.crit, dot: o.dot ? o.kind || "dot" : null, k: o.dot ? null : o.kind || null, eff: o.eff || null });
     provoke(st, src, t);
     if (t.hp <= 0) kill(st, src, t, ev);
     return amt;
@@ -1746,7 +1765,7 @@ var UncEngine = (() => {
     }
     let dmg = fl(roll * pct / 100 * (o.mult || 100) / 100);
     if (fx.res_galvanic_rot && t.poison) dmg += 2 * t.poison;
-    let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0);
+    let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0);
     const crit = o.crit || fx.bloodscent && t.bleed > 0 || r.int(100) < cc;
     if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
     if (t.mark > 0) dmg = fl(dmg * 125 / 100);
@@ -1783,6 +1802,7 @@ var UncEngine = (() => {
         ev.push({ e: "status", id: t.id, s: "poison" });
       }
       if (m.echo && dealt > 0) t.echo = (t.echo || 0) + fl(dealt * m.echo / 100);
+      if (u.lit > 0) ignite(st, u, t, ev);
       if (crit && fx.res_displaced_fate) {
         const dx = Math.sign(t.x - u.x), dy = Math.sign(t.y - u.y);
         push(st, t, Math.abs(dx) >= Math.abs(dy) && dx ? dx : 0, Math.abs(dx) >= Math.abs(dy) && dx ? 0 : dy || 1, 1, ev, u, 0);
@@ -1794,7 +1814,14 @@ var UncEngine = (() => {
       const n = creatures(st).filter((c) => c !== t && Math.abs(c.x - tx) + Math.abs(c.y - ty) === 1)[0];
       if (n) hurt(st, u, n, Math.max(1, fl(dealt * m.chain / 100)), ev, { dot: true, kind: "arc" });
     }
+    if (fx.a_firebrand && !o.off && alive(t)) strike(st, u, t, ev, { off: true, noChain: true, mult: fx.s_cutthroat ? 70 : 40 });
     return dealt;
+  }
+  function ignite(st, u, t, ev) {
+    if (!alive(t)) return;
+    t.burn = Math.max(t.burn || 0, 2 + (u.fx.s_pyre ? 1 : 0));
+    t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100));
+    ev.push({ e: "status", id: t.id, s: "burn" });
   }
   function gainStudy(st, u, t, pts, ev) {
     const cap = t.variant ? 5 : 3;
@@ -2151,6 +2178,11 @@ var UncEngine = (() => {
       u.poison = Math.max(0, u.poison - (u.fx && u.fx.t_tissue ? 2 : 1));
       if (!alive(u)) return;
     }
+    if (u.burn > 0) {
+      hurt(st, null, u, u.burnD || 2, ev, { dot: true, kind: "burn" });
+      u.burn--;
+      if (!alive(u)) return;
+    }
     if (u.bleed > 0) {
       hurt(st, null, u, u.bleedD || 2, ev, { dot: true, kind: "bleed" });
       u.bleed = Math.max(0, u.bleed - (u.fx && u.fx.t_tissue ? 2 : 1));
@@ -2189,7 +2221,7 @@ var UncEngine = (() => {
     }
     endPhase(st.units.filter((u) => u.side === "c"));
     for (const c of st.units) if (c.side === "c") c.hitBy = 0;
-    endPhase(seekers(st), ["rip", "taunt"]);
+    endPhase(seekers(st), free2 ? ["rip", "taunt"] : ["rip", "taunt", "lit"]);
     if (!seekers(st).some(alive)) {
       finish(st, "defeat", ev);
       return;
@@ -2607,6 +2639,25 @@ var UncEngine = (() => {
         };
         zap(t, d);
         if (n) zap(n, Math.max(1, fl(d / 2)));
+      } else if (id === "kindle") {
+        pay2();
+        u.lit = 2;
+        ev.push({ e: "text", id: u.id, msg: "Blades alight" });
+      } else if (id === "fire_breath") {
+        const t = tgt("c");
+        if (md(u, t) > rng) bad("Out of range.");
+        pay2();
+        const tx = t.x, ty = t.y;
+        const d = fl(R(st).range(5, 7) * ts * pw / 1e4);
+        for (const c of creatures(st).filter((c2) => Math.abs(c2.x - tx) + Math.abs(c2.y - ty) <= 1)) {
+          hurt(st, u, c, d, ev, { kind: "fire" });
+          ignite(st, u, c, ev);
+        }
+      } else if (id === "red_glare") {
+        const t = tgt("c");
+        if (md(u, t) > rng) bad("Out of range.");
+        pay2();
+        hurt(st, u, t, fl(R(st).range(6, 8) * ts * pw / 1e4), ev, { pierce: 99, kind: "beam" });
       } else if (id === "overclock") {
         const t = tgt("s");
         if (t === u) bad("Overclock someone else.");
@@ -2836,6 +2887,7 @@ var UncEngine = (() => {
       state.unlocks[m.id] = now;
       out.push(m.id);
       if (m.id === "tamsin") addSeeker(state, "tinkerer", r, now, fresh);
+      if (m.id === "garrow") addSeeker(state, "firebrand", r, now, fresh);
       if (m.id === "eye") addItem(state, makeSingular(r, "collectors_eye", Math.max(1, state.tierMax.verdant)), now, fresh);
     }
   }
