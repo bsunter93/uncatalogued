@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 16;
+export const VERSION = 17;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -124,9 +124,9 @@ export function sheet(state, sid, gearOverride) {
 // ---------------------------------------------------------------- expedition sim
 const ENC = {
   verdant: {
-    standard: [[['thornling', 4]], [['thornling', 3], ['mossback', 1]], [['thornling', 3], ['gulper', 1]], [['thornling', 2], ['carrion', 1], ['mossback', 1]], [['thornling', 2], ['gulper', 1], ['carrion', 1], ['glasswing', 1]], [['thornling', 3], ['carrion', 1], ['glasswing', 1]]],
+    standard: [[['thornling', 4]], [['thornling', 3], ['mossback', 1]], [['thornling', 3], ['gulper', 1]], [['thornling', 2], ['carrion', 1], ['mossback', 1]], [['thornling', 2], ['gulper', 1], ['carrion', 1], ['glasswing', 1]], [['thornling', 3], ['carrion', 1], ['glasswing', 1]], [['thornling', 2], ['stalkbriar', 1], ['dewhare', 2]], [['stalkbriar', 1], ['dewhare', 3], ['mossback', 1]], [['thornling', 3], ['dewhare', 2], ['carrion', 1]]],
     elite: [[['hush', 1], ['thornling', 3]], [['hush', 1], ['mossback', 1], ['carrion', 2]]],
-    quiet: [[['mossback', 2], ['glasswing', 2]], [['glasswing', 2], ['mossback', 1], ['gulper', 1]]],
+    quiet: [[['mossback', 2], ['glasswing', 2]], [['glasswing', 2], ['mossback', 1], ['gulper', 1]], [['dewhare', 3], ['mossback', 1], ['stalkbriar', 1]]],
     boss: [[['orchardmother', 1], ['thornling', 3]]],
   },
   clockwork: {
@@ -137,7 +137,7 @@ const ENC = {
   },
 };
 // 'roam' means it has not noticed the party and is living its own life.
-const NOTICE = { pack: 2, predator: 3, scavenger: 2 }; const AMBIENT = { verdant: ['mossback', 'glasswing'], clockwork: ['coilfawn', 'pollinator'] };
+const NOTICE = { pack: 2, predator: 3, scavenger: 2 }; const AMBIENT = { verdant: ['mossback', 'glasswing', 'lampmoth'], clockwork: ['coilfawn', 'pollinator'] };
 const MOOD0 = { pack: 'roam', scavenger: 'roam', predator: 'roam', boss_orchard: 'hostile', boss_regulator: 'hostile', grazer: 'docile', mender: 'docile', sentinel: 'docile', skittish: 'wary', ambush: 'territorial' };
 const md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const K = (x, y) => y * W + x;
@@ -227,6 +227,7 @@ function enterRoom(st, type, ev) {
   // the hall has residents that have nothing to do with you
   if (etype !== 'boss' && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
   for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 9 : 5); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
+  if (sp.sight && st.roomIdx === 0 && !sp.intro) { const p = spot(6); if (p) { const u = spawn(st, sp.sight.kind, p[0], p[1], r, ev, true, sp.sight.variant); u.sight = true; } } // today's sighting: one marked animal in the first hall
   // props
   const addProp = (kind, id, o = {}) => { const p = spot(2); if (p) room.props.push({ pid: room.pid++, kind, id, x: p[0], y: p[1], ...o }); };
   let nf = type === 'quiet' ? 3 : r.int(3); if (sp.type === 'harvest') nf += last ? 2 : 1; if (sp.intro && st.roomIdx === 0) nf = 0;
@@ -246,12 +247,12 @@ function enterRoom(st, type, ev) {
     if (seen.size >= open) break; const fxs = room.props.filter(p => (p.kind === 'fixture' || p.kind === 'chest') && !p.done); if (!fxs.length) break; fxs[fxs.length - 1].done = true; }
   ev.push({ e: 'room', idx: st.roomIdx, type });
 }
-function spawn(st, kind, x, y, r, ev, natural) {
+function spawn(st, kind, x, y, r, ev, natural, force) {
   const S = D.SPECIES[kind]; const hs = fl(tierScale(st.tier, 45) * (S.boss ? 150 : 140) / 100), ds = tierScale(st.tier, 36);
   const u = { id: st.uid++, side: 'c', kind, name: S.name, ai: S.ai, x, y, max: fl(S.hp * hs / 100), dmg: [fl(S.dmg[0] * ds / 100), fl(S.dmg[1] * ds / 100)], armor: S.armor + fl((st.tier - 1) / 2), move: S.move, range: S.range,
     mood: natural || MOOD0[S.ai] !== 'roam' ? MOOD0[S.ai] : 'hostile', hunter: MOOD0[S.ai] === 'roam' || MOOD0[S.ai] === 'hostile', home: { x, y }, shield: 0, studied: 0, tc: 0, bleed: 0, poison: 0, mark: 0, root: 0, stun: 0, calm: 0, echo: 0 };
-  if (natural && !S.boss && r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100))) {
-    u.variant = r.pick(['pale', 'gilded', 'overgrown']);
+  if (natural && !S.boss && (force || r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100)))) {
+    u.variant = force || r.pick(['pale', 'gilded', 'overgrown']);
     if (u.variant === 'overgrown') { u.max = fl(u.max * 150 / 100); u.dmg = [fl(u.dmg[0] * 130 / 100), fl(u.dmg[1] * 130 / 100)]; }
     st.res.variants[kind + ':' + u.variant] = 1;
   }
@@ -790,6 +791,11 @@ export function newPlayer(name, seed, now) {
   state.board = makeBoard(state, r.next()); return state;
 }
 export function weekId(now) { return fl((now - 345600000) / 604800000); }
+// One odd animal is reported each day, the same for everyone. Meeting it pays research, more for each day in a row.
+export function dayId(now) { return fl(now / 86400000); }
+export function dailySighting(now, state) { const d = dayId(now); const region = d % 2 && state && state.unlocks.clockwork ? 'clockwork' : 'verdant';
+  const pool = D.REGIONS[region].fauna.filter(k => !D.SPECIES[k].boss && !D.SPECIES[k].elite); return { day: d, region, kind: pool[hashStr('sighting-' + d) % pool.length], variant: ['pale', 'gilded', 'overgrown'][hashStr('coat-' + d) % 3] }; }
+export function sightingBonus(streak) { return 3 + Math.min(streak, 7); }
 export function weeklyContract(now) { const w = weekId(now); return { weekly: true, week: w, region: w % 2 ? 'clockwork' : 'verdant', type: 'pursue', tier: 3, mods: {}, target: { fam: w % 2 ? 'relic' : 'organic', slot: D.SLOTS[w % 6] }, seed: hashStr('weekly-trial-' + w) }; }
 export function makeBoard(state, seed) {
   const r = mkRng(seed); const regs = ['verdant']; if (state.unlocks.clockwork) regs.push('clockwork');
@@ -857,7 +863,8 @@ export function applyOp(state, op, ctx) {
       const squad = [...new Set(op.squad || [])]; if (squad.length < 1 || squad.length > 3) bad('Take one to three Seekers.'); squad.forEach(S);
       if (Object.keys(state.items).length > 90) bad('Your pack is full. Dismantle something first.');
       const tier = c.weekly ? c.tier : Math.max(1, Math.min(op.tier | 0 || 1, state.tierMax[c.region]));
-      state.run = { spec: buildSpec(state, c, squad, tier, c.weekly ? c.seed : ctx.rng.next()), at: now, c: op.weekly ? -1 : op.c }; break; }
+      state.run = { spec: buildSpec(state, c, squad, tier, c.weekly ? c.seed : ctx.rng.next()), at: now, c: op.weekly ? -1 : op.c };
+      { const sg = dailySighting(now, state); if (!c.weekly && c.region === sg.region && state.stats.runs && !(state.daily && state.daily.id === sg.day)) state.run.spec.sight = { kind: sg.kind, variant: sg.variant, day: sg.day }; } break; }
     case 'finish': { if (!ctx.rng) bad('server'); if (!state.run) bad('No expedition to finish.'); out.report = settle(state, op.log || [], ctx, fresh, out); break; }
     default: bad('Unknown operation.');
   }
@@ -875,6 +882,8 @@ function settle(state, log, ctx, fresh, out) {
   const touch = (key) => { catAdd(state, key, now, fresh); return state.cat[key]; };
   // Walking out early only counts what the party actually worked on: studied, sampled, watched or killed. Being in the room with it is not a record.
   const met = sp => win || rs.study[sp] || rs.samples[sp] || rs.kills[sp];
+  if (spec.sight && met(spec.sight.kind) && !(state.daily && state.daily.id >= spec.sight.day)) { const prev = state.daily || {}; const streak = prev.id === spec.sight.day - 1 ? (prev.streak || 0) + 1 : 1; const bonus = sightingBonus(streak);
+    state.daily = { id: spec.sight.day, streak, best: Math.max(prev.best || 0, streak) }; state.research += bonus; rep.sight = { kind: spec.sight.kind, variant: spec.sight.variant, streak, bonus }; }
   for (const sp in rs.seen) { if (!met(sp)) continue; const e = touch('f:' + sp); const before = stageOf(e); e.study = (e.study || 0) + (rs.study[sp] || 0); e.samples = (e.samples || 0) + (rs.samples[sp] || 0); e.n = (e.n || 0) + 1; const after = stageOf(e); if (after > before) { rep.stageUps.push({ sp, stage: after }); rep.research += 5 * (after - before); } }
   for (const v in rs.variants) if (met(v.split(':')[0])) touch('v:' + v);
   for (const f in rs.flora) { const e = touch('p:' + f); e.n = (e.n || 0) + rs.flora[f]; }

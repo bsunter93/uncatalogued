@@ -530,3 +530,9 @@ li.prov { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px s
 
 li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(184, 150, 74, .25); font-size: 12.5px; } li.set b { color: #e8c36a; } li.set .num { color: #a99a7c; font-size: 11px; margin-left: 4px; }
 .sb { display: block; margin-top: 3px; color: #8b7f6a; font-size: 12.5px; } .sb i { display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center; border-radius: 50%; border: 1px solid #6a5d45; font: 10px var(--mono); margin-right: 6px; font-style: normal; } .sb.on { color: #f3ead6; } .sb.on i { background: #e8c36a; border-color: #e8c36a; color: #1a1206; }
+
+/* Today's sighting and what is within reach */
+.sighting { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: center; border-color: var(--gilt); }
+.sighting .art, .sighting .plate { width: 96px; height: 96px; } .sighting h3 { margin: 2px 0 4px; } .sighting .streak { margin-top: 6px; font-size: 13px; color: var(--gilt); }
+.sighting.done { border-color: rgba(184, 150, 74, .3); opacity: .85; }
+.reach { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 20px; }

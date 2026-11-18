@@ -2,12 +2,24 @@
 import { C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
 import { mountBattle, NATURE } from './battle.js';
 // What a Mastered entry adds: who each resident lives beside, eats, or avoids.
+// What one more expedition would finish: the nearest milestones and the animals closest to their next stage.
+function closeTo(st) { const ctx = C.indexCtx(st); const rows = [];
+  for (const m of D.MILESTONES.filter(m => !st.unlocks[m.id])) { const [h, n] = m.test(ctx); if (h < n) rows.push({ k: (n - h) / n, t: esc(m.reward), s: esc(m.need), h, n }); }
+  rows.sort((a, b) => a.k - b.k); const out = rows.slice(0, 2);
+  const sp = []; for (const key in st.cat) { if (key[0] !== 'f') continue; const e = st.cat[key], s = C.stageOf(e); if (s >= 3) continue; const [ns, nm] = C.STAGE_REQ[s + 1]; const ds = Math.max(0, ns - (e.study || 0)), dm = Math.max(0, nm - (e.samples || 0)); if (ds + dm === 0) continue; sp.push({ k: ds + 2 * dm, id: key.slice(2), s, ds, dm, ns, nm, e }); }
+  sp.sort((a, b) => a.k - b.k); for (const x of sp.slice(0, 2)) out.push({ t: `${esc(D.SPECIES[x.id].name)} becomes ${C.STAGE_NAME[x.s + 1]}`, s: [x.ds ? `${x.ds} more field note${x.ds === 1 ? '' : 's'}` : '', x.dm ? `${x.dm} more sample${x.dm === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and '), h: Math.min(x.e.study || 0, x.ns) + Math.min(x.e.samples || 0, x.nm), n: x.ns + x.nm });
+  if (!out.length) return '';
+  return `<div><div class="sec-head"><h3>Within reach</h3><span class="label">one more expedition</span></div><div class="reach">${out.map(m => `<div class="mile"><div class="t"><span>${m.t}</span><span class="num dim">${m.h}/${m.n}</span></div><div class="bar gilt"><i style="width:${Math.min(100, m.h / m.n * 100)}%"></i></div><span class="label">${m.s}</span></div>`).join('')}</div></div>`; }
+const COAT = { pale: 'Pale', gilded: 'Gilded', overgrown: 'Overgrown' };
 const ECO = {
   thornling: 'Packs trail Mossbacks for the seed that falls from their gardens. They will not touch a Gulper Vine and give it a wide berth.',
   mossback: 'Its shell garden feeds half the hall. Glasswings roost in it at night and Lantern Moss spreads wherever it sleeps.',
   glasswing: 'Drawn to any light. Hush take them on the wing, so a hall with no Glasswings usually has a Hush in it.',
   gulper: 'It does not hunt. It waits beside the paths the Thornlings use, and it has never been seen to move in daylight.',
   carrion: 'It follows whatever does the killing. The petals at its throat are the flowers of the things it has eaten.',
+  stalkbriar: 'It keeps the Dewhare herds thin and the Carrion Blooms fed. A Hush will drive one off its kill without a fight.',
+  dewhare: 'It grazes the low ferns and drinks from Mirror Reeds. Most of what hunts in the Galleries is hunting this.',
+  lampmoth: 'It gathers at the old lamps as if they were its own kind. Glasswings follow it, and so does anything that eats them.',
   hush: 'The top of the hall. Everything else goes quiet when one is near, which is where the name comes from.',
   orchardmother: 'The Thornlings are hers. Every seed pod in the Galleries fell from one of her kind, and she remembers each one.',
   mite: 'They service the larger machines and are tolerated for it. A swarm with nothing to repair starts taking things apart.',
@@ -103,7 +115,11 @@ function board() {
   const wkLocked = !st.unlocks.clockwork && wk.region === 'clockwork';
   const wdone = st.weekly.id === wk.week && st.weekly.done; const wbest = st.weekly.id === wk.week ? st.weekly.best : 0;
   const next = D.MILESTONES.filter(m => !st.unlocks[m.id]).slice(0, 3); const ctx = C.indexCtx(st);
-  return `<div class="cols"><div class="stack" style="gap:22px">
+  const sg = C.dailySighting(Date.now(), st); const sgDone = st.daily && st.daily.id === sg.day; const streak = st.daily && st.daily.id >= sg.day - 1 ? st.daily.streak : 0; const hrs = Math.max(1, Math.ceil((86400000 - Date.now() % 86400000) / 3600000));
+  const sight = !st.stats.runs ? '' : `<div class="panel sighting ${sgDone ? 'done' : ''}">${plateBox(sg.kind, { variant: sg.variant })}<div><p class="label">Today's sighting · ${esc(D.REGIONS[sg.region].short)}</p><h3>${COAT[sg.variant]} ${esc(D.SPECIES[sg.kind].name)}</h3>
+      <p class="dim">${sgDone ? `Recorded. The next report comes in ${hrs} hour${hrs === 1 ? '' : 's'}.` : `One was reported in the first hall. Study it, sample it or bring it down for <b class="num">+${C.sightingBonus(streak + 1)}</b> research. Gone in ${hrs} hour${hrs === 1 ? '' : 's'}.`}</p>
+      <p class="streak">${streak ? `<b class="num">${streak}</b> day${streak === 1 ? '' : 's'} in a row${sgDone ? '' : ' · keep it going today'}` : 'Meet one each day and the bonus grows, up to +10.'}</p></div></div>`;
+  return `<div class="cols"><div class="stack" style="gap:22px">${sight}
     <div><div class="sec-head"><h2>Postings</h2><button class="link" data-act="reboard" ${st.research < 3 ? 'disabled style="opacity:.4"' : ''}>New postings · 3 research</button></div>
       <div class="contracts">${list.map((c, i) => contractCard(c, i, V.contract === i)).join('')}${wkLocked ? '' : contractCard(wk, 'w', weekly)}</div>
       ${weekly ? `<p class="dim" style="font-size:13.5px;margin-top:8px">Tier III, fixed. Scored on speed, studies and damage taken. ${wbest ? 'Your best this week: <b class="num">' + wbest + '</b>. ' : ''}${wdone ? 'This week\'s reward case is already yours. Runs still count for rank.' : 'First win of the week pays a trial case.'}</p>` : ''}</div>
@@ -263,6 +279,8 @@ function report() {
       <dt>Research</dt><dd class="num">+${rep.research}</dd>
       ${Object.keys(rep.mats).length ? `<dt>Material</dt><dd>${Object.keys(rep.mats).map(m => `${rep.mats[m]} ${esc(D.MATERIALS[m].name)}`).join(' · ')}</dd>` : ''}
       ${rep.tierUp ? `<dt>Access</dt><dd style="color:var(--gilt)">Tier ${ROMAN[rep.tierUp]} is open in ${D.REGIONS[rep.region].short}</dd>` : ''}</dl></div>
+    ${rep.sight ? `<p style="color:var(--gilt)"><span class="stamp">Sighting</span> ${COAT[rep.sight.variant]} ${esc(D.SPECIES[rep.sight.kind].name)} recorded. <b class="num">+${rep.sight.bonus}</b> research · ${rep.sight.streak} day${rep.sight.streak === 1 ? '' : 's'} in a row.</p>` : ''}
+    ${closeTo(st)}
     <div class="row"><button class="btn go" data-act="camp">Back to camp</button>${st.roster.some(s => pendingFor(st.seekers[s])) ? '<span style="color:var(--gilt);font-size:14px">A Seeker has a choice waiting.</span>' : ''}</div></main>`;
 }
 

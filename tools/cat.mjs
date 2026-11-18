@@ -8,6 +8,9 @@ const STYLE = 'A square painted illustration in the tradition of the finest coll
 const LOOK = {
   thornling: 'a lean knee-high predatory seed-pod creature, dark bark-armoured husk, four sharp root legs, a ridge of curved violet thorns, splinter teeth with a magenta glow, one torn leaf on its spine, crouched to spring',
   mossback: 'a cart-sized gentle tortoise with stone-grey skin, its shell a living garden of moss, ferns, pale mushrooms and glowing blue flowers',
+  stalkbriar: 'a lean wolf-sized ambush predator woven from dark thorned briar and bark, moss mane, amber eyes, hooked thorn jaws, half hidden in undergrowth, mid-stalk',
+  dewhare: 'a wary long-legged hare with grey-green mossy fur and tall leaf-shaped ears, a row of glowing blue dew sacs along its back, upright and listening in tall ferns',
+  lampmoth: 'a plump crow-sized moth with a glowing amber lantern abdomen and dusty plum and gold wings, circling an old brass lamp in the dark',
   glasswing: 'a large delicate moth with wings of clear rippled glass edged in teal, long feathered antennae, caught mid-flight, light refracting through it',
   gulper: 'a tall carnivorous pitcher plant that walks on thick roots, a wide wet maw lined with soft teeth, green and wine-red, a lure tendril dangling',
   carrion: 'a hunched four-legged scavenger with a long bone-white beak, ragged dark feathers like dead leaves, picking at a husk',

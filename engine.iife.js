@@ -40,6 +40,8 @@ var UncEngine = (() => {
     chestOpen: () => chestOpen,
     costOf: () => costOf,
     createRun: () => createRun,
+    dailySighting: () => dailySighting,
+    dayId: () => dayId,
     devKind: () => devKind,
     exploring: () => exploring,
     hashStr: () => hashStr,
@@ -68,6 +70,7 @@ var UncEngine = (() => {
     seekerItems: () => seekerItems,
     setsFor: () => setsFor,
     sheet: () => sheet,
+    sightingBonus: () => sightingBonus,
     stageOf: () => stageOf,
     studyValue: () => studyValue,
     traitOffer: () => traitOffer,
@@ -145,7 +148,7 @@ var UncEngine = (() => {
       code: "VG",
       blurb: "A rainforest grown through the display halls. The labels are still on the walls. Nothing is still behind them.",
       fam: { organic: 65, relic: 20, anomalous: 15 },
-      fauna: ["thornling", "mossback", "glasswing", "gulper", "carrion", "hush", "orchardmother"],
+      fauna: ["thornling", "mossback", "glasswing", "dewhare", "lampmoth", "gulper", "carrion", "stalkbriar", "hush", "orchardmother"],
       flora: ["lantern_moss", "snare_vine", "heartfruit", "mirror_reed"],
       wonders: ["pocket_sun", "upside_pool", "growing_fossil", "painted_door"],
       boss: "orchardmother",
@@ -264,6 +267,57 @@ var UncEngine = (() => {
       elite: true,
       blurb: "The catalogue entry is a blank plate with claw marks on the frame.",
       behavior: "Picks whoever stands alone, and prefers anyone already bleeding. Its bite opens a wound. Keep the squad shoulder to shoulder."
+    },
+    stalkbriar: {
+      name: "Stalkbriar",
+      latin: "Rubus insidians",
+      region: "verdant",
+      weak: "relic",
+      resist: "organic",
+      hp: 22,
+      dmg: [5, 7],
+      armor: 0,
+      move: 4,
+      range: 1,
+      ai: "predator",
+      mat: "thorn_resin",
+      hunts: true,
+      blurb: "A thicket that learned patience. The hall thins out wherever one has been sleeping.",
+      behavior: "Hunts Dewhares and Lampmoths when one is closer than you are. Left alone it eats and lies down. Step inside three tiles and you are the nearer meal."
+    },
+    dewhare: {
+      name: "Dewhare",
+      latin: "Lepus roridus",
+      region: "verdant",
+      weak: "organic",
+      resist: "anomalous",
+      hp: 8,
+      dmg: [1, 2],
+      armor: 0,
+      move: 5,
+      range: 1,
+      ai: "skittish",
+      mat: "living_sap",
+      prey: true,
+      blurb: "It carries its water on its back and listens with its whole body.",
+      behavior: "Keeps its distance and bolts when hurt. Where a herd is calm, nothing is hunting nearby. Where it scatters, look the other way."
+    },
+    lampmoth: {
+      name: "Lampmoth",
+      latin: "Phalaena lucerna",
+      region: "verdant",
+      weak: "organic",
+      resist: "relic",
+      hp: 5,
+      dmg: [1, 1],
+      armor: 0,
+      move: 4,
+      range: 1,
+      ai: "skittish",
+      mat: "sporeglass",
+      prey: true,
+      blurb: "It glows to find the others. In the Galleries the lamps answer first.",
+      behavior: "Harmless. Goes to any lit lamp and circles it. Whatever hunts by sight follows the moths to the light."
     },
     orchardmother: {
       name: "The Orchardmother",
@@ -809,7 +863,7 @@ var UncEngine = (() => {
   for (const id in SETS) for (const b of SETS[id].pieces) SET_OF[b] = id;
 
   // core.js
-  var VERSION = 16;
+  var VERSION = 17;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1080,9 +1134,9 @@ var UncEngine = (() => {
   }
   var ENC = {
     verdant: {
-      standard: [[["thornling", 4]], [["thornling", 3], ["mossback", 1]], [["thornling", 3], ["gulper", 1]], [["thornling", 2], ["carrion", 1], ["mossback", 1]], [["thornling", 2], ["gulper", 1], ["carrion", 1], ["glasswing", 1]], [["thornling", 3], ["carrion", 1], ["glasswing", 1]]],
+      standard: [[["thornling", 4]], [["thornling", 3], ["mossback", 1]], [["thornling", 3], ["gulper", 1]], [["thornling", 2], ["carrion", 1], ["mossback", 1]], [["thornling", 2], ["gulper", 1], ["carrion", 1], ["glasswing", 1]], [["thornling", 3], ["carrion", 1], ["glasswing", 1]], [["thornling", 2], ["stalkbriar", 1], ["dewhare", 2]], [["stalkbriar", 1], ["dewhare", 3], ["mossback", 1]], [["thornling", 3], ["dewhare", 2], ["carrion", 1]]],
       elite: [[["hush", 1], ["thornling", 3]], [["hush", 1], ["mossback", 1], ["carrion", 2]]],
-      quiet: [[["mossback", 2], ["glasswing", 2]], [["glasswing", 2], ["mossback", 1], ["gulper", 1]]],
+      quiet: [[["mossback", 2], ["glasswing", 2]], [["glasswing", 2], ["mossback", 1], ["gulper", 1]], [["dewhare", 3], ["mossback", 1], ["stalkbriar", 1]]],
       boss: [[["orchardmother", 1], ["thornling", 3]]]
     },
     clockwork: {
@@ -1093,7 +1147,7 @@ var UncEngine = (() => {
     }
   };
   var NOTICE = { pack: 2, predator: 3, scavenger: 2 };
-  var AMBIENT = { verdant: ["mossback", "glasswing"], clockwork: ["coilfawn", "pollinator"] };
+  var AMBIENT = { verdant: ["mossback", "glasswing", "lampmoth"], clockwork: ["coilfawn", "pollinator"] };
   var MOOD0 = { pack: "roam", scavenger: "roam", predator: "roam", boss_orchard: "hostile", boss_regulator: "hostile", grazer: "docile", mender: "docile", sentinel: "docile", skittish: "wary", ambush: "territorial" };
   var md = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   var K = (x, y) => y * W + x;
@@ -1332,6 +1386,13 @@ var UncEngine = (() => {
       const p = spot(SPECIES[kind].boss ? 9 : 5);
       if (p) spawn(st, kind, p[0], p[1], r, ev, true);
     }
+    if (sp.sight && st.roomIdx === 0 && !sp.intro) {
+      const p = spot(6);
+      if (p) {
+        const u = spawn(st, sp.sight.kind, p[0], p[1], r, ev, true, sp.sight.variant);
+        u.sight = true;
+      }
+    }
     const addProp = (kind, id, o = {}) => {
       const p = spot(2);
       if (p) room.props.push({ pid: room.pid++, kind, id, x: p[0], y: p[1], ...o });
@@ -1388,7 +1449,7 @@ var UncEngine = (() => {
     }
     ev.push({ e: "room", idx: st.roomIdx, type });
   }
-  function spawn(st, kind, x, y, r, ev, natural) {
+  function spawn(st, kind, x, y, r, ev, natural, force) {
     const S = SPECIES[kind];
     const hs = fl(tierScale(st.tier, 45) * (S.boss ? 150 : 140) / 100), ds = tierScale(st.tier, 36);
     const u = {
@@ -1418,8 +1479,8 @@ var UncEngine = (() => {
       calm: 0,
       echo: 0
     };
-    if (natural && !S.boss && r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100))) {
-      u.variant = r.pick(["pale", "gilded", "overgrown"]);
+    if (natural && !S.boss && (force || r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100)))) {
+      u.variant = force || r.pick(["pale", "gilded", "overgrown"]);
       if (u.variant === "overgrown") {
         u.max = fl(u.max * 150 / 100);
         u.dmg = [fl(u.dmg[0] * 130 / 100), fl(u.dmg[1] * 130 / 100)];
@@ -2848,6 +2909,18 @@ var UncEngine = (() => {
   function weekId(now) {
     return fl((now - 3456e5) / 6048e5);
   }
+  function dayId(now) {
+    return fl(now / 864e5);
+  }
+  function dailySighting(now, state) {
+    const d = dayId(now);
+    const region = d % 2 && state && state.unlocks.clockwork ? "clockwork" : "verdant";
+    const pool = REGIONS[region].fauna.filter((k) => !SPECIES[k].boss && !SPECIES[k].elite);
+    return { day: d, region, kind: pool[hashStr("sighting-" + d) % pool.length], variant: ["pale", "gilded", "overgrown"][hashStr("coat-" + d) % 3] };
+  }
+  function sightingBonus(streak) {
+    return 3 + Math.min(streak, 7);
+  }
   function weeklyContract(now) {
     const w = weekId(now);
     return { weekly: true, week: w, region: w % 2 ? "clockwork" : "verdant", type: "pursue", tier: 3, mods: {}, target: { fam: w % 2 ? "relic" : "organic", slot: SLOTS[w % 6] }, seed: hashStr("weekly-trial-" + w) };
@@ -3052,6 +3125,10 @@ var UncEngine = (() => {
         if (Object.keys(state.items).length > 90) bad("Your pack is full. Dismantle something first.");
         const tier = c.weekly ? c.tier : Math.max(1, Math.min(op.tier | 0 || 1, state.tierMax[c.region]));
         state.run = { spec: buildSpec(state, c, squad, tier, c.weekly ? c.seed : ctx.rng.next()), at: now, c: op.weekly ? -1 : op.c };
+        {
+          const sg = dailySighting(now, state);
+          if (!c.weekly && c.region === sg.region && state.stats.runs && !(state.daily && state.daily.id === sg.day)) state.run.spec.sight = { kind: sg.kind, variant: sg.variant, day: sg.day };
+        }
         break;
       }
       case "finish": {
@@ -3091,6 +3168,14 @@ var UncEngine = (() => {
       return state.cat[key];
     };
     const met = (sp) => win || rs.study[sp] || rs.samples[sp] || rs.kills[sp];
+    if (spec.sight && met(spec.sight.kind) && !(state.daily && state.daily.id >= spec.sight.day)) {
+      const prev = state.daily || {};
+      const streak = prev.id === spec.sight.day - 1 ? (prev.streak || 0) + 1 : 1;
+      const bonus = sightingBonus(streak);
+      state.daily = { id: spec.sight.day, streak, best: Math.max(prev.best || 0, streak) };
+      state.research += bonus;
+      rep.sight = { kind: spec.sight.kind, variant: spec.sight.variant, streak, bonus };
+    }
     for (const sp in rs.seen) {
       if (!met(sp)) continue;
       const e = touch("f:" + sp);
