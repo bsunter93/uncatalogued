@@ -42,7 +42,7 @@ function render() {
   if (S().run) { if (!V.mounted) { V.mounted = true; window.scrollTo(0, 0); mountBattle(app, finish); } return; }
   V.mounted = false;
   const st = S(); const sc = C.score(st);
-  app.innerHTML = `<header class="top"><div class="wrap"><div class="mark"><i>The</i>Uncatalogued</div>
+  app.innerHTML = `<header class="top"><div class="wrap"><div class="mark">Wildhall</div>
     <nav class="nav" aria-label="Sections">${TABS.map(([id, n]) => `<button data-tab="${id}" ${V.tab === id ? 'aria-current="page"' : ''}>${n}${id === 'seekers' && st.roster.some(s => pendingFor(st.seekers[s])) ? '<span class="pip"></span>' : ''}</button>`).join('')}</nav>
     <div class="purse" title="Components and research"><span><b>${st.comps}</b> comp</span><span><b>${st.research}</b> research</span></div></div></header>
     <main class="wrap">${{ board, seekers, catalogue, bench, record }[V.tab]()}</main>`;
@@ -64,7 +64,7 @@ function feedText(e) {
 function landing() {
   const wall = ['glasswing', 'pocket_sun', 'mossback', 'second_heart', 'thornling', 'regulator', 'lantern_moss', 'coilfawn', 'hush'];
   app.innerHTML = `<div class="wrap"><div class="land"><div class="stack" style="gap:22px">
-    <h1><i>Field catalogue of</i>The Uncatalogued</h1>
+    <h1><i>Field catalogue of</i>Wildhall</h1>
     <p class="lede">Someone built a world to hold every extraordinary thing in existence. Then they left. The exhibits got out, bred and changed, and the catalogue stopped updating.</p>
     <p class="lede"><b>You are here to finish it.</b> Take three Seekers in. Study what lives there, or fight it, or both. Whatever you record first carries your name for every player after you.</p>
     <form class="stack" id="join" style="gap:8px"><div class="ledger"><input id="name" maxlength="16" autocomplete="nickname" placeholder="${V.code ? 'Paste your carry code' : 'Sign the ledger'}" aria-label="${V.code ? 'Carry code' : 'Your Seeker name'}"><button class="btn go" type="submit">${V.code ? 'Return' : 'Enter the Cabinet'}</button></div>

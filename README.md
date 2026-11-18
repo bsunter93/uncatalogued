@@ -1,4 +1,4 @@
-# The Uncatalogued
+# Wildhall
 
 A shared collection RPG that runs in the browser. Take three Seekers into the Cabinet, study what lives there, and put your name on what nobody has catalogued yet.
 
