@@ -18,7 +18,7 @@ function botAction(st, r) {
       const rg = C.abilRange(st, u, id);
       if (A.target === 'enemy') { const t = foes.filter(f => md(u, f) <= rg && !(id === 'soothe') && !(id === 'mark' && f.mark > 0))[0]; if (t && id !== 'soothe') return { t: 'abil', u: u.id, a: id, id: t.id }; }
       if (id === 'mend') { const t = sk.filter(s => s.hp * 2 < s.max && md(u, s) <= rg)[0]; if (t) return { t: 'abil', u: u.id, a: id, id: t.id }; }
-      if (id === 'brace' && foes.some(f => md(u, f) <= 2)) return { t: 'abil', u: u.id, a: id };
+      if (id === 'brace' && !C.exploring(st) && foes.some(f => md(u, f) <= 2)) return { t: 'abil', u: u.id, a: id };
       if (id === 'drone' && foes.length) { for (const [dx, dy] of [[1, 0], [0, 1], [0, -1], [-1, 0]]) { const x = u.x + dx, y = u.y + dy; if (x >= 0 && y >= 0 && x < C.W && y < C.H && !C.unitAt(st, x, y) && !st.room.rock[y * C.W + x] && !st.room.props.some(p => !p.done && p.x === x && p.y === y)) return { t: 'abil', u: u.id, a: id, x, y }; } }
     }
     if (inR) return { t: 'atk', u: u.id, id: inR.id };
@@ -26,6 +26,7 @@ function botAction(st, r) {
     const tiles = C.moveTiles(st, u); const tgt = foes.sort((a, b) => md(u, a) - md(u, b))[0];
     if (tgt && tiles.size > 1) { let best = null, bd = md(u, tgt); for (const [k, d] of tiles) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const dd = Math.abs(x - tgt.x) + Math.abs(y - tgt.y); if (dd < bd && dd >= 1) { bd = dd; best = [x, y]; } } if (best) return { t: 'move', u: u.id, x: best[0], y: best[1] }; }
   }
+  if (C.exploring(st) && C.canAdvance(st)) return { t: 'next', c: r.int(2), b: r.int(3) }; /* nothing it can reach is hunting it: walk on */
   return { t: 'end' };
 }
 function playRun(state, c, tier, seed, r) {

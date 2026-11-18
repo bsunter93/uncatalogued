@@ -74,6 +74,8 @@ var UncEngine = (() => {
     sheet: () => sheet,
     sightingBonus: () => sightingBonus,
     stageOf: () => stageOf,
+    studyBand: () => studyBand,
+    studyReach: () => studyReach,
     studyValue: () => studyValue,
     traitOffer: () => traitOffer,
     unitAt: () => unitAt,
@@ -938,7 +940,7 @@ var UncEngine = (() => {
   };
 
   // core.js
-  var VERSION = 21;
+  var VERSION = 22;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -1241,7 +1243,7 @@ var UncEngine = (() => {
       turns: 0,
       heartUsed: false,
       kills3: {},
-      res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false }
+      res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false, read: {}, insight: 0 }
     };
     {
       const pr = mkRng((spec.seed ^ 20958) >>> 0 || 7);
@@ -1513,15 +1515,6 @@ var UncEngine = (() => {
       const p = spot(SPECIES[kind].boss ? 9 : 5);
       if (p) spawn(st, kind, p[0], p[1], r, ev, true);
     }
-    if (etype === "boss" && sp.type === "observe") {
-      for (const u of st.units) if (u.side === "c") {
-        if (SPECIES[u.kind].boss) {
-          u.mood = "asleep";
-          u.hunter = false;
-        }
-      }
-    }
-    if (etype === "boss" && sp.type === "observe") st.units = st.units.filter((u) => u.side !== "c" || SPECIES[u.kind].boss || !u.hunter);
     if (sp.sight && st.roomIdx === 0 && !sp.intro) {
       const p = spot(6);
       if (p) {
@@ -1958,7 +1951,7 @@ var UncEngine = (() => {
     if (fx.t_packmate && t.hitBy && t.hitBy !== u.id) pct += 15;
     if (fx.knowledge && t.side === "c") pct += 5 * ((st.spec.stages[t.kind] || 0) + 1);
     if (t.side === "c" && (st.spec.stages[t.kind] || 0) >= 2) pct += 10;
-    if (t.side === "c" && t.studied) pct += 10 * t.studied;
+    if (t.side === "c" && st.res.read[t.kind]) pct += 15;
     if (fx.hungry_compass) pct += 6 * Object.keys(st.res.seen).length;
     if (fx.glass) pct += 35;
     if (u.wrath) {
@@ -1968,7 +1961,9 @@ var UncEngine = (() => {
     let dmg = fl(roll * pct / 100 * (o.mult || 100) / 100);
     if (fx.res_galvanic_rot && t.poison) dmg += 2 * t.poison;
     let cc = u.sh.crit + (fx.a_tracker && t.hp === t.max ? 10 : 0) + (fx.s_cutthroat && t.burn > 0 ? 15 : 0) + (m.critB || 0);
-    const crit = o.crit || fx.bloodscent && t.bleed > 0 || r.int(100) < cc;
+    const known = t.side === "c" && u.side === "s" && st.res.read[t.kind] && !t.readHit && !SPECIES[t.kind].boss;
+    if (known) t.readHit = 1;
+    const crit = o.crit || known || fx.bloodscent && t.bleed > 0 || r.int(100) < cc;
     if (crit) dmg = fl(dmg * (150 + (m.critDmg || 0)) / 100);
     if (t.mark > 0) dmg = fl(dmg * 125 / 100);
     u.last = t.id;
@@ -2025,6 +2020,18 @@ var UncEngine = (() => {
     t.burnD = Math.max(t.burnD || 0, fl((1 + st.tier + fl(u.sh.attr.insight / 3)) * (u.fx.s_pyre ? 150 : 100) / 100));
     ev.push({ e: "status", id: t.id, s: "burn" });
   }
+  function studyReach(st, u) {
+    let b = (u.m.study || 0) + (u.fx.t_curious ? 1 : 0);
+    if (st.room.props.some((q) => !q.done && q.id === "lantern_moss" && md(q, u) <= 2)) b++;
+    return b;
+  }
+  function studyBand(st, u, t) {
+    const d = Math.max(1, md(u, t) - studyReach(st, u));
+    return (d <= 1 ? 3 : d === 2 ? 2 : d === 3 ? 1 : 0) + (t.variant ? 2 : 0);
+  }
+  function studyValue(st, u, t) {
+    return t ? Math.max(0, studyBand(st, u, t) - (t.studied || 0)) : 1;
+  }
   function gainStudy(st, u, t, pts, ev) {
     const cap = t.variant ? 5 : 3;
     const g = Math.min(pts, cap - t.studied);
@@ -2032,13 +2039,18 @@ var UncEngine = (() => {
     t.studied += g;
     st.res.study[t.kind] = (st.res.study[t.kind] || 0) + g;
     st.res.xp += 2 * g;
-    ev.push({ e: "study", id: t.id, by: u.id, n: g, left: cap - t.studied });
+    const e = { e: "study", id: t.id, by: u.id, n: g, left: cap - t.studied };
+    if (t.studied >= cap && !st.res.read[t.kind]) {
+      st.res.read[t.kind] = 1;
+      e.read = true;
+      if (!SPECIES[t.kind].boss) {
+        st.res.insight = Math.min(3, st.res.insight + 1);
+        e.insight = st.res.insight;
+      }
+      st.res.xp += 6;
+    }
+    ev.push(e);
     return g;
-  }
-  function studyValue(st, u) {
-    let p = 1 + (u.m.study || 0) + (u.fx.t_curious ? 1 : 0);
-    if (st.room.props.some((q) => !q.done && q.id === "lantern_moss" && md(q, u) <= 2)) p++;
-    return p;
   }
   function isHostile(st, c) {
     if (c.side !== "c" || !alive(c) || c.calm > 0) return false;
@@ -2122,7 +2134,8 @@ var UncEngine = (() => {
     const lampOn = (c.mood === "roam" || c.ai === "skittish" && !sk.some((s) => md(s, c) <= 3)) && !S.boss ? st.room.props.filter((p) => !p.done && p.lit && md(p, c) <= 8).sort((a, b) => md(a, c) - md(b, c) || a.pid - b.pid)[0] : null;
     if (lampOn) return { k: "idle", mv: stepToward(st, c, lampOn, 2, 1), label: md(lampOn, c) <= 1 ? "Held by the light" : "Drawn to the light" };
     if (c.ai === "skittish") {
-      const near = sk.filter((s) => md(s, c) <= 3);
+      let near = sk.filter((s) => md(s, c) <= 3);
+      if (near.length === 1 && md(near[0], c) >= 2 && c.hp === c.max) return { k: "idle", label: "Watching you" };
       if (c.hp * 2 <= c.max && c.hp < c.max && !(c.bleed > 0 || c.mauled)) return { k: "flee", label: "Bolting" };
       if ((c.bleed > 0 || c.mauled) && c.hp < c.max) {
         const hunter = creatures(st).filter((o) => o !== c && (SPECIES[o.kind].ai === "predator" || SPECIES[o.kind].hunts)).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
@@ -2181,6 +2194,10 @@ var UncEngine = (() => {
     }
     if (c.ai === "boss_orchard") {
       const n = c.tc + 1;
+      if (c.falter) {
+        const t3 = pickTarget(st, c, friends(st));
+        return { k: "atk", tgt: t3 ? t3.id : 0, mv: t3 ? approach(st, c, t3) : null, root: 0, label: "Faltering" };
+      }
       if (n % 3 === 0) return { k: "seed", label: "Dropping brood" };
       const t2 = pickTarget(st, c, friends(st));
       const far = sk.slice().sort((a, b) => md(b, c) - md(a, c) || a.id - b.id)[0];
@@ -2188,6 +2205,7 @@ var UncEngine = (() => {
     }
     if (c.ai === "boss_regulator") {
       const t2 = pickTarget(st, c, friends(st));
+      if (c.falter) return { k: "atk", tgt: t2 ? t2.id : 0, mv: t2 ? approach(st, c, t2) : null, label: "Faltering" };
       if (c.tele) return { k: "purge", tgt: t2 ? t2.id : 0, mv: t2 ? approach(st, c, t2) : null, label: "Purging the line" };
       let best = null, bn = -1;
       const near = sk.slice().sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0];
@@ -2278,6 +2296,8 @@ var UncEngine = (() => {
   function act(st, c, ev) {
     const p = plan(st, c);
     c.tc++;
+    if (c.steady > 0) c.steady--;
+    if (c.falter) c.falter = 0;
     if (p.k === "atk" && !(p.mv && p.mv.path.length)) {
       const t0 = st.units.find((u) => u.id === p.tgt && alive(u));
       if (!t0 || md(c, t0) > Math.max(1, c.range)) {
@@ -2606,14 +2626,26 @@ var UncEngine = (() => {
       strike(st, u, t, ev);
       return ev;
     }
+    if (a.t === "insight") {
+      const t = tgt("c");
+      if (!SPECIES[t.kind].boss) bad("Save it for the great one.");
+      if ((st.res.insight || 0) < 1) bad("No insight to spend.");
+      if (t.falter || t.steady > 0) bad(t.falter ? "It is already off balance." : "It has its footing back. Wait a round.");
+      st.res.insight--;
+      t.falter = 1;
+      t.steady = 3;
+      t.mark = Math.max(t.mark || 0, 2);
+      ev.push({ e: "insight", id: t.id, by: u.id, left: st.res.insight }, { e: "status", id: t.id, s: "mark" });
+      return ev;
+    }
     if (a.t === "study") {
       const t = tgt("c");
       if (md(u, t) > 3) bad("Too far to study.");
       const calm = !isHostile(st, t);
       const free2 = calm && !u.freeStudy;
       if (!free2) need(1);
-      const g = gainStudy(st, u, t, studyValue(st, u), ev);
-      if (!g) bad("Nothing more to learn from this one.");
+      const g = gainStudy(st, u, t, studyValue(st, u, t), ev);
+      if (!g) bad(t.studied >= (t.variant ? 5 : 3) ? "Nothing more to learn from this one." : "Get closer to learn more.");
       if (free2) u.freeStudy = true;
       else u.ap--;
       if (u.fx.a_naturalist && calm && !t.sampled) {

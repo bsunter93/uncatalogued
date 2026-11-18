@@ -158,7 +158,7 @@ export function mountBattle(root, onFinish) {
       each((x, y, o) => { if (md(u, { x, y }) > I.range) return; const open = !o && !st.room.rock[y * C.W + x] && !(propAt(x, y) && !propAt(x, y).walk);
         if ((I.target === 'tile' && open) || (I.target === 'ally' && o && o.side === 's') || I.target === 'any') m.set(x + ',' + y, { t: 'dev', u: u.id, x, y }); });
     } else if (mode && mode.k === 'study') {
-      for (const c of foes()) if (md(u, c) <= 3 && c.studied < (c.variant ? 5 : 3) && (u.ap >= 1 || (!u.freeStudy && !C.isHostile(st, c)))) m.set(c.x + ',' + c.y, { t: 'study', u: u.id, id: c.id });
+      for (const c of foes()) if (md(u, c) <= 3 && C.studyValue(st, u, c) > 0 && (u.ap >= 1 || (!u.freeStudy && !C.isHostile(st, c)))) m.set(c.x + ',' + c.y, { t: 'study', u: u.id, id: c.id });
     } else {
       if (u.ap >= 1 || (u.fx.freemove && !u.freeUsed)) for (const [k, d] of C.moveTiles(st, u)) if (d) m.set((k % C.W) + ',' + Math.floor(k / C.W), { t: 'move', u: u.id, x: k % C.W, y: Math.floor(k / C.W) });
       if (u.ap >= 1) { for (const c of foes()) if (md(u, c) <= C.weaponRange(st, u)) m.set(c.x + ',' + c.y, { t: 'atk', u: u.id, id: c.id });
@@ -193,14 +193,14 @@ export function mountBattle(root, onFinish) {
         <p class="goal ${ok ? 'ok' : ''}"><span class="chk">${ok ? '&#10003;' : ''}</span><span>${t}</span></p>
         <div class="step"><span class="rooms">${pips}</span><span>Hall ${st.roomIdx + 1} of ${LEN}${st.roomIdx === LEN - 2 ? ' · the great one is next' : ''}</span></div>
         ${next ? `<p class="next"><b>Next</b> ${next}</p>` : ''}${w ? (wKnown ? `<p class="won"><b>${esc(w.name)}.</b> ${esc(w.effect)}</p>` : `<p class="won"><b>Something about this hall is not right.</b> Find it and record it to learn what it does.</p>`) : ''}</div>`;
-    $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · ${C.exploring(st) ? 'Exploring' : 'Round ' + (st.turn - fightFrom + 1)}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off'; $('.held', root).innerHTML = st.boons.map(id => `<span class="hb" data-tip="${esc(D.BOONS[id].name)}" data-desc="${esc(D.BOONS[id].desc)}"><img src="assets/icons/boon_${id}.jpg" alt="${esc(D.BOONS[id].name)}" onerror="this.style.visibility='hidden'"></span>`).join(''); $('[data-act="cine"]', root).textContent = store.get('unc.cine') === '0' ? 'Close-ups off' : 'Close-ups on';
+    $('.turn', root).textContent = `Tier ${['', 'I', 'II', 'III', 'IV', 'V'][st.tier]} · ${C.exploring(st) ? 'Exploring' : 'Round ' + (st.turn - fightFrom + 1)}`; $('[data-act="snd"]', root).textContent = snd.on ? 'Sound on' : 'Sound off'; $('.held', root).innerHTML = st.boons.map(id => `<span class="hb" data-tip="${esc(D.BOONS[id].name)}" data-desc="${esc(D.BOONS[id].desc)}"><img src="assets/icons/boon_${id}.jpg" alt="${esc(D.BOONS[id].name)}" onerror="this.style.visibility='hidden'"></span>`).join('') + (st.res.insight > 0 ? `<span class="hb ins" data-tip="Insight ${st.res.insight}" data-desc="Earned by a full record of a species. Spend one on the great one: it loses its next trick and takes 25% more for two rounds."><img src="assets/icons/watch.jpg" alt="Insight"><b>${st.res.insight}</b></span>` : ''); $('[data-act="cine"]', root).textContent = store.get('unc.cine') === '0' ? 'Close-ups off' : 'Close-ups on';
     $('[data-act="retreat"]', root).textContent = retreatArmed ? 'Really retreat? You lose most cases.' : 'Retreat';
   }
   function actions() {
     const u = unit(sel); const el = $('.actions', root); if (st.outcome) { el.innerHTML = ''; return; }
     const b = [], own = []; const dis = busy || !live(u); const calm = C.exploring(st);
     if (live(u)) {
-      b.push(btn('lore', 'study', 'Study', u.freeStudy ? 'find weak points · 1 action' : 'free on a calm creature', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="Each note adds 10% damage against that creature and reveals what it is weak to" ${dis ? 'disabled' : u.ap < 1 && u.freeStudy ? off('No actions left this turn') : ''}`));
+      b.push(btn('lore', 'study', 'Study', u.freeStudy ? 'closer is more · 1 action' : 'closer is more · free on a calm creature', `data-mode="study" aria-pressed="${mode?.k === 'study'}" title="From three tiles a sketch, from two a proper look, beside it the full record. One full record of a kind: 15% more on every hit against it, a critical on your first blow, and an insight to spend on the great one." ${dis ? 'disabled' : u.ap < 1 && u.freeStudy ? off('No actions left this turn') : ''}`));
       own.push(btn('attack', 'attack', 'Attack', calm ? 'weapon' : 'weapon · 1 action', `data-mode="atk" aria-pressed="${mode?.k === 'atk'}" title="Strike with ${esc(u.name)}'s weapon. Something calm is only struck when you choose this first." ${dis ? 'disabled' : u.ap < 1 && !calm ? off('No actions left this turn') : ''}`));
       for (const id of u.sh.abilities) { const A = D.ABILITIES[id]; const cd = u.cds[id] || 0; const free = u.fx.borrowed_moment && (u.abilN + 1) % 4 === 0;
         own.push(btn(ABIL_KIND[id] || 'attack', id, esc(A.name), cd > 0 ? `ready in ${cd}` : free || C.exploring(st) ? KINDWORD[ABIL_KIND[id]] || 'ability' : A.ap ? A.ap + (A.ap > 1 ? ' actions' : ' action') : 'free', `data-abil="${id}" aria-pressed="${mode?.id === id}" title="${esc(A.desc)}" ${dis ? 'disabled' : cd > 0 ? off(`${A.name} is ready in ${cd} turn${cd === 1 ? '' : 's'}`) : !free && u.ap < A.ap ? off(`Not enough actions: ${A.name} needs ${A.ap}, ${u.name} has ${u.ap}`) : ''}`)); }
@@ -209,6 +209,7 @@ export function mountBattle(root, onFinish) {
     }
     const adv = C.canAdvance(st); const anyAp = mine().some(x => live(x) && x.ap > 0 && !passed.has(x.id));
     if (live(u) && !calm) { const others = mine().some(x => x !== u && live(x) && x.ap > 0 && !passed.has(x.id)); own.push(btn('flow', 'end', 'End turn', others ? `${esc(u.name)} is done` : 'last Seeker: creatures act', `data-act="pass" title="Finish ${esc(u.name)}'s turn and hand over to the next Seeker" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${u.ap <= 0 ? 'ready' : ''} `)); }
+    const great = st.units.find(c => c.side === 'c' && live(c) && D.SPECIES[c.kind].boss); if (great && st.res.insight > 0 && live(u)) b.push(btn('lore', 'watch', 'Use insight', great.falter ? 'already off balance' : great.steady > 0 ? 'it has its footing · wait' : st.res.insight + ' left · free', `data-act="insight" title="What you learned on the way in. The ${esc(D.SPECIES[great.kind].name)} loses its next trick and takes 25% more from every hit for two rounds." ${busy || great.falter || great.steady > 0 ? 'disabled' : ''}`));
     const far = C.exploring(st) ? C.placeFor(st) : null; if (far) b.push(btn('lore', 'study', 'Wander off', 'to ' + D.WONDERS[far].seen, `data-act="wander" title="Leave the hall for a while and go and look. You can come back." ${busy ? 'disabled' : ''}`));
     if (adv) b.push(btn('flow', 'move_on', st.side ? 'Head back' : st.roomIdx >= LEN - 1 ? 'Extract' : st.roomIdx === LEN - 2 ? 'Face the great one' : 'Move on', st.side ? 'to the hall you left' : st.roomIdx >= LEN - 1 ? 'end the expedition' : (st.offer && !C.boonEarned(st) ? (st.room.type === 'quiet' ? 'a quiet hall gives rest, not a boon · ' : 'leave now and this hall gives no boon · ') : st.offer ? 'take a boon · ' : '') + (st.roomIdx === LEN - 2 ? D.SPECIES[reg.boss].name + ' is next' : 'choose the next hall'), `data-act="next" ${busy ? 'disabled' : ''}`).replace('class="act ', 'class="act adv '));
     b.push(btn('flow', 'end', calm ? 'Wait' : 'End round', calm ? 'watch the hall move' : 'all Seekers done', `data-act="end" title="${calm ? 'Stay put for a moment and watch' : 'End the turn for the whole party now'}" ${busy ? 'disabled' : ''}`).replace('class="act ', `class="act end ${!anyAp && !adv ? 'ready' : ''} `));
@@ -234,7 +235,7 @@ export function mountBattle(root, onFinish) {
         ${STATUS(u)}
         <p style="margin-top:8px;font-size:13.5px">${esc(S.blurb)} ${sg >= 1 ? esc(S.behavior) : ''}</p>
         ${sg >= 1 ? `<p class="hc-tip"><b>Tip</b> ${esc(tip)}</p>` : `<p class="hc-tip"><b>Unrecorded</b> Its habits are not in your Catalogue. ${Math.max(1, 4 - tot)} more stud${4 - tot === 1 ? 'y' : 'ies'} and this card will say how it behaves and how to handle it.</p>`}
-        <div class="hc-wr">${sg >= 2 || u.studied >= 2 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="rs"><b>Resists</b> ${D.FAMILY_NAME[S.resist]} weapons</span>` : sg >= 1 || u.studied >= 1 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="un"><b>Resists</b> not yet known</span>` : '<span class="un"><b>Weak to</b> not yet known</span><span class="un"><b>Resists</b> not yet known</span>'}</div>
+        <div class="hc-wr">${sg >= 2 || u.studied >= 2 || st.res.read?.[u.kind] ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="rs"><b>Resists</b> ${D.FAMILY_NAME[S.resist]} weapons</span>` : sg >= 1 || u.studied >= 1 ? `<span class="wk"><b>Weak to</b> ${D.FAMILY_NAME[S.weak]} weapons</span><span class="un"><b>Resists</b> not yet known</span>` : '<span class="un"><b>Weak to</b> not yet known</span><span class="un"><b>Resists</b> not yet known</span>'}</div>
         ${u.armor ? `<p class="dim" style="font-size:12.5px;margin-top:6px">Armor ${u.armor} is taken off every hit, so many small hits do little. Poison and Bleed ignore it.</p>` : ''}
         ${u.variant ? `<p style="margin-top:6px;font-size:13px"><span class="stamp">Variant</span> ${esc(D.VARIANTS[u.variant].note)}</p>` : ''}
         <div class="hc-foot"><span>Field notes${u.studied ? ` · +${u.studied * 10}% damage to it` : ''}</span><span class="pips">${Array.from({ length: cap }, (_, i) => `<i class="${i < u.studied ? 'on' : ''}"></i>`).join('')}</span></div>`;
@@ -256,7 +257,7 @@ export function mountBattle(root, onFinish) {
     if (st.outcome) t = '';
     else if (busy) t = 'The room moves.';
     else if (mode?.k === 'abil') t = `<b>${esc(D.ABILITIES[mode.id].name)}.</b> ${esc(D.ABILITIES[mode.id].desc)} Tap a lit tile, or the button again to cancel.`;
-    else if (mode?.k === 'study') t = '<b>Study</b> a creature within 3 tiles. Each note makes every hit on it 10% stronger. The first note shows what it is weak to, the second what it resists. Free once a turn on anything that is not hunting you.';
+    else if (mode?.k === 'study') t = '<b>Study</b> a creature. Three tiles away is a sketch (1 note), two tiles a proper look (2), beside it the full record (3). One full record is all you need of each kind: every hit on that kind is 15% stronger, your first blow on each is a critical, and you earn an insight for the great one.';
     else if (mode?.k === 'dev') t = '<b>Device.</b> Tap a lit tile to use it.';
     else if (armed) t = '<b>It is calm.</b> Tap it again to attack anyway. It will fight back.';
     else if (C.canAdvance(st) && first && st.roomIdx === 0) t = '<b>The room is quiet.</b> Before you move on: the Mossback is harmless. Study it, pick the moss, then leave when you are ready.';
@@ -311,6 +312,7 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'heal') { if (e.n > 0) push(`${who(e.id)} recovers ${e.n} health.`, cls(e.id)); }
       else if (e.e === 'shield') push(e.n < 0 ? `${who(e.id)} gains ${-e.n} shield.` : `${who(e.id)}'s shield absorbs ${e.n}.`, cls(e.id));
       else if (e.e === 'text') push(/^Witnessed/.test(e.msg) ? `You watch the ${who(e.id)}. ${e.msg}.` : `${who(e.id)}: ${e.msg}.`, cls(e.id));
+      else if (e.e === 'insight') push(`You know how ${who(e.id)} moves. It falters.`, 'ally');
       else if (e.e === 'status') push(`${who(e.id)} is ${{ bleed: 'bleeding', burn: 'burning', poison: 'poisoned', mark: 'marked', calm: 'calmed', root: 'held in place', stun: 'stunned' }[e.s] || e.s}.`, cls(e.id));
       else if (e.e === 'study') push(`Field notes on ${who(e.id)}: +${e.n}.`, 'ally');
       else if (e.e === 'die') push(`${who(e.id)} dies.`, cls(e.id));
@@ -342,12 +344,10 @@ export function mountBattle(root, onFinish) {
   for (const u of st.units) cutLoad(u.side === 's' ? CUT_HERO[u.kind] : u.side === 'c' ? u.kind : null);
   let cutAct = null, fightShot = false; const castSeen = new Set(), fell = new Set();
   // What a field note taught you, shown as the page it goes on: the plate, the name, and the one new thing.
-  function studyCard(e) { const c = unit(e.id); if (!c || c.side !== 'c' || !D.SPECIES[c.kind]) return; const S = D.SPECIES[c.kind]; const n = Math.max(1, c.studied || 1), cap = c.variant ? 5 : 3;
-    const seen = { kill: 'a kill', hunt: 'a hunt', feed: 'feeding', graze: 'grazing', light: 'a lamp lit' }[e.seen];
-    const fact = seen ? ['Witnessed: ' + seen, S.blurb] : n === 1 ? ['How it lives', S.behavior] : n === 2 ? ['Weak point', `${D.FAMILY_NAME[S.weak]} weapons hurt it most.`] : ['Hide', `${D.FAMILY_NAME[S.resist]} weapons glance off it.`];
+  function studyCard(e) { const c = unit(e.id); if (!c || c.side !== 'c' || !D.SPECIES[c.kind]) return; const S = D.SPECIES[c.kind];
     root.querySelector('.studycard')?.remove(); const d = document.createElement('button'); d.className = 'studycard';
-    d.innerHTML = `<img src="assets/cat/${c.kind}.jpg" alt=""><span><i>${seen ? 'Field note' : 'Field note ' + Math.min(n, cap) + ' of ' + cap}</i><b>${esc(S.name)}</b><em>${esc(S.latin)}</em><small>${fact[0]}</small><p>${esc(fact[1])}</p></span>`;
-    d.onclick = () => d.remove(); root.querySelector('.game').append(d); setTimeout(() => d.remove(), 4600); }
+    d.innerHTML = `<img src="assets/cat/${c.kind}.jpg" alt=""><span><i>Full record</i><b>${esc(S.name)}</b><em>${esc(S.latin)}</em><p>${esc(S.behavior)}</p><small>Weak to ${D.FAMILY_NAME[S.weak]} · resists ${D.FAMILY_NAME[S.resist]}</small><p class="sc-pay">${S.boss ? 'Every hit on it is 15% stronger.' : `Hits on any ${esc(S.name)} are 15% stronger this expedition, and your first blow on each is a critical.${e.insight ? ` Insight ${e.insight} for the great one.` : ''}`}</p></span>`;
+    d.onclick = () => d.remove(); root.querySelector('.game').append(d); setTimeout(() => d.remove(), 5200); }
   // Arriving: the hall is shown before it is played. The great one gets its name; anywhere else, one resident going about its day.
   async function entrance() { const res = st.units.filter(u => u.side === 'c' && live(u)); if (!res.length || st.side) return; const nm = u => D.SPECIES[u.kind].name; let who = res.find(u => D.SPECIES[u.kind].boss), big = !!who, line = '';
     const subj = spec.type === 'observe' && res.find(u => u.kind === reg.observe); if (!who && subj) { who = subj; line = `The ${nm(subj)} you came to record is here.`; }
@@ -376,8 +376,9 @@ export function mountBattle(root, onFinish) {
       else if (e.e === 'heal') { const v = at(e.id); if (e.n > 0) { float(v.x, v.y, '+' + e.n, 'heal'); snd.heal(); sc.burst(v.x, v.y, 0x8fe0c2); await sleep(140); } }
       else if (e.e === 'shield') { const v = at(e.id); float(v.x, v.y, e.n < 0 ? 'shield +' + -e.n : 'blocked ' + e.n, 'txt'); await sleep(110); }
       else if (e.e === 'text') { const v = at(e.id); float(v.x, v.y, e.msg, 'txt'); await sleep(180); }
+      else if (e.e === 'insight') { const v = at(e.id); sc.focus(v.x, v.y); float(v.x, v.y, 'Off balance', 'study'); sc.burst(v.x, v.y, 0xffd05a); snd.study(); await sleep(520); }
       else if (e.e === 'status') { const v = at(e.id); float(v.x, v.y, { bleed: 'Bleeding', poison: 'Poisoned', mark: 'Marked', calm: 'Calmed', root: 'Held' }[e.s] || e.s, 'txt'); await sleep(110); }
-      else if (e.e === 'study') { const v = at(e.id); if (e.seen || cutAct?.t !== 'study') studyCard(e); float(v.x, v.y, '+' + e.n + ' study', 'study'); snd.study(); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
+      else if (e.e === 'study') { const v = at(e.id); if (e.read) studyCard(e); float(v.x, v.y, e.read ? 'Full record' : e.seen ? '+' + e.n + ' study' : e.left > 0 ? '+' + e.n + ' · closer for more' : '+' + e.n + ' study', 'study'); snd.study(); sc.burst(v.x, v.y, 0x6fd6ff); await sleep(280); }
       else if (e.e === 'die' || e.e === 'flee' || e.e === 'down') { if (e.e === 'flee') sc.cineEnd(); const v = at(e.id); if (!fell.has(e.id)) sc.gone(e.id); e.e === 'flee' ? snd.flee() : snd.die(); if (e.e === 'flee') float(v.x, v.y, 'Gone', 'txt'); if (e.e === 'down') float(v.x, v.y, 'Down', 'txt'); if (!e.quiet) await sleep(300); }
       else if (e.e === 'spawn') { const u = unit(e.id); if (u) { sc.add({ id: u.id, x: u.x, y: u.y, kind: u.kind, side: u.side, variant: u.variant }); sc.burst(u.x, u.y, 0xb6e33a); vp.set(u.id, { x: u.x, y: u.y }); await sleep(180); } }
       else if (e.e === 'eat') { const v = at(e.id); float(v.x, v.y, 'Feeds', 'txt'); await sleep(220); }
@@ -408,7 +409,7 @@ export function mountBattle(root, onFinish) {
     busy = true; actions(); hint(); sc.marks(new Map()); sc.lines([]); sc.threat([]); tip.hidden = true;
     if (a.t === 'abil' && a.id != null && unit(a.id)?.side === 'c' && store.get('unc.cine') !== '0' && !castSeen.has(a.a) && !sc.cining() && sc.cine(a.u, a.id)) { castSeen.add(a.a); fightShot = true; tip.hidden = true; await sleep(230); } // the close-up opens on the cast, not only on the blow
     if (flair) { const own = a.t === 'abil' ? sc.act(a.u, 'a:' + a.a) : 0; const d = own || sc.act(a.u, flair); if (d) await sleep(own ? Math.min(d * .55, 1500) : Math.min(d * .5, 700)); }
-    if (C.exploring(st)) fightShot = false; cutAct = a; if (a.t === 'study') { const se = ev.find(e => e.e === 'study' && !e.seen); if (se) studyCard(se); } await play(ev, before); drawLog();
+    if (C.exploring(st)) fightShot = false; cutAct = a; await play(ev, before); drawLog();
     for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
@@ -466,17 +467,19 @@ export function mountBattle(root, onFinish) {
     if (b.dataset.act === 'end') return send({ t: 'end' });
     if (b.dataset.act === 'pass') { passed.add(sel); const n = mine().find(u => live(u) && u.ap > 0 && !passed.has(u.id)); if (!n) return send({ t: 'end' }); sel = n.id; mode = null; info = null; armed = null; sc.focus(n.x, n.y); return sync(); }
     if (b.dataset.act === 'wander') return send({ t: 'wander' });
+    if (b.dataset.act === 'insight') { const g = st.units.find(c => c.side === 'c' && live(c) && D.SPECIES[c.kind].boss); const me = unit(sel); return g && live(me) ? send({ t: 'insight', u: me.id, id: g.id }) : null; }
     if (b.dataset.act === 'next') return st.side || st.roomIdx >= LEN - 1 ? send({ t: 'next' }) : choosePath();
     if (b.dataset.act === 'retreat') { if (retreatArmed) return send({ t: 'abandon' }); retreatArmed = true; head(); return; }
   };
   // Walk the selected Seeker as close to a tile as their remaining actions allow, stopping once within `need` of it.
   // Walking up to look: one Seeker goes alone, and never onto a tile where a roaming hunter would notice. The others stay put.
-  async function creep(o) { const me = unit(sel); if (!live(me)) return; let moved = 0, held = false;
+  async function creep(o) { const me = unit(sel); if (!live(me)) return; let moved = 0, held = false; const near = o.ai === 'ambush' ? 4 : o.ai === 'skittish' ? 2 : 1; /* as close as it will stand for */
     const quiet = (x, y) => st.units.every(h => !(h.side === 'c' && live(h) && h.mood === 'roam' && !(h.calm > 0)) || md({ x, y }, h) > C.noticeRadius(st, h));
-    while (!busy && !st.outcome && live(me) && live(o) && C.exploring(st) && md(me, o) > 2 && moved < 6) { const dist = md(me, o); let best = null;
-      for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far >= dist || far < 2 || !quiet(x, y)) continue; if (!best || far < best.far || (far === best.far && d < best.d)) best = { x, y, far, d }; }
+    while (!busy && !st.outcome && live(me) && live(o) && C.exploring(st) && md(me, o) > near && moved < 6) { const dist = md(me, o); let best = null;
+      for (const [k, d] of C.moveTiles(st, me)) { if (!d) continue; const x = k % C.W, y = Math.floor(k / C.W); const far = md({ x, y }, o); if (far >= dist || far < near || !quiet(x, y)) continue; if (!best || far < best.far || (far === best.far && d < best.d)) best = { x, y, far, d }; }
       if (!best) { held = true; break; } moved++; await send({ t: 'move', u: me.id, x: best.x, y: best.y, solo: true }); }
-    if (live(o)) { info = { u: o.id }; sync(); } if (held && live(o) && md(me, o) > 3) say(C.exploring(st) ? 'Any closer and something here will notice' : ''); }
+    if (!busy && !st.outcome && live(me) && live(o) && C.exploring(st) && !me.freeStudy && md(me, o) <= 3 && C.studyValue(st, me, o) > 0) await send({ t: 'study', u: me.id, id: o.id });
+    if (live(o)) { info = { u: o.id }; sync(); } if (held && live(o) && md(me, o) > 1) say(C.exploring(st) ? 'Any closer and something here will notice' : ''); }
   async function approach(tx, ty, need, what) {
     const me = unit(sel); const T0 = { x: tx, y: ty }; if (!live(me)) return; if (me.ap < 1) return say('No actions left this turn'); let moved = 0;
     const calm0 = C.exploring(st);
@@ -502,7 +505,7 @@ export function mountBattle(root, onFinish) {
     if (live(me) && o && o.side === 'c' && live(o)) {
       const dist = md(me, o);
       if (mode?.k === 'abil') { const A = D.ABILITIES[mode.id]; const rg = C.abilRange(st, me, mode.id); if (A.target !== 'enemy') return say(`${A.name} cannot target a creature`); if (dist > rg) return approach(x, y, rg, A.name); return say(`${A.name} has no effect on this one`); }
-      if (mode?.k === 'study') return dist > 3 ? approach(x, y, 3, 'Study') : say('Nothing more to learn from this one');
+      if (mode?.k === 'study') return o.studied >= (o.variant ? 5 : 3) ? say('Nothing more to learn from this one') : approach(x, y, dist > 3 ? 3 : Math.max(1, dist - 1), 'Study');
       if (mode?.k === 'dev') return approach(x, y, C.DEV_INFO[C.devKind(me)].range, 'The device');
       return approach(x, y, C.weaponRange(st, me), 'Weapon');
     }

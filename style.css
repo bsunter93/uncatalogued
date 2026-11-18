@@ -645,3 +645,8 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 .mile.withplate .plate { grid-row: span 3; width: 64px !important; height: 64px !important; min-width: 0; aspect-ratio: 1; padding: 0; }
 .stageup { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; } .stageup .plate { width: 76px !important; height: 76px !important; flex: 0 0 76px; aspect-ratio: 1; padding: 0; }
 .mile.withplate .plate .art, .stageup .plate .art, .mile.withplate .plate img, .stageup .plate img { width: 100% !important; height: 100% !important; object-fit: cover; display: block; }
+
+/* insight: the count sits on its chip; the full-record card says what it bought */
+.game .held .hb.ins { box-shadow: 0 0 0 1px #ffd05a, 0 0 10px rgba(255, 208, 90, .45); }
+.game .held .hb.ins b { position: absolute; right: -4px; bottom: -5px; min-width: 15px; padding: 0 3px; font-size: 11px; line-height: 15px; text-align: center; color: #1a1208; background: #ffd05a; border-radius: 8px; }
+.game .studycard .sc-pay { margin-top: 6px; color: #ffd98a; font-size: 13px; }
