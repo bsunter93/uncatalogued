@@ -131,9 +131,10 @@ const GEAR = { kindled_pair: ['hand', 'melee', 'kindled_dagger'], marrow_cleaver
   compound_lens: ['head', 1.02, .01], targeting_visor: ['head', 1.3, .0], oracle_shard: ['head', 1.02, .05], chitin_plate: ['chest', 1.0, 0], barkweave: ['chest', 1.0, 0], relay_harness: ['chest', 1.0, 0], mirror_carapace: ['chest', .96, 0], phase_shroud: ['chest', 1.05, .03] };
 // Which clip a weapon class strikes with, and the part of it that is the strike: [clip, from s, to s, speed, ms until the blow lands].
 // The library clips are long (a throw is 5.8 s with the release at 3.5), so each plays only its window.
-const CLASS_CLIP = { melee: { a: ['Right_Hand_Sword_Slash', 0, 1.3, 1.3, 420], c: ['Charged_Slash', .3, 2.0, 1.3, 700] }, pole: { a: ['Thrust_Slash', .3, 1.3, 1.3, 370], c: ['Charged_Slash', .3, 2.0, 1.3, 700] },
-  gun: { a: ['Side_Shot', .5, 1.75, 1.5, 520], c: ['Cowboy_Quick_Draw_Shooting', 2.05, 3.3, 1.3, 440] }, throw: { a: ['Crouch_Pull_and_Throw', 3.2, 4.8, 1.4, 820] },
-  rifle: { a: ['Cowboy_Quick_Draw_Shooting', 2.05, 3.3, 1.3, 440], c: ['Side_Shot', .5, 1.75, 1.5, 520], aim: true } }; // aim: these are bow clips, so a rifle is levelled at the target while they play
+/* [clip, from, to, speed, ms to the blow]. Played at the pace they were made: sped up by a third, a swing was over before the eye had it and every strike read as a twitch. */
+const CLASS_CLIP = { melee: { a: ['Right_Hand_Sword_Slash', 0, 1.3, 1.0, 545], c: ['Charged_Slash', .3, 2.0, 1.0, 910] }, pole: { a: ['Thrust_Slash', .3, 1.3, 1.0, 480], c: ['Charged_Slash', .3, 2.0, 1.0, 910] },
+  gun: { a: ['Side_Shot', .5, 1.75, 1.15, 680], c: ['Cowboy_Quick_Draw_Shooting', 2.05, 3.3, 1.0, 570] }, throw: { a: ['Crouch_Pull_and_Throw', 3.2, 4.8, 1.1, 1040] },
+  rifle: { a: ['Cowboy_Quick_Draw_Shooting', 2.05, 3.3, 1.0, 570], c: ['Side_Shot', .5, 1.75, 1.15, 680], aim: true } }; // aim: these are bow clips, so a rifle is levelled at the target while they play
 const gearWait = {};
 const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .24; } } });
 const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
@@ -460,7 +461,8 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   function play(o, name, { once = false, speed = 1, hold = false, from = 0, to = 0 } = {}) {
     if (o.acts && !o.acts[name] && o.body.userData.clips[name]) o.acts[name] = o.mixer.clipAction(o.body.userData.clips[name]);
     const a = o.acts && o.acts[name]; if (!a) return 0; if (o.cur === a && !once) return 0;
-    a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once; a.timeScale = speed; a.fadeIn(.16).play(); if (from) a.time = from; o.endAt = to ? performance.now() + (to - from) / speed * 1000 : 0; if (o.cur && o.cur !== a) o.cur.fadeOut(.16); o.cur = a; o.downed = hold;
+    if (name === 'idle') speed *= .72; /* standing is slow: at full speed the stance clips fidget */ const blend = name === 'idle' ? .45 : .26; /* long enough that one pose melts into the next and nothing snaps */
+    a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once; a.timeScale = speed; a.fadeIn(blend).play(); if (from) a.time = from; o.endAt = to ? performance.now() + (to - from) / speed * 1000 : 0; if (o.cur && o.cur !== a) o.cur.fadeOut(blend); o.cur = a; o.downed = hold;
     return a.getClip().duration / speed * 1000;
   }
   // Stand at a site with no flight (start of a room, or a reload mid-expedition).
@@ -506,10 +508,10 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     },
     async move(id, path, ms = 110) { const o = units.get(id); if (!o) return; const tok = o.mvTok = (o.mvTok || 0) + 1; o.walking = true; if (o.real && !o.mixer && ms > 20) ms = Math.max(ms, 170); if (o.mixer && ms > 20) { play(o, 'walk', { speed: 1.5 }); ms = Math.max(ms, 230); } for (const [x, y] of path) { if (o.mvTok !== tok) return; const fx = o.g.position.x, fz = o.g.position.z, tx = wx(y), tz = wz(x); const t0 = performance.now(); o.body.rotation.y = Math.atan2(tx - fx, tz - fz); await new Promise(res => { const step = () => { if (o.mvTok !== tok) return res(); const t = Math.min(1, (performance.now() - t0) / ms); o.g.position.x = fx + (tx - fx) * t; o.g.position.z = fz + (tz - fz) * t; o.g.position.y = o.mixer ? 0 : Math.sin(t * Math.PI) * .12; t < 1 ? requestAnimationFrame(step) : res(); }; step(); }); o.tx = tx; o.tz = tz; } if (o.mvTok !== tok) return; o.walking = false; if (o.mixer) play(o, 'idle'); },
     lunge(id, tid, crit) { const o = units.get(id), t = units.get(tid); if (!o || !t) return 0; o.body.rotation.y = Math.atan2(t.g.position.x - o.g.position.x, t.g.position.z - o.g.position.z);
-      if (o.mixer) { const C0 = CLASS_CLIP[o.wclass]; const cc = C0 && (crit && C0.c || C0.a); const ms = cc && play(o, 'c:' + cc[0], { once: true, speed: cc[3], from: cc[1], to: cc[2] }); if (ms && C0.aim && o.weap) o.aim = { t: performance.now(), ms: (cc[2] - cc[1]) / cc[3] * 1000 }; if (ms) return cc[4]; play(o, crit && o.acts.heavy ? 'heavy' : 'attack', { once: true, speed: 1.35 }); return RIG[o.body.userData.rig][2]; }
+      if (o.mixer) { const C0 = CLASS_CLIP[o.wclass]; const cc = C0 && (crit && C0.c || C0.a); const ms = cc && play(o, 'c:' + cc[0], { once: true, speed: cc[3], from: cc[1], to: cc[2] }); if (ms && C0.aim && o.weap) o.aim = { t: performance.now(), ms: (cc[2] - cc[1]) / cc[3] * 1000 }; if (ms) return cc[4]; play(o, crit && o.acts.heavy ? 'heavy' : 'attack', { once: true, speed: 1 }); return Math.round(RIG[o.body.userData.rig][2] * 1.35); }
       o.lunge = { dx: (t.g.position.x - o.g.position.x), dz: (t.g.position.z - o.g.position.z), t: performance.now() }; return 200; },
-    act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1.2 }) : 0; },
-    hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1.3 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
+    act(id, name) { const o = units.get(id); return o && o.mixer ? play(o, name, { once: true, speed: 1 }) : 0; },
+    hit(id, crit) { const o = units.get(id); if (!o) return; if (o.mixer && !o.downed) play(o, 'hit', { once: true, speed: 1 }); else o.kick = performance.now(); o.crit = crit; spark(o.g.position, crit ? 0xffd05a : 0xffffff, crit ? 16 : 9); },
     cine(id, tid, ms = 4200) { const a = units.get(id), t = units.get(tid); if (!a || !t || a === t) return false; a.g.getWorldPosition(cA); t.g.getWorldPosition(cT); cD.subVectors(cT, cA); cS.set(cD.z, 0, -cD.x).normalize();
       cine = { a, t, size: Math.max(1.6, (a.h || 2.2) - .3), t0: performance.now() + 90, ms, out: 0, sgn: cS.dot(cP.copy(cam.position).sub(cA)) >= 0 ? 1 : -1, shake: 0, amp: 0, slowTo: 0, stopTo: 0 }; blink(); el.parentElement && el.parentElement.classList.add('cine'); beaconG.visible = lineG.visible = threatG.visible = marks.visible = false; return true; },
     cining() { return !!cine && !cine.out; },
