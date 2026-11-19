@@ -413,7 +413,7 @@ export function mountBattle(root, onFinish) {
     for (const q of shut) if (!q.done && C.chestOpen(st, q)) { sc.focus(q.x, q.y); await sleep(350); float(q.x, q.y, 'A lock gives', 'study'); sc.burst(q.x, q.y, 0xffd05a); snd.study(); await sleep(500); }
     if (used && used.kind === 'fixture' && learn(spec.region + ':' + used.id)) { const K = (CWF && FIXTURE_CW[used.id]) || FIXTURE[used.id]; toast(`Recorded: ${K[0]}. ${K[2]}`, 'good'); info = { p: used.pid }; }
     if (!st.outcome && wasCalm && !C.exploring(st)) { fightFrom = st.turn; passed.clear(); banner('Something turns on you'); snd.warn(); } else if (!st.outcome && !wasCalm && C.exploring(st)) banner('The hall settles');
-    if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); head(); await entrance(); }
+    if (!st.outcome && st.roomIdx + (st.side ? 's' : '') !== roomWas) { sc.sync([], []); sc.beacons([]); nameSites(); await sc.travel(siteNow()); head(); sync(); /* the residents are built as the party arrives, under the arrival card, not in a half-second stall when the card closes */ await entrance(); }
     busy = false;
     if (st.outcome) { sync(); await sleep(350); leave(); onFinish(log, st); return; }
     sync();

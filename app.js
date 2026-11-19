@@ -1,6 +1,7 @@
 // Camp: everything between expeditions.
 import { MOCK, C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
 import { mountBattle, NATURE } from './battle.js';
+import { playIntro } from './intro.js';
 // What a Mastered entry adds: who each resident lives beside, eats, or avoids.
 // What one more expedition would finish: the nearest milestones and the animals closest to their next stage.
 function closeTo(st) { const ctx = C.indexCtx(st); const rows = [];
@@ -48,6 +49,7 @@ async function boot() {
   G.key = MOCK ? 'preview' : store.get('unc.key');
   if (G.key) { try { if (!(await load())) G.key = null; } catch (e) { app.innerHTML = `<p class="boot">${esc(e.message)}</p><p style="text-align:center"><button class="btn" onclick="location.reload()">Try again</button></p>`; return; } }
   if (!G.key) await loadWorld();
+  if (/[?&]intro\b/.test(location.search) || (S() && !S().run && !MOCK && !store.get('unc.intro'))) { await playIntro(); store.set('unc.intro', '1'); } // the opening, once
   render();
   setInterval(async () => { if (document.hidden || !G.key || S()?.run || V.report) return; await loadWorld(); if (V.tab === 'board' || V.tab === 'record') render(); }, 60000);
 }
@@ -83,7 +85,7 @@ function landing() {
     <p class="lede">Someone built a world to hold every extraordinary thing in existence. Then they left. The exhibits got out, bred and changed, and the catalogue stopped updating.</p>
     <p class="lede"><b>You are here to finish it.</b> Take three Seekers in. Study what lives there, or fight it, or both. Whatever you record first carries your name for every player after you.</p>
     <form class="stack" id="join" style="gap:8px"><div class="ledger"><input id="name" maxlength="16" autocomplete="nickname" placeholder="${V.code ? 'Paste your carry code' : 'Sign the ledger'}" aria-label="${V.code ? 'Carry code' : 'Your Seeker name'}"><button class="btn go" type="submit">${V.code ? 'Return' : 'Enter the Cabinet'}</button></div>
-    <p class="err">${esc(V.landErr)}</p><p style="font-size:13.5px"><button type="button" class="link" data-act="code">${V.code ? 'I am new here' : 'I have a carry code from another device'}</button></p></form>
+    <p class="err">${esc(V.landErr)}</p><p style="font-size:13.5px"><button type="button" class="link" data-act="code">${V.code ? 'I am new here' : 'I have a carry code from another device'}</button> · <button type="button" class="link" data-act="intro">Watch the opening</button></p></form>
     <div><div class="sec-head"><span class="label">Lately in the Cabinet</span><span class="label">${G.world ? G.world.seekers + ' in the ledger' : ''}</span></div>${feedList(4)}</div>
     </div><div class="wall" aria-hidden="true">${wall.map(k => plateBox(k)).join('')}</div></div></div>`;
   if (V.code) $('#name').maxLength = 128;
@@ -92,7 +94,7 @@ function landing() {
     try {
       if (V.code) { G.key = v; if (!(await load())) { G.key = null; throw new Error('That code is not in the ledger.'); } }
       else { G.key = newKey(); try { await register(v); } catch (er) { G.key = null; throw er; } }
-      store.set('unc.key', G.key); V.tab = 'board'; render();
+      store.set('unc.key', G.key); V.tab = 'board'; if (!V.code && !store.get('unc.intro')) { app.innerHTML = ''; await playIntro(); store.set('unc.intro', '1'); } render();
     } catch (er) { V.landErr = er.message; landing(); }
   };
 }
@@ -289,7 +291,7 @@ function report() {
 
 // ---------------------------------------------------------------- input
 app.addEventListener('click', async e => {
-  const b = e.target.closest('button'); if (!b || (S()?.run && V.mounted && !V.report)) return; const d = b.dataset; const st = S(); if (!st) { if (d.act === 'code') { V.code = !V.code; V.landErr = ''; landing(); } return; }
+  const b = e.target.closest('button'); if (!b || (S()?.run && V.mounted && !V.report)) return; const d = b.dataset; const st = S(); if (!st) { if (d.act === 'code') { V.code = !V.code; V.landErr = ''; landing(); } else if (d.act === 'intro') await playIntro(); return; }
   if (d.tab) { V.tab = d.tab; V.slot = null; window.scrollTo(0, 0); return render(); }
   if (d.contract != null) { V.contract = d.contract === 'w' ? 'w' : +d.contract; return render(); }
   if (d.pick) { const i = V.squad.indexOf(d.pick); if (i >= 0) V.squad.splice(i, 1); else if (V.squad.length < 3) V.squad.push(d.pick); else toast('Three at most. Tap one to stand them down first.'); return render(); }

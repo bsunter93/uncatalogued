@@ -669,3 +669,20 @@ html.ink .game * { transition-timing-function: steps(3) !important; }
 .game .hbot .hint { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; max-width: min(820px, 94vw); }
 html.ink .game .htop .link, html.ink .game .htop .label.turn, html.ink .game .hbot .hint { background: var(--paper) !important; color: var(--ink) !important; text-shadow: none !important; border: 1.5px solid var(--ink); padding: 3px 8px !important; text-decoration: none !important; border-radius: 0 !important; }
 html.ink .game .hbot .hint b { color: var(--rust) !important; }
+
+/* The opening. Plates held on a dark mount, caption on paper below, like a lantern-slide lecture. */
+.intro { position: fixed; inset: 0; z-index: 9999; background: #14100f; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: opacity .7s; }
+.intro.out { opacity: 0; }
+.intro .i-pic { position: relative; width: min(100vw, 170vh); aspect-ratio: 1336 / 770; max-height: 76vh; overflow: hidden; border: 1.5px solid #e9dfc8; box-shadow: 0 0 0 7px #14100f, 0 0 0 8px rgba(233, 223, 200, .35); }
+.intro .i-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; animation: introIn 1.2s forwards; }
+.intro .i-pic img.gone { animation: none; opacity: 1; transition: opacity 1.2s; opacity: 0; }
+@keyframes introIn { to { opacity: 1; } }
+.intro .i-cap { width: min(760px, 92vw); margin-top: 22px; min-height: 96px; color: #e9dfc8; text-align: center; }
+.intro .i-no { display: block; font: 11px/1 'Special Elite', 'Courier New', monospace; letter-spacing: .18em; text-transform: uppercase; color: #b9a98a; margin-bottom: 10px; }
+.intro .i-cap p { margin: 0; font: 23px/1.42 'IM Fell English', Georgia, serif; }
+.intro .i-cap p span { opacity: 0; transition: opacity .9s; } .intro .i-cap p span.in { opacity: 1; }
+.intro .i-foot { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; align-items: center; justify-content: center; gap: 18px; }
+.intro .i-pips { display: flex; gap: 6px; } .intro .i-pips i { width: 18px; height: 2px; background: rgba(233, 223, 200, .25); } .intro .i-pips i.on { background: #e9dfc8; }
+.intro .i-skip { background: none; border: 1px solid rgba(233, 223, 200, .5); color: #e9dfc8; font: 12px/1 'Special Elite', 'Courier New', monospace; letter-spacing: .1em; padding: 7px 12px; cursor: pointer; }
+.intro .i-skip:hover { background: #e9dfc8; color: #14100f; }
+@media (max-width: 640px) { .intro .i-cap p { font-size: 18px; } }
