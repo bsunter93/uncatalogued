@@ -652,14 +652,14 @@ li.set { list-style: none; margin-top: 6px; padding-top: 6px; border-top: 1px so
 .game .studycard .sc-pay { margin-top: 6px; color: #ffd98a; font-size: 13px; }
 
 /* Ink look (the default; ?look=classic turns it off): the HUD as pages from a field journal. Paper, ink, one rust accent. No glow, no gradient, no round corners. */
-html.ink { --paper: #e9dfc8; --ink: #221b1d; --rust: #9a3b22; --display: 'IM Fell English', Georgia, serif; --mono: 'Special Elite', 'Courier New', monospace; }
+html.ink { --pp: #e9dfc8; --pi: #221b1d; --rust: #9a3b22; --display: 'IM Fell English', Georgia, serif; --mono: 'Special Elite', 'Courier New', monospace; }
 html.ink .game .hud.htop, html.ink .game .hud.hbot { background-image: none !important; }
-html.ink .game .trk, html.ink .game .agrp, html.ink .game .scard, html.ink .game .sitetag, html.ink .game .tip, html.ink .game .hcard, html.ink .game .studycard, html.ink .modal, html.ink .game .hbot [data-tip]::after { background: var(--paper) !important; background-image: none !important; color: var(--ink) !important; border: 1.5px solid var(--ink) !important; border-radius: 0 !important; box-shadow: 3px 3px 0 rgba(34, 27, 29, .5) !important; text-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-html.ink .game .trk *, html.ink .game .sitetag, html.ink .game .tip *, html.ink .game .hcard *, html.ink .game .studycard *, html.ink .modal * { color: var(--ink) !important; text-shadow: none !important; }
+html.ink .game .trk, html.ink .game .agrp, html.ink .game .scard, html.ink .game .sitetag, html.ink .game .tip, html.ink .game .hcard, html.ink .game .studycard, html.ink .modal, html.ink .game .hbot [data-tip]::after { background: var(--pp) !important; background-image: none !important; color: var(--pi) !important; border: 1.5px solid var(--pi) !important; border-radius: 0 !important; box-shadow: 3px 3px 0 rgba(34, 27, 29, .5) !important; text-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.ink .game .trk *, html.ink .game .sitetag, html.ink .game .tip *, html.ink .game .hcard *, html.ink .game .studycard *, html.ink .modal * { color: var(--pi) !important; text-shadow: none !important; }
 html.ink .game .trk .label, html.ink .game .trk small, html.ink .modal .label { font-family: var(--mono) !important; letter-spacing: .06em; }
 html.ink .game .trk b, html.ink .game .trk .nx b { color: var(--rust) !important; }
-html.ink .game .trk i { background: rgba(34, 27, 29, .22) !important; border-radius: 0 !important; box-shadow: none !important; } html.ink .game .trk i.on { background: var(--ink) !important; }
-html.ink .game .act { background: var(--ink) !important; border-width: 2px !important; border-style: solid !important; border-radius: 0 !important; box-shadow: none !important; } /* the kind colour on the border stays: it says attack, guard or aid at a glance */
+html.ink .game .trk i { background: rgba(34, 27, 29, .22) !important; border-radius: 0 !important; box-shadow: none !important; } html.ink .game .trk i.on { background: var(--pi) !important; }
+html.ink .game .act { background: var(--pi) !important; border-width: 2px !important; border-style: solid !important; border-radius: 0 !important; box-shadow: none !important; } /* the kind colour on the border stays: it says attack, guard or aid at a glance */
 html.ink .game .act:not([disabled]):hover { transform: translateY(-3px); }
 html.ink .game .act[aria-pressed="true"], html.ink .game .scard.sel { outline: 2.5px solid var(--rust) !important; outline-offset: 1px; }
 html.ink .game .act img, html.ink .game .scard .face, html.ink .game .scard .face img { border-radius: 0 !important; box-shadow: none !important; }
@@ -667,9 +667,36 @@ html.ink .game .scard .bar { background: rgba(34, 27, 29, .2) !important; border
 html.ink .game * { transition-timing-function: steps(3) !important; }
 
 .game .hbot .hint { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; max-width: min(820px, 94vw); }
-html.ink .game .htop .link, html.ink .game .htop .label.turn, html.ink .game .hbot .hint { background: var(--paper) !important; color: var(--ink) !important; text-shadow: none !important; border: 1.5px solid var(--ink); padding: 3px 8px !important; text-decoration: none !important; border-radius: 0 !important; }
+html.ink .game .htop .link, html.ink .game .htop .label.turn, html.ink .game .hbot .hint { background: var(--pp) !important; color: var(--pi) !important; text-shadow: none !important; border: 1.5px solid var(--pi); padding: 3px 8px !important; text-decoration: none !important; border-radius: 0 !important; }
 html.ink .game .hbot .hint b { color: var(--rust) !important; }
 
+
+/* Camp in the ink look: the ledger, the postings and the catalogue as paper pages. The colour names keep their jobs and change their values, so a page written for pale type on a dark ground reads as ink on paper. Inside a hall the old values come back, because the HUD there sits over the painted scene. */
+html.ink body { color-scheme: light; --bg: #e4d9c0; --bg2: #dbcfb4; --panel: #efe7d4; --panel2: #e6dcc5; --line: rgba(34, 27, 29, .24); --line2: rgba(34, 27, 29, .62); --ink: #221b1d; --paper: #f6efdf; --ink2: #594c46; --dim: #76675b; --gilt: #9a3b22; --hostile: #a3311f; --calm: #2c6b50;
+  --common: #55626c; --uncommon: #2c7440; --rare: #1c6a8f; --epic: #6238a0; --exotic: #a85a14; --singular: #86640c; --r: 0px; background: #dccfb3 !important; background-image: none !important; color: var(--ink); }
+html.ink .game { color-scheme: dark; --bg: #120d1a; --bg2: #1b1426; --panel: #261c33; --panel2: #33273f; --line: rgba(184, 150, 74, .24); --line2: rgba(184, 150, 74, .55); --ink: #f3ead6; --paper: #efe4cb; --ink2: #bcab8b; --dim: #8f8068; --gilt: #e8c36a; --hostile: #ff8474; --calm: #8fe0c2;
+  --common: #b9cadb; --uncommon: #8fdc9f; --rare: #6fd6ff; --epic: #cdaaff; --exotic: #ffae63; --singular: #fff3c4; --r: 3px; color: var(--ink); }
+html.ink body::after { opacity: .28; mix-blend-mode: multiply; }
+html.ink .top { background: #e9dfc8 !important; background-image: none !important; box-shadow: none !important; border-bottom: 1.5px solid var(--pi) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.ink .top .mark { color: var(--pi) !important; text-shadow: none !important; }
+html.ink .nav button { background: none !important; box-shadow: none !important; border: 0 !important; border-bottom: 2.5px solid transparent !important; border-radius: 0 !important; color: var(--ink2) !important; }
+html.ink .nav button[aria-current="page"] { color: var(--pi) !important; border-bottom-color: var(--rust) !important; }
+html.ink :is(main.wrap, .land, .report, .modal) :is(.panel, .contract, .pick, .slot, .item, .card, .plate, .seeker, .entry, .row-card, .tile) { background: var(--panel) !important; background-image: none !important; box-shadow: none !important; border-color: var(--line2) !important; border-radius: 0 !important; text-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item)[aria-pressed="true"], html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item).sel, html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item).on { background: #f6efdf !important; outline: 2.5px solid var(--rust); outline-offset: -1px; }
+html.ink :is(main.wrap, .land, .report) * { text-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report, .top) .btn { border-radius: 0 !important; background-image: none !important; box-shadow: none !important; text-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report, .top) .btn.go { background: var(--pi) !important; color: #efe7d4 !important; border-color: var(--pi) !important; }
+html.ink :is(main.wrap, .land, .report, .top) .btn.go:hover:not(:disabled) { background: var(--rust) !important; border-color: var(--rust) !important; }
+html.ink :is(main.wrap, .land, .report) .btn:hover:not(:disabled) { background: rgba(34, 27, 29, .07) !important; }
+html.ink :is(main.wrap, .land, .report) :is(.art, .face, .bigport, img) { box-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report) .art { border-radius: 0 !important; border: 1.5px solid var(--pi) !important; }
+html.ink :is(main.wrap, .land, .report) .bar { background: rgba(34, 27, 29, .16) !important; border-radius: 0 !important; } html.ink :is(main.wrap, .land, .report) .bar > i { background: var(--rust) !important; border-radius: 0 !important; box-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report) input { background: #f6efdf !important; color: var(--pi) !important; border-radius: 0 !important; box-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report) :is(h1, h2, h3, h4) { color: var(--pi) !important; }
+html.ink :is(main.wrap, .land, .report, .top) .label { color: #6f5f50 !important; }
+html.ink :is(main.wrap, .land, .report) .sb { color: var(--ink2) !important; } html.ink :is(main.wrap, .land, .report) .sb.on { color: var(--pi) !important; font-weight: 600; }
+html.ink :is(main.wrap, .land, .report) .rec small { color: var(--rust) !important; }
+html.ink main.wrap .panel.detail { overflow: hidden; }
 /* The opening. Plates held on a dark mount, caption on paper below, like a lantern-slide lecture. */
 .intro { position: fixed; inset: 0; z-index: 9999; background: #14100f; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: opacity .7s; }
 .intro.out { opacity: 0; }
