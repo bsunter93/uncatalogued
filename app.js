@@ -2,6 +2,7 @@
 import { MOCK, C, D, G, $, esc, art, face, store, toast, op, flush, serverOp, load, loadWorld, register, newKey, itemCard, itemMini, ago, accession, ROMAN, wornBy, modLine, itemArt } from './ui.js';
 import { mountBattle, NATURE } from './battle.js';
 import { playIntro } from './intro.js';
+import { drawSketches, sketchTag, paint } from './sketch.js';
 // What a Mastered entry adds: who each resident lives beside, eats, or avoids.
 // What one more expedition would finish: the nearest milestones and the animals closest to their next stage.
 function closeTo(st) { const ctx = C.indexCtx(st); const rows = [];
@@ -54,6 +55,7 @@ async function boot() {
   setInterval(async () => { if (document.hidden || !G.key || S()?.run || V.report) return; await loadWorld(); if (V.tab === 'board' || V.tab === 'record') render(); }, 60000);
 }
 function render() {
+  queueMicrotask(() => drawSketches(app)); // any field sketch on the page that was just written
   if (!S()) return landing();
   if (V.report) { app.innerHTML = report(); return; }
   if (S().run) { if (!V.mounted) { V.mounted = true; window.scrollTo(0, 0); mountBattle(app, finish); } return; }
@@ -198,7 +200,8 @@ function catDetail(key) {
       <div><span class="label">Known properties · ${known.length} of ${can.length}</span><ul style="margin:6px 0 0;padding:0;list-style:none;font-size:13.5px;display:grid;gap:2px">${can.map(a => st.aff[a] ? `<li>${esc(D.AFFIXES[a].pre)} <span class="dim">· ${esc(modLine(D.AFFIXES[a].key, D.AFFIXES[a].r[0] + ' to ' + D.AFFIXES[a].r[1]))}</span></li>` : '<li class="dim">Unidentified</li>').join('')}</ul></div>`; }
   else if (t === 's') { const X = D.SINGULARS[id]; body = `<p class="label r-singular"><span class="rar">Singular</span> · ${D.SLOT_NAME[X.slot]}</p><p style="font-size:14px">${esc(X.text)}</p><p class="lat">${esc(X.lore)}</p>`; }
   else if (t === 'r') body = resoBody(id, true);
-  return `<div class="panel detail stack">${info.art ? plateBox(info.art, { variant: info.variant }) : ''}<p class="label">${accession(key)}</p><h3>${esc(info.name)}</h3>${firstLine(key)}${body}</div>`;
+  const sgF = t === 'f' ? C.stageOf(e) : 0; // a creature's page opens on your own sketch of it: more of it drawn at each stage, and washed with colour once it is mastered
+  return `<div class="panel detail stack">${t === 'f' ? `<div class="fieldpage">${sketchTag(id, [.34, .62, .86, 1][sgF], sgF >= 3 ? 1 : sgF === 2 ? .3 : 0, 440)}<span class="fp-cap">${['Sketch begun', 'Sketch, half done', 'Sketch, nearly done', 'Finished plate'][sgF]}${e.at ? ' · entered ' + new Date(e.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</span></div>` : info.art ? plateBox(info.art, { variant: info.variant }) : ''}<p class="label">${accession(key)}</p><h3>${esc(info.name)}</h3>${firstLine(key)}${body}</div>`;
 }
 function resoBody(id, woke) { const Rz = D.RESONANCES[id]; return `<div class="tags">${Rz.need.map(x => `<span class="tag on">${D.TAG_NAME[x]}</span>`).join('<span class="dim">+</span>')}</div><p style="font-size:14px">${esc(Rz.text)}</p><p class="dim" style="font-size:13px">${woke ? 'You have woken this one.' : 'Put these two tags on one Seeker, from two different items, to wake it.'}</p>`; }
 function catalogue() {
@@ -267,6 +270,24 @@ async function finish(log) {
   if (!r) { if (S().run) { app.innerHTML = `<p class="boot">The Cabinet did not answer.</p><p style="text-align:center"><button class="btn go" id="retry">Send the expedition report again</button></p>`; $('#retry').onclick = () => finish(log); return; } V.mounted = false; return render(); }
   store.del('unc.run'); V.report = { rep: r.report, fresh: r.fresh || [], firsts: r.firsts || [], unlocked: r.unlocked || [] }; V.opened = {}; V.mounted = false; V.squad = null; window.scrollTo(0, 0); render();
 }
+// One picture of an expedition, to post: the sketch of what you went in for, how it ended, what you recorded.
+async function resultCard() {
+  const { rep, fresh, firsts } = V.report; const st = S(); const R = D.REGIONS[rep.region]; const kind = rep.type === 'observe' ? R.observe : R.boss; const Sx = D.SPECIES[kind];
+  const win = rep.outcome === 'win'; const head = win ? (rep.contractDone ? 'Contract fulfilled.' : 'Extracted.') : rep.outcome === 'retreat' ? 'Walked out.' : 'Carried out.';
+  try { await Promise.all([document.fonts.load('64px "IM Fell English"'), document.fonts.load('italic 30px "IM Fell English"'), document.fonts.load('20px "Special Elite"')]); } catch { /* the fallback faces will do */ }
+  const W = 1200, H = 630, c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); const INK = '#221b1d', RUST = '#9a3b22';
+  x.fillStyle = '#e9dfc8'; x.fillRect(0, 0, W, H); x.strokeStyle = INK; x.lineWidth = 3; x.strokeRect(20, 20, W - 40, H - 40); x.lineWidth = 1; x.strokeRect(28, 28, W - 56, H - 56);
+  const sk = document.createElement('canvas'); sk.width = sk.height = 480; await paint(sk, `assets/cat/${kind}.jpg`, 1, win && rep.contractDone ? .5 : 0); x.drawImage(sk, 64, 75); x.lineWidth = 2; x.strokeRect(64, 75, 480, 480);
+  const T = (t, px, y, o = {}) => { x.font = `${o.it ? 'italic ' : ''}${px}px ${o.mono ? '"Special Elite", "Courier New", monospace' : '"IM Fell English", Georgia, serif'}`; x.fillStyle = o.col || INK; x.fillText(t, 600, y); };
+  x.textBaseline = 'alphabetic'; T('W I L D H A L L   ·   F I E L D   C A T A L O G U E', 17, 108, { mono: true, col: '#6f5f50' });
+  T(head, 68, 190); T(`${R.short} · Tier ${ROMAN[rep.tier]} · ${rep.turns} turns`, 20, 232, { mono: true, col: '#594c46' });
+  T(Sx.name, 40, 316); T(Sx.latin, 28, 354, { it: true, col: '#594c46' });
+  let y = 420; if (fresh.length) { T(`${fresh.length} new ${fresh.length === 1 ? 'entry' : 'entries'} in the Catalogue`, 28, y); y += 42; } if (firsts.length) { T(`${firsts.length} recorded first. ${firsts.length === 1 ? 'The name is' : 'The names are'} permanent.`, 28, y, { col: RUST }); y += 42; }
+  x.fillStyle = INK; x.fillRect(600, 508, 536, 1.5); T(`${st.name || 'A Seeker'} · ${new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`, 19, 540, { mono: true }); T('bsunter93.github.io/uncatalogued', 17, 566, { mono: true, col: '#6f5f50' });
+  window.__card = c; // local testing reads the last card from here
+  c.toBlob(async bl => { if (!bl) return toast('Could not make the card.'); const u = URL.createObjectURL(bl), l = document.createElement('a'); l.href = u; l.download = `wildhall-${new Date().toISOString().slice(0, 10)}.png`; document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+    try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': bl })]); toast('Card saved, and copied to paste.', 'good'); } catch { toast('Card saved to your downloads.', 'good'); } }, 'image/png');
+}
 function report() {
   const { rep, fresh, firsts, unlocked } = V.report; const st = S(); const win = rep.outcome === 'win';
   const head = win ? (rep.contractDone ? 'Contract fulfilled.' : 'Extracted.') : rep.outcome === 'retreat' ? 'You walked out.' : 'Carried out.';
@@ -274,7 +295,7 @@ function report() {
   const disc = fresh.filter(k => !['b', 's'].includes(k[0]) || true);
   const allOpen = rep.items.every(x => V.opened[x.id]);
   return `<main class="wrap report stack" style="gap:24px;max-width:900px">
-    <div><p class="label">${D.REGIONS[rep.region].short} · Tier ${ROMAN[rep.tier]} · ${rep.turns} turns${rep.weeklyScore ? ' · trial score ' + rep.weeklyScore : ''}</p><h2>${head}</h2><p class="dim">${sub}</p></div>
+    <div><p class="label">${D.REGIONS[rep.region].short} · Tier ${ROMAN[rep.tier]} · ${rep.turns} turns${rep.weeklyScore ? ' · trial score ' + rep.weeklyScore : ''}</p><h2>${head}</h2><p class="dim">${sub}</p><p style="margin-top:10px"><button class="btn sm" data-act="card">Save a result card to share</button></p></div>
     ${disc.length ? `<div><div class="sec-head"><h3>New in your Catalogue</h3><span class="label">${disc.length} entr${disc.length === 1 ? 'y' : 'ies'}</span></div><div class="finds">${disc.map((k, i) => { const inf = C.keyInfo(k); const hidden = (k[0] === 'b' || k[0] === 's') && rep.items.some(x => !V.opened[x.id] && (st.items[x.id]?.base === k.slice(2) || st.items[x.id]?.sing === k.slice(2))); return hidden ? '' : `<div class="find" style="animation-delay:${i * 90}ms">${inf.art ? plateBox(inf.art, { variant: inf.variant }) : '<div class="plate"></div>'}<span class="label">${inf.kind}</span><br>${esc(inf.name)}${firsts.includes(k) ? '<br><span class="stamp">First in the Cabinet</span>' : ''}</div>`; }).join('')}</div></div>` : ''}
     ${rep.stageUps.length ? `<div class="stack" style="gap:6px">${rep.stageUps.map(s => `<div class="stageup">${plateBox(s.sp)}<span class="stamp">${C.STAGE_NAME[s.stage]}</span> <b>${esc(D.SPECIES[s.sp].name)}</b> is now <b style="color:var(--gilt)">${C.STAGE_NAME[s.stage]}</b>. <span class="dim">${s.stage === 1 ? 'Its behaviour is written up in your Catalogue.' : s.stage === 2 ? 'Your Seekers hit it 10% harder.' : 'There is nothing more it can teach you.'}</span></div>`).join('')}</div>` : ''}
     ${unlocked.length ? `<div class="stack" style="gap:6px">${unlocked.map(id => `<p style="color:var(--gilt)"><span class="stamp">Index</span> ${esc(D.MILESTONES.find(m => m.id === id).reward)}</p>`).join('')}</div>` : ''}
@@ -292,6 +313,7 @@ function report() {
 // ---------------------------------------------------------------- input
 app.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || (S()?.run && V.mounted && !V.report)) return; const d = b.dataset; const st = S(); if (!st) { if (d.act === 'code') { V.code = !V.code; V.landErr = ''; landing(); } else if (d.act === 'intro') await playIntro(); return; }
+  if (d.act === 'card') return resultCard();
   if (d.tab) { V.tab = d.tab; V.slot = null; window.scrollTo(0, 0); return render(); }
   if (d.contract != null) { V.contract = d.contract === 'w' ? 'w' : +d.contract; return render(); }
   if (d.pick) { const i = V.squad.indexOf(d.pick); if (i >= 0) V.squad.splice(i, 1); else if (V.squad.length < 3) V.squad.push(d.pick); else toast('Three at most. Tap one to stand them down first.'); return render(); }

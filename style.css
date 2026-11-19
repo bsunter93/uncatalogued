@@ -713,3 +713,13 @@ html.ink main.wrap .panel.detail { overflow: hidden; }
 .intro .i-skip { background: none; border: 1px solid rgba(233, 223, 200, .5); color: #e9dfc8; font: 12px/1 'Special Elite', 'Courier New', monospace; letter-spacing: .1em; padding: 7px 12px; cursor: pointer; }
 .intro .i-skip:hover { background: #e9dfc8; color: #14100f; }
 @media (max-width: 640px) { .intro .i-cap p { font-size: 18px; } }
+
+/* Field sketches. */
+canvas.sketch { display: block; width: 100%; height: auto; border: 1.5px solid #221b1d; background: #efe7d4; }
+.fieldpage { display: flex; flex-direction: column; gap: 6px; } .fieldpage .fp-cap { font: 11px/1.3 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: #6f5f50; }
+.game .sketchpad { position: absolute; left: 22px; bottom: 132px; z-index: 30; width: 184px; padding: 8px 8px 9px; background: #e9dfc8; color: #221b1d; border: 1.5px solid #221b1d; box-shadow: 3px 3px 0 rgba(34, 27, 29, .5); display: flex; flex-direction: column; gap: 3px; pointer-events: none; transform: rotate(-1.4deg); }
+.game .sketchpad canvas { width: 100%; height: auto; border: 1px solid rgba(34, 27, 29, .5); background: #efe7d4; }
+.game .sketchpad b { font: 17px/1.15 'IM Fell English', Georgia, serif; font-weight: 400; margin-top: 3px; } .game .sketchpad small { font: 10.5px/1.2 'Special Elite', 'Courier New', monospace; letter-spacing: .05em; text-transform: uppercase; color: #6f5f50; }
+.game .studycard canvas.sketch { width: 132px; flex: 0 0 auto; align-self: flex-start; }
+.game .hc-first, .game .entrance .wl { display: block; margin-top: 7px; font: 11px/1.3 'Special Elite', 'Courier New', monospace; letter-spacing: .04em; opacity: .85; }
+@media (max-width: 700px) { .game .sketchpad { width: 128px; left: 10px; bottom: 150px; } }
