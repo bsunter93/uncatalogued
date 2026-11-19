@@ -941,7 +941,7 @@ var UncEngine = (() => {
   };
 
   // core.js
-  var VERSION = 25;
+  var VERSION = 26;
   var W = 14;
   var H = 10;
   function hashStr(s) {
@@ -2204,10 +2204,7 @@ var UncEngine = (() => {
     }
     if (c.ai === "boss_orchard") {
       const n = c.tc + 1;
-      if (c.falter) {
-        const t3 = pickTarget(st, c, friends(st));
-        return { k: "atk", tgt: t3 ? t3.id : 0, mv: t3 ? approach(st, c, t3) : null, root: 0, label: "Faltering" };
-      }
+      if (c.falter) return { k: "idle", label: "Faltering" };
       if (n % 3 === 0) return { k: "seed", label: "Dropping brood" };
       const t2 = pickTarget(st, c, friends(st));
       const far = sk.slice().sort((a, b) => md(b, c) - md(a, c) || a.id - b.id)[0];

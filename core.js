@@ -2,7 +2,7 @@
 // The server replays every expedition from its seed and action log before paying out.
 import * as D from './data.js';
 export { D };
-export const VERSION = 25;
+export const VERSION = 26;
 export const W = 14, H = 10;
 
 // ---------------------------------------------------------------- rng
@@ -528,7 +528,7 @@ export function plan(st, c) {
   }
   if (c.ai === 'boss_orchard') {
     const n = c.tc + 1;
-    if (c.falter) { const t = pickTarget(st, c, friends(st)); return { k: 'atk', tgt: t ? t.id : 0, mv: t ? approach(st, c, t) : null, root: 0, label: 'Faltering' }; }
+    if (c.falter) return { k: 'idle', label: 'Faltering' }; /* read right, she loses the whole turn: no blow, no roots, and if brood was due it is not dropped. A plain blow in place of her trick was worth nothing to the party */
     if (n % 3 === 0) return { k: 'seed', label: 'Dropping brood' };
     const t = pickTarget(st, c, friends(st)); const far = sk.slice().sort((a, b) => md(b, c) - md(a, c) || a.id - b.id)[0];
     return { k: 'atk', tgt: t ? t.id : 0, mv: t ? approach(st, c, t) : null, root: n % 3 === 1 && far && md(far, c) > 1 ? far.id : 0, label: n % 3 === 1 ? 'Rooting' : 'Advancing' };
