@@ -681,7 +681,7 @@ html.ink .top { background: #e9dfc8 !important; background-image: none !importan
 html.ink .top .mark { color: var(--pi) !important; text-shadow: none !important; }
 html.ink .nav button { background: none !important; box-shadow: none !important; border: 0 !important; border-bottom: 2.5px solid transparent !important; border-radius: 0 !important; color: var(--ink2) !important; }
 html.ink .nav button[aria-current="page"] { color: var(--pi) !important; border-bottom-color: var(--rust) !important; }
-html.ink :is(main.wrap, .land, .report, .modal) :is(.panel, .contract, .pick, .slot, .item, .card, .plate, .seeker, .entry, .row-card, .tile) { background: var(--panel) !important; background-image: none !important; box-shadow: none !important; border-color: var(--line2) !important; border-radius: 0 !important; text-shadow: none !important; }
+html.ink :is(main.wrap, .land, .report, .modal) :is(.panel, .contract, .pick, .slot, .item, .case, .card, .plate, .seeker, .entry, .row-card, .tile) { background: var(--panel) !important; background-image: none !important; box-shadow: none !important; border-color: var(--line2) !important; border-radius: 0 !important; text-shadow: none !important; }
 html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item)[aria-pressed="true"], html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item).sel, html.ink :is(main.wrap, .land, .report) :is(.contract, .pick, .slot, .item).on { background: #f6efdf !important; outline: 2.5px solid var(--rust); outline-offset: -1px; }
 html.ink :is(main.wrap, .land, .report) * { text-shadow: none !important; }
 html.ink :is(main.wrap, .land, .report, .top) .btn { border-radius: 0 !important; background-image: none !important; box-shadow: none !important; text-shadow: none !important; }
@@ -723,3 +723,10 @@ canvas.sketch { display: block; width: 100%; height: auto; border: 1.5px solid #
 .game .studycard canvas.sketch { width: 132px; flex: 0 0 auto; align-self: flex-start; }
 .game .hc-first, .game .entrance .wl { display: block; margin-top: 7px; font: 11px/1.3 'Special Elite', 'Courier New', monospace; letter-spacing: .04em; opacity: .85; }
 @media (max-width: 700px) { .game .sketchpad { width: 128px; left: 10px; bottom: 150px; } }
+
+/* Sealed cases on the report sit on paper like everything else there, and one opening does not stretch its neighbours. */
+html.ink .cases { align-items: start; }
+/* The phone tab bar is a strip of the same paper, so the tab you are on can be read. */
+@media (max-width: 760px) { html.ink .nav { background: #e9dfc8; border-top: 1.5px solid #221b1d; } html.ink .nav button { color: #221b1d; } }
+/* A tile note never runs off the side of the hall. */
+.tiletip { max-width: min(78vw, 420px); white-space: normal; text-align: center; }

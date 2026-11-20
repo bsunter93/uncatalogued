@@ -252,7 +252,7 @@ function record() {
   const table = (rows, val, empty) => rows.length ? `<table class="rank">${rows.map((r, i) => `<tr class="${r.name === me ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}</td><td>${val(r)}</td></tr>`).join('')}</table>` : `<p class="dim" style="font-size:14px">${empty}</p>`;
   const cover = Object.keys(D.REGIONS).map(r => { const R = D.REGIONS[r]; const keys = R.fauna.map(f => 'f:' + f).concat(R.flora.map(f => 'p:' + f), R.wonders.map(x => 'w:' + x)); const h = keys.filter(k => G.firsts[k]).length; return `<div class="mile"><div class="t"><span>${R.short}</span><span class="num dim">${h}/${keys.length}</span></div><div class="bar"><i style="width:${h / keys.length * 100}%"></i></div></div>`; }).join('');
   const open = C.allKeys().filter(k => !G.firsts[k] && !['b', 'm'].includes(k[0])).length;
-  return `<div class="sec-head"><h2>The Record</h2><span class="label">${w.seekers || 0} Seekers in the ledger</span></div>
+  return `<div class="sec-head"><h2>The Record</h2><span class="label">${w.seekers || 0} ${w.seekers === 1 ? 'Seeker' : 'Seekers'} in the ledger</span></div>
     <div class="cols"><div class="stack" style="gap:22px">
       <div class="tabs">${[['feed', 'Discoveries'], ['index', 'Index score'], ['firsts', 'Firsts'], ['weekly', 'Weekly trial']].map(([id, n]) => `<button data-rec="${id}" aria-selected="${V.rec === id}">${n}</button>`).join('')}</div>
       ${V.rec === 'feed' ? feedList(40) : V.rec === 'index' ? table(w.leaders, r => r.score, 'No scores yet.') : V.rec === 'firsts' ? table(w.firstsTop, r => r.firsts, 'Nobody holds a first yet.') : table(w.weekly, r => r.score, 'Nobody has finished this week\'s trial. It resets every Monday.')}

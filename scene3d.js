@@ -139,6 +139,17 @@ const gearWait = {};
 const tune = sc => sc.traverse(m => { if (m.isMesh) { m.castShadow = true; const M = m.material; M.roughness = Math.max(.6, M.roughness); M.metalness = Math.min(.25, M.metalness); if (M.map) { M.emissiveMap = M.map; M.emissive = new THREE.Color(0xffffff); M.emissiveIntensity = .24; } } });
 const loadGear = id => gearWait[id] ||= gl.loadAsync(new URL(`assets/gear/${id}.glb`, import.meta.url).href).then(g => { tune(g.scene); return g.scene; }).catch(() => null);
 const FLIES = { tickwren: 1.0, lampmoth: 1.15, glasswing: 1.0, pollinator: .9, drone: 1.0 }; // how high the ones with wings hold themselves
+// Wings that beat. The models are one solid piece with no bones, so the wing is found by where it is (out to the side of the body) and bent in the vertex stage about a hinge at its root.
+// [hinge axis, how far out the wing starts, hinge height or depth, swing in radians, beats a second, resting lift, how much the tip trails the root, and a height below which nothing moves (so feet stay put)]
+// 'y': wings held upright like a butterfly, opening and closing front to back. 'z': wings held flat like a bird, beating up and down.
+const FLAP = { glasswing: ['y', .06, 0, .62, 1.7, .12, .9], lampmoth: ['y', .17, 0, .5, 2.3, .1, .8], tickwren: ['z', .3, .55, .5, 3.4, .06, .6, .3], pollinator: ['z', .2, .64, .3, 11, .05, .3] };
+function flapify(body, kind) { const F = FLAP[kind]; if (!F) return; const u = { value: 0 }; body.userData.flap = u; body.userData.flapHz = F[4];
+  const patch = sh => { sh.uniforms.uFlap = u; sh.vertexShader = 'uniform float uFlap;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+    { float sd = transformed.x < 0. ? -1. : 1.; float d = abs(transformed.x) - ${F[1].toFixed(3)}; if (d > 0.) { float tip = clamp(d / ${(F[1] * 5).toFixed(3)}, 0., 1.); float w = smoothstep(0., ${(F[1] * .8).toFixed(3)}, d)${F[7] ? ` * smoothstep(${F[7].toFixed(3)}, ${(F[7] + .1).toFixed(3)}, transformed.y)` : ''};
+      float th = (${F[3].toFixed(3)} * sin(uFlap - tip * ${F[6].toFixed(2)}) + ${F[5].toFixed(3)}) * w * (1. + tip * .35); float c = cos(th), n = sin(th);
+      ${F[0] === 'y' ? `float q = transformed.z - ${F[2].toFixed(3)}; transformed.x = sd * (${F[1].toFixed(3)} + d * c - q * n); transformed.z = ${F[2].toFixed(3)} + d * n + q * c;` : `float q = transformed.y - ${F[2].toFixed(3)}; transformed.x = sd * (${F[1].toFixed(3)} + d * c - q * n); transformed.y = ${F[2].toFixed(3)} + d * n + q * c;`} } }`); };
+  body.traverse(m => { if (!m.isMesh) return; m.material = m.material.clone(); m.material.onBeforeCompile = patch; m.material.customProgramCacheKey = () => 'flap:' + kind; m.frustumCulled = false;
+    const dm = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); dm.onBeforeCompile = patch; dm.customProgramCacheKey = () => 'flapd:' + kind; m.customDepthMaterial = dm; /* the shadow beats with the wing */ }); }
 let ALIAS = {}; const CW_ALIAS = { tree_a: 'c_tree_a', tree_b: 'c_tree_b', gate: 'c_gate', rock: 'c_rock', lamp: 'c_lamp', fx_lamp: 'c_lamp', mushrooms: 'c_vent', fx_bellcap: 'c_vent', survey: 'c_bench', column_fallen: 'c_gear', plinth: 'c_boiler', case_broken: 'c_orrery' };
 const al = k => ALIAS[k] || k, gsz = k => GLB[al(k)][1];
 const glbCache = {}, glbWait = {}; const gl = new GLTFLoader();
@@ -296,7 +307,13 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
   const real = true; const decor = new THREE.Group(); here.add(decor);
   if (!real) for (let i = 0; i < 46; i++) { const a = r0() * Math.PI * 2, d = 7.6 + r0() * 9; const x = Math.cos(a) * d * .95, z = Math.sin(a) * d - 1; if ((z > 5.5 && Math.abs(x) < 6) || (x > 4.6 && Math.abs(z) < 10)) continue; env.add(r0() < .82 ? tree(x, z, .8 + r0() * 1.1) : pillar(x, z, 1.6 + r0() * 2)); }
   if (!real) env.add(pillar(-2.6, -GZ + .2, 3.4), pillar(2.6, -GZ + .2, 3.4), P(box(6.2, .5, .8), mat(pal.stone), 0, 3.9, -GZ + .2));
-  const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), glow(pal.glow[2], .9), 0, 1.8, -GZ - .1); gate.castShadow = false; env.add(gate);
+  // The way on is light coming through, not a painted board: bright low in the middle, falling off to the frame, with slow veils drifting up through it.
+  const gateMat = new THREE.ShaderMaterial({ uniforms: { uC: { value: new THREE.Color(pal.glow[2]) }, uT: { value: 0 }, uK: { value: 1 } }, vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+    fragmentShader: `uniform vec3 uC; uniform float uT, uK; varying vec2 vUv;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); } float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3. - 2. * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main(){ vec2 u = vUv; float x = abs(u.x - .5) * 2.; float core = (1. - smoothstep(0., 1., x)) * (1. - smoothstep(.1, 1.05, u.y) * .75); float veil = n(vec2(u.x * 3.2, u.y * 2.1 - uT * .16)) * .6 + n(vec2(u.x * 7. + 3., u.y * 4.6 - uT * .27)) * .4; float shaft = pow(1. - x, 2.2) * (.55 + .45 * n(vec2(u.x * 9., uT * .1)));
+        float l = .2 + core * .62 + veil * .3 * (.4 + core) + shaft * .18; vec3 deep = uC * vec3(.3, .2, .42), hot = mix(uC, vec3(1., .97, .9), .62); vec3 c = mix(deep, uC, smoothstep(.12, .6, l)); c = mix(c, hot, smoothstep(.62, 1.05, l)); float lum = dot(uC, vec3(.3, .6, .1)); c = mix(c, c * mix(vec3(.5, .36, .2), vec3(1.), smoothstep(.25, .95, l)), smoothstep(.45, .85, lum)); /* a pale gate still needs a dark edge, or it is a blank sheet */ gl_FragColor = vec4(c * (.86 + .14 * uK), 1.); }` });
+  const gate = P(new THREE.PlaneGeometry(real ? 2.5 : 4.2, real ? 3.6 : 3.4), gateMat, 0, 1.8, -GZ - .1); gate.castShadow = false; env.add(gate);
   const lamps = []; let dressSite = () => {};
   // ---- The far world. The hall is a terrace; beyond its edge the Galleries fall away for miles.
   const farG = new THREE.Group(); scene.add(farG); const skyG = new THREE.Group(); scene.add(skyG); const drift = []; /* P0, P1: hilltops off the way, one seen from the first hall and one from the second */ const SITES = { S: [0, 0, 0], A: [-92, 5, -52], B: [-92, -5, 58], C: [-140, 8, -70], D: [-150, 2, 66], E: [-46, 6, -46], F: [-205, 12, 0], P0: [-46, 7, 42], P1: [-150, 14, 0] }; const marksFar = {}; let site = 'S', flight = null;
@@ -426,7 +443,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
       if (u.variant) body.traverse(m => { if (m.isMesh) m.material = m.material.clone(); });
       if (u.variant === 'gilded') body.traverse(m => { if (m.isMesh) { m.material.map = null; m.material.emissiveMap = null; m.material.emissive.set(0x5a3a00); m.material.color.set(0xe0b040); m.material.metalness = .7; m.material.roughness = .3; m.material.needsUpdate = true; } });
       if (u.variant === 'pale') body.traverse(m => { if (m.isMesh) { m.material.color.lerp(new THREE.Color(0xffffff), .75); m.material.transparent = true; m.material.opacity = .7; } });
-      if (real && FLIES[u.kind]) { body.userData.hover = true; body.userData.hoverY = FLIES[u.kind]; }
+      if (real && FLIES[u.kind]) { body.userData.hover = true; body.userData.hoverY = FLIES[u.kind]; flapify(body, u.kind); }
       g.add(body); return body;
     };
     const copy = m => { if (!m.userData.rig) return m.clone(true); const c = skinClone(m); c.userData.clips = m.userData.clips; c.userData.rig = m.userData.rig; c.userData.sock = m.userData.sock; return c; };
@@ -437,7 +454,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     if (u.side === 'c') { const halo = new THREE.Mesh(haloGeo, haloMat); halo.rotation.x = -Math.PI / 2; halo.position.y = .045; halo.scale.setScalar(Math.max(.75, sc * .62)); halo.renderOrder = 2; halo.userData.nopick = 1; g.add(halo); } /* a pool of pale light under every resident, so a brass mite on a brass floor can still be found */
     g.position.set(wx(u.y), 0, wz(u.x)); here.add(g);
     const lab = document.createElement('div'); lab.className = 'ulab ' + u.side; labels.append(lab);
-    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, rate: .8 + Math.random() * .4, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); animate(o); wear(o, u.gear); return o;
+    o = { g, body, rg, lab, real: !!ready, h: ready ? sc + .3 + (body.userData.hoverY || 0) * .8 /* a flyer's labels sit over it, not on it */ : sc > 2 ? 3.1 : 1.2 * sc + (body.userData.hover ? .15 : 0), phase: Math.random() * 6, rate: .8 + Math.random() * .4, kick: 0, tx: g.position.x, tz: g.position.z }; units.set(u.id, o); animate(o); wear(o, u.gear); return o;
   }
   // Rigged units get a mixer. play() crossfades to a clip; one-shots return to idle.
   function animate(o) {
@@ -587,7 +604,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     if (dead) return; requestAnimationFrame(frame); const now = performance.now(), t = now / 1000; const dt = Math.min(.1, (now - last) / 1000); last = now; const slowK = cine && now < cine.slowTo ? (now < cine.stopTo ? .02 : .22) : 1; // a held frame at the blow, then the follow-through in slow motion
     fN++; renderer.shadowMap.needsUpdate = fN % 2 === 0; fAcc += dt; if (fN % 90 === 0) { const avg = fAcc / 90; fAcc = 0; slow = avg > .026 && fN > 400 && !document.hidden ? slow + 1 : 0; if (slow >= 2 && dpr > 1) { slow = 0; dpr = Math.max(1, dpr - .25); renderer.setPixelRatio(dpr); composer.setPixelRatio(dpr); } } // two slow stretches in a row, after loading, before giving up sharpness
     for (const [id, o] of units) {
-      const b = o.body; if (o.mixer) o.mixer.update(dt * slowK); if (o.own && o.mixer) live(o, t, dt); if (o.wrist) for (const [wb, wq] of o.wrist) wb.quaternion.copy(wq); /* a hand that holds something keeps a straight wrist */ if (o.aim) level(o, now); if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + Math.sin(t * 2.4 + o.phase) * .09 : (.5 + .5 * Math.sin(t * 1.25 * o.rate + o.phase)) * .02; /* a smooth rise and fall; the old bounce had a corner at the bottom of every beat */ if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 1.25 * o.rate + o.phase + .9) * .018);
+      const b = o.body; if (o.mixer) o.mixer.update(dt * slowK); if (o.own && o.mixer) live(o, t, dt); if (o.wrist) for (const [wb, wq] of o.wrist) wb.quaternion.copy(wq); /* a hand that holds something keeps a straight wrist */ if (o.aim) level(o, now); if (!o.mixer) if (b.userData.flap) b.userData.flap.value = t * 6.2832 * b.userData.flapHz * o.rate + o.phase; if (!o.mixer) b.position.y = b.userData.hover ? (b.userData.hoverY || .12) + (b.userData.flap ? Math.sin(t * .9 * o.rate + o.phase) * .05 - Math.cos(b.userData.flap.value) * (b.userData.flapHz < 6 ? .022 : 0) : Math.sin(t * 2.4 + o.phase) * .09) : (.5 + .5 * Math.sin(t * 1.25 * o.rate + o.phase)) * .02; /* a smooth rise and fall; the old bounce had a corner at the bottom of every beat */ if (!b.userData.hover && !o.mixer) b.scale.y = b.scale.x * (1 + Math.sin(t * 1.25 * o.rate + o.phase + .9) * .018);
       if (b.userData.spin) b.userData.spin.forEach((r, i) => { r.rotation.x += .01 * (i + 1); r.rotation.y += .007 * (i + 1); });
       b.position.x = b.position.z = 0;
       if (o.real && !o.mixer && !o.kick && !o.lunge && !o.dying) { const w = o.walking ? 1 : 0; b.rotation.z = Math.sin(t * (w ? 13 : .8 * o.rate) + o.phase) * (w ? .09 : .022); b.rotation.x = Math.sin(t * (w ? 6.5 : .53 * o.rate) + o.phase * 2) * (w ? .05 : .018); if (w && !b.userData.hover) b.position.y += Math.abs(Math.sin(t * 13 + o.phase)) * .07; }
@@ -606,7 +623,7 @@ export function createScene(el, { onTile, onDecor, onHover, onMiss, region = 've
     for (const o of props.values()) { if (o.userData.hover) o.position.y = Math.sin(t * 1.5) * .06; if (o.userData.use) o.scale.setScalar(1 + Math.sin(t * 5) * .05); }
     const pa = flies.geometry.attributes.position; for (let i = 0; i < fn; i++) { pa.array[i * 3 + 1] += Math.sin(t * .8 + fs[i]) * .003; pa.array[i * 3] += Math.cos(t * .5 + fs[i]) * .002; } pa.needsUpdate = true;
     for (const k in mk) if (k.endsWith('mv')) mk[k].scale.setScalar(1 + Math.sin(t * 4) * .12);
-    gate.material.emissiveIntensity = .8 + Math.sin(t * 1.3) * .25;
+    gateMat.uniforms.uT.value = t; gateMat.uniforms.uK.value = Math.sin(t * 1.3);
     for (const d of drift) { if (d.userData.fall) { d.material.map.offset.y = (t * d.userData.sp) % 1; continue; } if (d.userData.beam) { d.material.opacity = .09 + Math.sin(t * 1.3 + d.userData.ph) * .03; continue; } if (d.userData.ray) d.material.opacity = .014 + Math.sin(t * .4 + d.userData.ph) * .008; else { d.position.y = d.userData.y + Math.sin(t * .25 + d.userData.ph) * .9; d.rotation.y = t * .01; } } lineM.opacity = .6 + Math.sin(t * 4) * .25;
     for (const m of beaconG.children) { m.position.y = m.userData.y + Math.sin(t * 2.2 + m.position.x) * .08; m.rotation.y = t * 1.6; }
     for (const k in mk) if (k.endsWith('reach')) mk[k].material.opacity = .17 + Math.sin(t * 2.4) * .05;
