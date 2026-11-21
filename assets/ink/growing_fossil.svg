@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<defs>
+<filter id="a" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".045" numOctaves="2" seed="946"/><feDisplacementMap in="SourceGraphic" scale="2.2" xChannelSelector="R" yChannelSelector="G"/></filter>
+<filter id="b" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".03" numOctaves="2" seed="957"/><feDisplacementMap in="SourceGraphic" scale="4.5" xChannelSelector="G" yChannelSelector="R"/></filter>
+<filter id="c" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".06" numOctaves="1" seed="969"/><feDisplacementMap in="SourceGraphic" scale="1.5" xChannelSelector="R" yChannelSelector="G"/></filter>
+</defs>
+<path d="M17 43 H47 V55 H17 Z" fill="#a07a48" fill-opacity=".8" transform="translate(2 -1.3)" filter="url(#b)"/>
+
+<g fill="none" stroke="#221b1d" stroke-linecap="round" stroke-linejoin="round">
+<path d="M32 10 V41 M32 15 C22 13 15 21 17 32 M32 22 C24 21 19 27 21 36 M32 29 C27 28 24 32 25 39 M32 15 C42 13 49 21 47 32 M32 22 C40 21 45 27 43 36 M32 29 C37 28 40 32 39 39 M17 43 H47 V55 H17 Z" stroke-width="1.9" filter="url(#a)"/>
+<path d="M32 10 V41 M32 15 C22 13 15 21 17 32 M32 22 C24 21 19 27 21 36 M32 29 C27 28 24 32 25 39 M32 15 C42 13 49 21 47 32 M32 22 C40 21 45 27 43 36 M32 29 C37 28 40 32 39 39 M17 43 H47 V55 H17 Z" stroke-width=".7" stroke-opacity=".5" transform="translate(.5 .6)" filter="url(#c)"/>
+<path d="M30 43 L34 48 L29 55 M20 47 H26 M38 51 H44" stroke-width="1" filter="url(#c)"/>
+</g>
+<path d="M30 9 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 Z" fill="#221b1d" filter="url(#a)"/>
+</svg>

@@ -155,7 +155,7 @@ function seekers() {
   const near = []; if (V.slot == null) for (const id in D.RESONANCES) { if (sh.res.active.includes(id) || sh.res.dormant.includes(id)) continue; near.push(id); }
   return `<div class="tabs" role="tablist">${st.roster.map(id => { const x = st.seekers[id]; return `<button role="tab" data-seeker="${id}" aria-selected="${id === s.id}">${esc(x.name)}<span class="n">${x.lvl}</span>${pendingFor(x) ? ' <span style="color:var(--gilt)">&#9679;</span>' : ''}</button>`; }).join('')}</div>
   <div class="cols" style="margin-top:18px"><div class="stack" style="gap:18px">
-    <div class="row" style="gap:14px;align-items:flex-start"><img class="bigport" src="assets/portraits/${s.arch}.jpg" alt="Portrait of ${esc(s.name)}"><div class="grow"><h2>${esc(s.name)}</h2><p class="label">${A.name}${s.spec ? ' · ' + D.SPECS[s.arch].find(x => x.id === s.spec).name : ''} · level ${s.lvl}</p><p class="dim" style="font-size:14px;margin-top:4px">${esc(A.bio)}</p>
+    <div class="row" style="gap:14px;align-items:flex-start"><img class="bigport" src="assets/ink/${s.arch}_f.webp" alt="Portrait of ${esc(s.name)}"><div class="grow"><h2>${esc(s.name)}</h2><p class="label">${A.name}${s.spec ? ' · ' + D.SPECS[s.arch].find(x => x.id === s.spec).name : ''} · level ${s.lvl}</p><p class="dim" style="font-size:14px;margin-top:4px">${esc(A.bio)}</p>
       ${s.lvl < D.LEVEL_CAP ? `<div class="bar" style="margin-top:8px"><i style="width:${s.xp / C.xpNext(s.lvl) * 100}%"></i></div><p class="label" style="margin-top:3px">${s.xp} / ${C.xpNext(s.lvl)} to level ${s.lvl + 1}</p>` : '<p class="label" style="margin-top:6px">Level cap</p>'}</div></div>
     ${choose}
     <div><div class="sec-head"><h3>Equipment</h3><span class="label">tap a slot to change it</span></div>

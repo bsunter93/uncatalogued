@@ -1,6 +1,7 @@
 // Shared interface pieces: state, server calls, item cards.
 import * as C from './core.js';
 import { plate } from './art.js';
+import { INKED } from './sketch.js';
 export { C };
 export const D = C.D;
 const API = 'https://kffkasnzqcddpystszch.supabase.co/functions/v1/uncatalogued';
@@ -8,11 +9,11 @@ export const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V'];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, root = document) => root.querySelector(sel);
 const painted = k => k in D.SPECIES || k in D.FLORA || k in D.WONDERS || k in D.MATERIALS;
-export const art = (key, o = {}) => painted(key) ? `<span class="art pic ${o.variant || ''}"><img src="assets/cat/${key}.jpg" alt=""></span>` : D.ARCHETYPES[key] ? `<span class="art pic"><img src="assets/portraits/${key}.jpg" alt=""></span>` : `<span class="art">${plate(key, o)}</span>`;
+export const art = (key, o = {}) => PAINTED.has(key) ? `<span class="art pic inkp gearp"><img src="assets/ink/g_${key}.${key === 'second_heart' ? 'svg' : 'webp'}" alt=""></span>` : INKED.has(key) ? `<span class="art pic inkp ${o.variant || ''}"><img src="assets/ink/${key}.webp" alt=""></span>` : D.ARCHETYPES[key] ? `<span class="art pic inkp"><img src="assets/ink/${key}_f.webp" alt=""></span>` : (key in D.WONDERS || key in D.MATERIALS) ? `<span class="art pic inkp drawn"><img src="assets/ink/${key}.svg" alt=""></span>` : painted(key) ? `<span class="art pic ${o.variant || ''}"><img src="assets/cat/${key}.jpg" alt=""></span>` : D.ARCHETYPES[key] ? `<span class="art pic"><img src="assets/portraits/${key}.jpg" alt=""></span>` : `<span class="art">${plate(key, o)}</span>`;
 const PAINTED = new Set('kindled_pair hunter_mask collectors_eye yesterdays_rifle thorncaster marrow_cleaver spore_sling pulse_rifle arc_lance echo_blade chitin_plate barkweave relay_harness mirror_carapace phase_shroud compound_lens targeting_visor oracle_shard resin_charm capacitor_band bait_satchel lucky_knot leechroot symbiote_graft neural_shunt venom_sac fold_gland lure_pod barrier_seed pulse_emitter drone_core blink_anchor gravity_knot second_heart hungry_compass borrowed_moment unfinished_machine'.split(' '));
-export const itemArt = it => { const k = it.sing || it.base; return PAINTED.has(k) ? `<span class="art pic"><img src="assets/items/${k}.jpg" alt=""></span>` : art(k); };
+export const itemArt = it => { const k = it.sing || it.base; return PAINTED.has(k) ? `<span class="art pic inkp gearp"><img src="assets/ink/g_${k}.${k === 'second_heart' ? 'svg' : 'webp'}" alt=""></span>` : art(k); };
 const PORTRAIT = { vanguard: 1, tracker: 1, naturalist: 1, tinkerer: 1, firebrand: 1 };
-export const face = arch => PORTRAIT[arch] ? `<span class="face ph ${arch}"><img src="assets/portraits/${arch}.jpg" alt=""></span>` : `<span class="face">${plate(arch)}</span>`;
+export const face = arch => PORTRAIT[arch] ? `<span class="face ph inkp"><img src="assets/ink/${arch}_f.webp" alt=""></span>` : `<span class="face">${plate(arch)}</span>`;
 
 export const G = { key: null, state: null, world: null, firsts: {}, tab: 'board', busy: false };
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } }, del(k) { try { localStorage.removeItem(k); } catch { /* */ } } };

@@ -147,6 +147,7 @@ const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 export function createRun(spec) {
   const st = { spec, rs: spec.seed, tier: spec.tier, roomIdx: -1, uid: 1, units: [], outcome: null, turn: 0, turns: 0, heartUsed: false, kills3: {},
     res: { study: {}, samples: {}, seen: {}, variants: {}, flora: {}, wonders: {}, mats: {}, kills: {}, cases: [], xp: 0, dmgTaken: 0, floraN: 0, bossDown: false, objCache: false, obsKilled: false, rooms: 0, contractDone: false, read: {}, insight: 0 } };
+  if (spec.slice) { st.res.pages = {}; st.res.tech = {}; for (const k of spec.tech || []) st.res.tech[k] = 1; } /* the one-hall trial: sketch pages earned by what you see, and techniques learned from a full record */
   { const pr = mkRng((spec.seed ^ 0x51de) >>> 0 || 7); const pl = (D.PLACES[spec.region] || []).slice(); for (let i = pl.length - 1; i > 0; i--) { const j = pr.next() % (i + 1); [pl[i], pl[j]] = [pl[j], pl[i]]; } st.places = pl; st.side = null; st.wandered = {}; } // which side place each hall can see
   // The way through: a first hall, then a run of forks, then the great one. Each fork offers two different kinds of hall, and every second fork has a quiet one to rest in.
   { const rr = mkRng((spec.seed ^ 0x2f6b) >>> 0 || 11); const LEN = spec.len || 3; st.route = [null]; st.path = [];
@@ -237,13 +238,14 @@ function enterRoom(st, type, ev) {
   let etype = type; if (last) etype = 'boss'; st.path.push(etype); // every way through ends at the great one
   const tpl = r.pick(ENC[reg][etype]).map(a => a.slice());
   if (sp.intro && st.roomIdx === 0) { tpl.length = 0; tpl.push(['thornling', 2], ['mossback', 1]); }
+  if (sp.slice) { tpl.length = 0; tpl.push(['thornling', sp.pack || 4], ['glasswing', 1]); }
   if (st.tier >= 3 && etype !== 'boss') tpl[0][1]++;
   if (st.roomIdx >= 3 && etype !== 'boss' && etype !== 'quiet') tpl[0][1]++; // the halls fill up the deeper you go, which is what the boons are for
   if (st.tier >= 4 && etype === 'boss') tpl[1][1]++;
   if (sp.mods.hunt && etype !== 'elite' && etype !== 'boss') tpl.push([D.REGIONS[reg].elite, 1]);
   if (sp.type === 'observe' && etype !== 'boss') tpl.push([D.REGIONS[reg].observe, etype === 'quiet' ? 2 : 1]);
   // the hall has residents that have nothing to do with you
-  if (etype !== 'boss' && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
+  if (etype !== 'boss' && !sp.slice && !(sp.intro && st.roomIdx === 0)) for (const k of AMBIENT[reg] || []) if (!tpl.some(t => t[0] === k) && r.pct(75)) tpl.push([k, 1]);
   for (const [kind, n] of tpl) for (let i = 0; i < n; i++) { const p = spot(D.SPECIES[kind].boss ? 9 : 5); if (p) spawn(st, kind, p[0], p[1], r, ev, true); }
   if (sp.sight && st.roomIdx === 0 && !sp.intro) { const p = spot(6); if (p) { const u = spawn(st, sp.sight.kind, p[0], p[1], r, ev, true, sp.sight.variant); u.sight = true; } } // today's sighting: one marked animal in the first hall
   // props
@@ -259,6 +261,7 @@ function enterRoom(st, type, ev) {
   if (!(sp.intro && st.roomIdx === 0)) { const nb = r.range(1, 2); for (let i = 0; i < nb; i++) addProp('fixture', 'bellcap'); addProp('fixture', 'lamp'); if (r.pct(60)) addProp('fixture', 'case'); }
   if (r.pct(wch)) { const id = sp.intro ? 'pocket_sun' : r.pick(D.REGIONS[reg].wonders); room.wonder = id; addProp('wonder', id); }
   if (!(sp.intro && st.roomIdx === 0) && etype !== 'boss' && r.pct(type === 'quiet' ? 70 : 45)) addChest(st, r, r.pick(['plates', 'light', 'breath']));
+  if (sp.slice) { room.props = room.props.filter(p => p.kind === 'flora' || (p.kind === 'fixture' && p.id !== 'case')); room.wonder = null; }
   // nothing placed in the hall may wall part of it off
   for (let guard = 0; guard < 12; guard++) { const seen = new Set([K(0, 3)]), q = [[0, 3]]; while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of DIRS) { const nx = x + dx, ny = y + dy, k = K(nx, ny); if (inb(nx, ny) && !seen.has(k) && !solid(st, nx, ny)) { seen.add(k); q.push([nx, ny]); } } }
     let open = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!solid(st, x, y)) open++;
@@ -270,7 +273,9 @@ function spawn(st, kind, x, y, r, ev, natural, force) {
   const S = D.SPECIES[kind]; const hs = fl(tierScale(st.tier, 45) * (S.boss ? 150 : 140) / 100), ds = tierScale(st.tier, 36);
   const u = { id: st.uid++, side: 'c', kind, name: S.name, ai: S.ai, x, y, max: fl(S.hp * hs / 100), dmg: [fl(S.dmg[0] * ds / 100), fl(S.dmg[1] * ds / 100)], armor: S.armor + fl((st.tier - 1) / 2), move: S.move, range: S.range,
     mood: natural || MOOD0[S.ai] !== 'roam' ? MOOD0[S.ai] : 'hostile', hunter: MOOD0[S.ai] === 'roam' || MOOD0[S.ai] === 'hostile', home: { x, y }, shield: 0, studied: 0, tc: 0, bleed: 0, poison: 0, mark: 0, root: 0, stun: 0, calm: 0, echo: 0 };
-  if (natural && !S.boss && (force || r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100)))) {
+  if (st.spec.slice && !S.prey) { const h = st.spec.tough || 100, d = st.spec.bite || 100; u.max = fl(u.max * h / 100); u.dmg = [fl(u.dmg[0] * d / 100), fl(u.dmg[1] * d / 100)]; }
+  if (st.res.pages) { u.studied = pageCount(st, kind); if (S.ai === 'pack' && natural && !st.room.lead) { st.room.lead = u.id; u.lead = true; u.max = fl(u.max * 140 / 100); } }
+  if (natural && !S.boss && !st.spec.slice && (force || r.pct(Math.min(40, 5 * (100 + (st.spec.variantBoost || 0)) / 100)))) {
     u.variant = force || r.pick(['pale', 'gilded', 'overgrown']);
     if (u.variant === 'overgrown') { u.max = fl(u.max * 150 / 100); u.dmg = [fl(u.dmg[0] * 130 / 100), fl(u.dmg[1] * 130 / 100)]; }
     st.res.variants[kind + ':' + u.variant] = 1;
@@ -349,6 +354,7 @@ function kill(st, src, t, ev) {
   if (t.side === 'a') { t.dead = true; ev.push({ e: 'die', id: t.id }); return; }
   if (st.room.wonder === 'growing_fossil' && !st.room.firstDeath) { st.room.firstDeath = true; t.hp = fl(t.max / 2); ev.push({ e: 'text', id: t.id, msg: 'Gets back up' }); return; }
   st.room.firstDeath = true; t.dead = true; t.hp = 0; ev.push({ e: 'die', id: t.id });
+  if (t.lead) { const rest = st.units.filter(o => o.side === 'c' && o.kind === t.kind && alive(o)); for (const o of rest) { o.stun = Math.max(o.stun || 0, 1); o.dmg = [Math.max(1, fl(o.dmg[0] / 2)), Math.max(1, fl(o.dmg[1] / 2))]; o.broken = 1; ev.push({ e: 'status', id: o.id, s: 'stun' }); } if (rest.length) ev.push({ e: 'text', id: rest[0].id, msg: 'The pack falters' }); } /* the pack follows one: drop it and the rest lose a turn and half their bite */
   for (const w of st.units) if (w.grudge === t.id) { w.grudge = 0; if (w.ai === 'sentinel' || w.ai === 'grazer') w.mood = 'docile'; }
   const S = D.SPECIES[t.kind]; const bled = t.bleed > 0, hadPoison = t.poison;
   st.res.kills[t.kind] = (st.res.kills[t.kind] || 0) + 1; st.res.samples[t.kind] = (st.res.samples[t.kind] || 0) + 1;
@@ -434,7 +440,22 @@ function ignite(st, u, t, ev) { if (!alive(t)) return; if (u && u.side !== 'c') 
 /* How close you get is how much you learn: from three tiles a sketch (1), from two a proper look (2), beside it the full record (3). An odd one holds two more. Anything that sharpens the eye counts as a tile closer. */
 export function studyReach(st, u) { let b = (u.m.study || 0) + (u.fx.t_curious ? 1 : 0); if (st.room.props.some(q => !q.done && q.id === 'lantern_moss' && md(q, u) <= 2)) b++; return b; }
 export function studyBand(st, u, t) { const d = Math.max(1, md(u, t) - studyReach(st, u)); return (d <= 1 ? 3 : d === 2 ? 2 : d === 3 ? 1 : 0) + (t.variant ? 2 : 0); }
-export function studyValue(st, u, t) { return t ? Math.max(0, studyBand(st, u, t) - (t.studied || 0)) : 1; }
+export function studyValue(st, u, t) { if (st.res.pages) return t ? lookPages(st, u, t).length : 1; return t ? Math.max(0, studyBand(st, u, t) - (t.studied || 0)) : 1; }
+/* The one-hall trial. A record is three pages, and each is something seen: the animal at ease, the animal up close, and the animal doing the thing it does. */
+export const PAGES = ['rest', 'close', 'act'];
+export function pagesOf(st, kind) { return (st.res.pages && st.res.pages[kind]) || {}; }
+export function pageCount(st, kind) { const p = pagesOf(st, kind); return PAGES.filter(k => p[k]).length; }
+export function lookPages(st, u, t) { const out = []; if (md(u, t) > 3) return out; const p = pagesOf(st, t.kind);
+  if (!p.rest && !isHostile(st, t)) out.push('rest'); if (!p.close && Math.max(1, md(u, t) - studyReach(st, u)) <= 1) out.push('close'); return out; }
+function addPage(st, c, page, ev, by) {
+  const kind = c.kind, P = st.res.pages[kind] || (st.res.pages[kind] = {}); if (P[page]) return 0; P[page] = 1; const n = pageCount(st, kind);
+  for (const o of st.units) if (o.side === 'c' && o.kind === kind) o.studied = n;
+  st.res.study[kind] = (st.res.study[kind] || 0) + 2; st.res.xp += 4;
+  const e = { e: 'study', id: c.id, by: by ? by.id : 0, n: 1, left: 3 - n, page };
+  if (n >= 3 && !st.res.read[kind]) { st.res.read[kind] = 1; e.read = true; st.res.xp += 6; const T = D.TECHNIQUES && D.TECHNIQUES[kind]; if (T && !st.res.tech[T.id]) { st.res.tech[T.id] = 1; e.tech = T.id; } }
+  ev.push(e); return 1;
+}
+function seeAct(st, c, ev) { if (!st.res.pages || c.side !== 'c' || pagesOf(st, c.kind).act) return; const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (w && md(w, c) <= 7) addPage(st, c, 'act', ev, w); }
 function gainStudy(st, u, t, pts, ev) {
   const cap = t.variant ? 5 : 3; const g = Math.min(pts, cap - t.studied); if (g <= 0) return 0;
   t.studied += g; st.res.study[t.kind] = (st.res.study[t.kind] || 0) + g; st.res.xp += 2 * g;
@@ -560,6 +581,7 @@ function stepToward(st, c, goal, steps, stopAt = 0) {
 }
 // The party sees something happen between residents and writes it down. Once per kind of event per room.
 function witness(st, c, what, ev) {
+  if (st.res.pages) { seeAct(st, c, ev); return; }
   const seen = st.room.seenActs || (st.room.seenActs = {}); const key = c.kind + ':' + what; if (seen[key]) return;
   const w = seekers(st).filter(alive).sort((a, b) => md(a, c) - md(b, c) || a.id - b.id)[0]; if (!w || md(w, c) > (what === 'kill' || what === 'hunt' ? 10 : 7)) return; // a hunt is loud enough to follow from across the hall
   seen[key] = 1; st.res.study[c.kind] = (st.res.study[c.kind] || 0) + 2; st.res.xp += 4;
@@ -574,9 +596,9 @@ function notice(st, ev) {
 }
 function creatureAttack(st, c, t, ev) {
   const r = R(st); let dmg = r.range(c.dmg[0], c.dmg[1]);
-  if (c.kind === 'thornling') dmg += 2 * st.units.filter(o => o !== c && alive(o) && o.kind === 'thornling' && o.side === c.side && md(o, t) === 1).length * tierScale(st.tier) / 100 | 0;
+  if (c.kind === 'thornling' && !(st.spec.slice && st.room.lead && !st.units.some(o => o.lead && alive(o)))) dmg += 2 * st.units.filter(o => o !== c && alive(o) && o.kind === 'thornling' && o.side === c.side && md(o, t) === 1).length * tierScale(st.tier) / 100 | 0;
   if (dmg <= 0) return; const melee = md(c, t) === 1;
-  hurt(st, c, t, dmg, ev, { melee });
+  hurt(st, c, t, dmg, ev, { melee }); seeAct(st, c, ev);
   if (c.kind === 'hush' && alive(t)) { t.bleed = 3; t.bleedD = 2 * st.tier; ev.push({ e: 'status', id: t.id, s: 'bleed' }); }
   if (melee && alive(c) && t.m && t.m.thorns) hurt(st, t, c, t.m.thorns, ev, { dot: true, kind: 'thorns' });
   if (melee && alive(c) && alive(t) && t.rip > 0) strike(st, t, c, ev, { mult: t.fx.s_retaliator ? 160 : 100 });
@@ -584,6 +606,7 @@ function creatureAttack(st, c, t, ev) {
 function act(st, c, ev) {
   const p = plan(st, c); c.tc++; if (c.steady > 0) c.steady--; if (c.falter) c.falter = 0; /* a marked line stays marked: the purge comes a round late, it is not called off */
   if (p.k === 'atk' && !(p.mv && p.mv.path.length)) { const t0 = st.units.find(u => u.id === p.tgt && alive(u)); if (!t0 || md(c, t0) > Math.max(1, c.range)) { c.stuck = (c.stuck || 0) + 1; if (c.stuck >= 3 && !D.SPECIES[c.kind].boss) { c.calm = 99; c.stuck = 0; ev.push({ e: 'text', id: c.id, msg: 'Loses the trail' }); return; } } else c.stuck = 0; } else c.stuck = 0;
+  if (st.res.pages && c.ai === 'skittish' && (p.k === 'flee' || p.label === 'Keeping away')) seeAct(st, c, ev);
   if (p.k === 'flee') { c.fled = true; ev.push({ e: 'flee', id: c.id }); return; }
   if (p.root) { const t = st.units.find(u => u.id === p.root); if (t && alive(t) && !t.fx.anchor) { t.root = 1; ev.push({ e: 'text', id: t.id, msg: 'Rooted' }, { e: 'status', id: t.id, s: 'root' }); } }
   if (p.mv && p.mv.path.length) { walk(st, c, p.mv.path, ev); if (!alive(c)) return; }
@@ -630,7 +653,7 @@ function endTurn(st, ev, free) {
   const r = R(st);
   for (const u of seekers(st)) {
     if (!alive(u)) continue; tickUnit(st, u, ev); if (!alive(u)) continue;
-    u.ap = u.stun > 0 ? 0 : 2; u.moved = false; u.freeUsed = false; u.freeStudy = false; u.killRef = false; u.critRef = false;
+    u.ap = u.stun > 0 ? 0 : 2; if (u.glass) u.glass = 0; u.moved = false; u.freeUsed = false; u.freeStudy = false; u.killRef = false; u.critRef = false;
     for (const k in u.cds) u.cds[k] = Math.max(0, u.cds[k] - (st.room.wonder === 'counting_clock' ? 2 : 1));
     if (u.sh.dev === 'unfinished') u.devNow = r.pick(['lure', 'barrier', 'pulse', 'drone', 'blink', 'gravity']);
   }
@@ -706,13 +729,16 @@ function applyAction(st, a) {
   const tgt = (side) => { const t = st.units.find(x => x.id === a.id && alive(x)); if (!t) bad('No target.'); if (side === 'c' && t.side !== 'c') bad('Not a creature.'); if (side === 's' && t.side !== 's') bad('Not a Seeker.'); return t; };
   if (a.t === 'move') {
     if (u.root > 0 && !u.fx.anchor) bad('Held in place.');
-    const freeMv = u.fx.freemove && !u.freeUsed; if (!freeMv) need(1);
+    const glass = !!u.glass; const freeMv = glass || (u.fx.freemove && !u.freeUsed); if (!freeMv) need(1);
     const { dist, par } = reach(st, u, moveRange(st, u)); if (!dist.get(K(a.x, a.y))) bad('Out of reach.');
-    if (freeMv) u.freeUsed = true; else u.ap--; u.moved = true; walk(st, u, pathFrom(par, a.x, a.y), ev); if (alive(u)) onPlate(st, u, ev); return ev;
+    if (glass) u.glass = 0; else if (freeMv) u.freeUsed = true; else u.ap--; u.moved = true; walk(st, u, pathFrom(par, a.x, a.y), ev); if (alive(u)) onPlate(st, u, ev); return ev;
   }
-  if (a.t === 'atk') { need(1); const t = tgt('c'); if (md(u, t) > weaponRange(st, u)) bad('Out of range.'); u.ap--; strike(st, u, t, ev); return ev; }
+  if (a.t === 'atk') { need(1); const t = tgt('c'); if (md(u, t) > weaponRange(st, u)) bad('Out of range.'); u.ap--; strike(st, u, t, ev); if (st.res.tech && st.res.tech.glass && alive(u)) u.glass = 1; return ev; }
   if (a.t === 'insight') { const t = tgt('c'); if (!D.SPECIES[t.kind].boss) bad('Save it for the great one.'); if ((st.res.insight || 0) < 1) bad('No insight to spend.'); if (t.falter || t.steady > 0) bad(t.falter ? 'It is already off balance.' : 'It has its footing back. Wait a round.');
     st.res.insight--; t.falter = 1; t.steady = 3; t.mark = Math.max(t.mark || 0, 2); ev.push({ e: 'insight', id: t.id, by: u.id, left: st.res.insight }, { e: 'status', id: t.id, s: 'mark' }); return ev; } /* what the party learned on the way in, spent: the great one loses its next trick and is open for two rounds */
+  if (a.t === 'study' && st.res.pages) { const t = tgt('c'); if (md(u, t) > 3) bad('Too far to study.'); const L = lookPages(st, u, t), p = pagesOf(st, t.kind);
+    if (!L.length) bad(pageCount(st, t.kind) >= 3 ? 'Nothing more to learn from this one.' : !p.close ? 'Get beside it for the close page.' : !p.rest ? 'It has to be at ease for that page.' : 'The last page is what it does. Watch it.');
+    const free = !isHostile(st, t) && !u.freeStudy; if (!free) need(1); for (const pg of L) addPage(st, t, pg, ev, u); if (free) u.freeStudy = true; else u.ap--; return ev; }
   if (a.t === 'study') { const t = tgt('c'); if (md(u, t) > 3) bad('Too far to study.'); const calm = !isHostile(st, t);
     // watching something that is not hunting you costs nothing, once a turn
     const free = calm && !u.freeStudy; if (!free) need(1);

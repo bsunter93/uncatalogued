@@ -452,3 +452,11 @@ export const BOONS = {
   soft_step: { name: 'Soft Step', desc: 'Residents notice the party from one tile closer than they would.', flag: 'softStep' },
   ember_oil: { name: 'Ember Oil', desc: 'Every weapon hit sets its target Burning.', flag: 'emberOil' },
 };
+
+/* The one-hall trial. What each page of a record is, and what it tells you. */
+export const PAGE_NAME = { rest: 'At ease', close: 'Up close', act: 'What it does' };
+export const PAGE_NOTES = {
+  thornling: { rest: 'One leads. The rest go where it goes. Drop the lead and the pack loses a turn.', close: 'The pod has a seam under the jaw. Your first blow on each one lands there.', act: 'Every Thornling beside you adds to the bite. Do not let them ring you.' },
+  glasswing: { rest: 'It will stand one quiet watcher at two tiles. Two of you and it goes.', close: 'The wings are plates. It turns them edge-on to whatever is coming.', act: 'It is never where the bite lands. It has already moved.' },
+};
+export const TECHNIQUES = { glasswing: { id: 'glass', name: 'Glass step', text: 'After a blow, your next move this turn costs nothing.', from: 'Learned from the Glasswing, which is never where the bite lands.' } };
